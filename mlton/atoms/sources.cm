@@ -72,6 +72,7 @@ prim.fun
 ffi.sig
 ffi.fun
 func.sig
+func-entry.sig
 generic-scheme.sig
 generic-scheme.fun
 profile-label.sig

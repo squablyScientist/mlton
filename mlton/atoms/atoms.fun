@@ -34,6 +34,11 @@ structure Atoms =
             open Var
             fun newNoname () = newString "F"
          end
+      structure FuncEntry =
+         struct
+            open Var
+            fun newNoname () = newString "FE"
+         end
       structure Label =
          struct
             open Func

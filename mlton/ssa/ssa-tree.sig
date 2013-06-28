@@ -1,4 +1,5 @@
-(* Copyright (C) 2009 Matthew Fluet.
+(* Copyright (C) 2013 David Larsen.
+ * Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -49,7 +50,7 @@ signature RETURN =
       val map: t * (Label.t -> Label.t) -> t
    end
 
-signature SSA_TREE = 
+signature ME_SSA_TREE =
    sig
       include SSA_TREE_STRUCTS
 
@@ -172,6 +173,7 @@ signature SSA_TREE =
                          ty: Type.t} (* int or word *)
              | Bug  (* MLton thought control couldn't reach here. *)
              | Call of {args: Var.t vector,
+                        entry: FuncEntry.t,
                         func: Func.t,
                         return: Return.t}
              | Case of {cases: Cases.t,
@@ -226,6 +228,20 @@ signature SSA_TREE =
             val layout: t -> Layout.t
          end
 
+      structure FunctionEntry:
+         sig
+            datatype t =
+               T of {
+                     args: (Var.t * Type.t) vector,
+                     name: FuncEntry.t,
+                     function: Func.t,
+                     start: Label.t
+                     }
+
+            val function: t -> Func.t
+            val name: t -> FuncEntry.t
+         end
+
       structure Function:
          sig
             type t
@@ -242,6 +258,7 @@ signature SSA_TREE =
                      nodeBlock: unit DirectedGraph.Node.t -> Block.t}
             val dest: t -> {args: (Var.t * Type.t) vector,
                             blocks: Block.t vector,
+                            entries: FunctionEntry.t vector,
                             mayInline: bool,
                             name: Func.t,
                             raises: Type.t vector option,
@@ -253,6 +270,7 @@ signature SSA_TREE =
              *)
             val dfs: t * (Block.t -> unit -> unit) -> unit
             val dominatorTree: t -> Block.t Tree.t
+            val entries: t -> FunctionEntry.t vector
             val foreachVar: t * (Var.t * Type.t -> unit) -> unit
             val layout: t -> Layout.t
             val layoutDot:
@@ -263,6 +281,7 @@ signature SSA_TREE =
             val name: t -> Func.t
             val new: {args: (Var.t * Type.t) vector,
                       blocks: Block.t vector,
+                      entries: FunctionEntry.t vector,
                       mayInline: bool,
                       name: Func.t,
                       raises: Type.t vector option,
@@ -277,7 +296,7 @@ signature SSA_TREE =
                T of {datatypes: Datatype.t vector,
                      functions: Function.t list,
                      globals: Statement.t vector,
-                     main: Func.t (* Must be nullary. *)}
+                     main: FuncEntry.t (* Must be nullary. *)}
 
             val clear: t -> unit
             val clearTop: t -> unit
@@ -292,5 +311,6 @@ signature SSA_TREE =
             val layouts: t * (Layout.t -> unit) -> unit
             val layoutStats: t -> Layout.t
             val mainFunction: t -> Function.t
+            val mainFunctionEntry: t -> FunctionEntry.t
          end
    end

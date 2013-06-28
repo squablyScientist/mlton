@@ -29,6 +29,7 @@ signature ATOMS' =
       structure Const: CONST
       structure Ffi: FFI
       structure Func: FUNC
+      structure FuncEntry: FUNC_ENTRY
       structure Label: LABEL
       structure Prim: PRIM
       structure ProfileLabel: PROFILE_LABEL

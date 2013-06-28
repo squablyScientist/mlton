@@ -1,4 +1,5 @@
-(* Copyright (C) 2009 Matthew Fluet.
+(* Copyright (C) 2013 David Larsen.
+ * Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -7,7 +8,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor SsaTree (S: SSA_TREE_STRUCTS): SSA_TREE = 
+functor MeSsaTree (S: SSA_TREE_STRUCTS): ME_SSA_TREE =
 struct
 
 open S
@@ -682,6 +683,7 @@ structure Transfer =
                    ty: Type.t}
        | Bug (* MLton thought control couldn't reach here. *)
        | Call of {args: Var.t vector,
+                  entry: FuncEntry.t,
                   func: Func.t,
                   return: Return.t}
        | Case of {test: Var.t,
@@ -742,8 +744,9 @@ structure Transfer =
                          success = fl success,
                          ty = ty}
              | Bug => Bug
-             | Call {func, args, return} =>
+             | Call {func, entry, args, return} =>
                   Call {func = func, 
+                        entry = entry,
                         args = fxs args,
                         return = Return.map (return, fl)}
              | Case {test, cases, default} =>
@@ -794,8 +797,8 @@ structure Transfer =
                        str " Overflow => ",
                        Label.layout overflow, str " ()"]
              | Bug => str "Bug"
-             | Call {func, args, return} =>
-                  seq [Func.layout func, str " ", layoutTuple args,
+             | Call {func, entry, args, return} =>
+                  seq [FuncEntry.layout entry, str " ", layoutTuple args,
                        str " ", Return.layout return]
              | Case arg => layoutCase arg
              | Goto {dst, args} =>
@@ -823,9 +826,10 @@ structure Transfer =
                Label.equals (overflow, overflow') andalso
                Label.equals (success, success')
           | (Bug, Bug) => true
-          | (Call {func, args, return}, 
-             Call {func = func', args = args', return = return'}) =>
+          | (Call {func, entry, args, return},
+             Call {func = func', entry = entry', args = args', return = return'}) =>
                Func.equals (func, func') andalso
+               FuncEntry.equals (entry, entry') andalso
                varsEquals (args, args') andalso
                Return.equals (return, return')
           | (Case {test, cases, default},
@@ -859,8 +863,8 @@ structure Transfer =
                   hashVars (args, hash2 (Label.hash overflow,
                                          Label.hash success))
              | Bug => bug
-             | Call {func, args, return} =>
-                  hashVars (args, hash2 (Func.hash func, Return.hash return))
+             | Call {func, entry, args, return} =>
+                  hashVars (args, hash2 (FuncEntry.hash entry, Return.hash return))
              | Case {test, cases, default} =>
                   hash2 (Var.hash test, 
                          Cases.fold
@@ -966,12 +970,27 @@ structure Datatype =
           ; Vector.foreach (cons, Con.clear o #con))
    end
 
+structure FunctionEntry =
+   struct
+      datatype t =
+        T of {
+              args: (Var.t * Type.t) vector,
+              function: Func.t,
+              name : FuncEntry.t,
+              start: Label.t
+              }
+
+      fun function (T{function, ...}) = function
+      fun name (T{name, ...}) = name
+   end
+
 structure Function =
    struct
       structure CPromise = ClearablePromise
 
       type dest = {args: (Var.t * Type.t) vector,
                    blocks: Block.t vector,
+                   entries: FunctionEntry.t vector,
                    mayInline: bool,
                    name: Func.t,
                    raises: Type.t vector option,
@@ -999,6 +1018,7 @@ structure Function =
       in
          val blocks = make #blocks
          val dest = make (fn d => d)
+         val entries = make #entries
          val mayInline = make #mayInline
          val name = make #name
       end
@@ -1172,9 +1192,9 @@ structure Function =
                                                     Layout.str
                                                     (Var.pretty (x, global))))])
                           | Bug => ["bug"]
-                          | Call {func, args, return} =>
+                          | Call {func, entry, args, return} =>
                                let
-                                  val f = Func.toString func
+                                  val e = FuncEntry.toString entry
                                   val args = Var.prettys (args, global)
                                   val _ =
                                      case return of
@@ -1186,7 +1206,7 @@ structure Function =
                                                 edge (l, "", Dashed))))
                                       | Return.Tail => ()
                                in
-                                  [f, " ", args]
+                                  [e, " ", args]
                                end
                           | Case {test, cases, default, ...} =>
                                let
@@ -1419,7 +1439,7 @@ structure Function =
                val (bindLabel, lookupLabel, destroyLabel) =
                   make (Label.new, Label.plist)
             end
-            val {args, blocks, mayInline, name, raises, returns, start, ...} =
+            val {args, blocks, entries, mayInline, name, raises, returns, start, ...} =
                dest f
             val args = Vector.map (args, fn (x, ty) => (bindVar x, ty))
             val bindLabel = ignore o bindLabel
@@ -1454,6 +1474,8 @@ structure Function =
          in
             new {args = args,
                  blocks = blocks,
+                 (* TODO: I don't actually a' rename these.  Should I? *)
+                 entries = entries,
                  mayInline = mayInline,
                  name = name,
                  raises = raises,
@@ -1461,6 +1483,7 @@ structure Function =
                  start = start}
          end
 
+      (* TODO: Fix profiling for multi-entry functions *)
       fun profile (f: t, sourceInfo): t =
          if !Control.profile = Control.ProfileNone
             orelse !Control.profileIL <> Control.ProfileSource
@@ -1468,7 +1491,7 @@ structure Function =
          else 
          let
             val _ = Control.diagnostic (fn () => layout f)
-            val {args, blocks, mayInline, name, raises, returns, start} = dest f
+            val {args, blocks, entries, mayInline, name, raises, returns, start} = dest f
             val extraBlocks = ref []
             val {get = labelBlock, set = setLabelBlock, rem} =
                Property.getSetOnce
@@ -1541,7 +1564,7 @@ structure Function =
                        transfer)
                    val (statements, transfer) =
                       case transfer of
-                         Call {args, func, return} =>
+                         Call {args, entry, func, return} =>
                             let
                                datatype z = datatype Return.t
                             in
@@ -1561,6 +1584,7 @@ structure Function =
                                             in
                                                (statements,
                                                 Call {args = args,
+                                                      entry = entry,
                                                       func = func,
                                                       return = return})
                                             end
@@ -1582,6 +1606,7 @@ structure Function =
             val f = 
                new {args = args,
                     blocks = blocks,
+                    entries = entries,
                     mayInline = mayInline,
                     name = name,
                     raises = raises,
@@ -1604,7 +1629,7 @@ structure Program =
                datatypes: Datatype.t vector,
                globals: Statement.t vector,
                functions: Function.t list,
-               main: Func.t
+               main: FuncEntry.t
                }
    end
 
@@ -1640,6 +1665,21 @@ structure Program =
                     in
                        n
                     end))
+               val {get = funcEntryNode, destroy} =
+                  Property.destGet
+                  (FuncEntry.plist, Property.initFun
+                   (fn f =>
+                    let
+                       val n = Graph.newNode graph
+                       val _ =
+                          setNodeOptions
+                          (n,
+                           let open NodeOption
+                           in [FontColor Black, label (FuncEntry.toString f)]
+                           end)
+                    in
+                       n
+                    end))
                val {get = edgeOptions, set = setEdgeOptions, ...} =
                   Property.getSetOnce (Edge.plist, Property.initConst [])
                val _ =
@@ -1657,9 +1697,9 @@ structure Program =
                          Vector.foreach
                          (blocks, fn Block.T {transfer, ...} =>
                           case transfer of
-                             Call {func, return, ...} =>
+                             Call {func, entry, return, ...} =>
                                 let
-                                   val to = funcNode func
+                                   val to = funcEntryNode entry
                                    val {tail, nontail} = get to
                                    datatype z = datatype Return.t
                                    val is =
@@ -1684,7 +1724,7 @@ structure Program =
                    in
                       ()
                    end)
-               val root = funcNode main
+               val root = funcEntryNode main
                val l =
                   Graph.layoutDot
                   (graph, fn {nodeName} =>
@@ -1712,7 +1752,7 @@ structure Program =
             ; Vector.foreach (datatypes, output o Datatype.layout)
             ; output (str "\n\nGlobals:")
             ; Vector.foreach (globals, output o Statement.layout)
-            ; output (seq [str "\n\nMain: ", Func.layout main])
+            ; output (seq [str "\n\nMain: ", FuncEntry.layout main])
             ; output (str "\n\nFunctions:")
             ; List.foreach (functions, fn f =>
                             Function.layouts (f, global, output))
@@ -1729,21 +1769,31 @@ structure Program =
                  end
          end
 
-      fun layoutStats (T {datatypes, globals, functions, main, ...}) =
+      fun mainFunction (T {functions, main, ...}) =
+         case List.peek (functions, fn f =>
+               Vector.exists (Function.entries f, fn e =>
+                         FuncEntry.equals (main, FunctionEntry.name e))) of
+            NONE => Error.bug "SsaTree.Program.mainFunction: no main function"
+          | SOME f => f
+
+      fun mainFunctionEntry (program as T{main,...}) =
+         case Vector.peek (Function.entries (mainFunction program), fn e =>
+             FuncEntry.equals (main, FunctionEntry.name e)) of
+            NONE     => Error.bug "SsaTree.Program.mainFunctionEntry: no main function entry"
+          | SOME  e  => e
+
+      fun layoutStats (program as T{datatypes, globals, functions, main, ...})=
          let
             val (mainNumVars, mainNumBlocks) =
-               case List.peek (functions, fn f =>
-                               Func.equals (main, Function.name f)) of
-                  NONE => Error.bug "SsaTree.Program.layoutStats: no main"
-                | SOME f =>
-                     let
-                        val numVars = ref 0
-                        val _ = Function.foreachVar (f, fn _ => Int.inc numVars)
-                        val {blocks, ...} = Function.dest f
-                        val numBlocks = Vector.length blocks
-                     in
+               let
+                  val f = mainFunction program
+                  val numVars = ref 0
+                  val _ = Function.foreachVar (f, fn _ => Int.inc numVars)
+                  val {blocks, ...} = Function.dest f
+                  val numBlocks = Vector.length blocks
+               in
                         (!numVars, numBlocks)
-                     end
+               end
             val numTypes = ref 0
             val {get = countType, destroy} =
                Property.destGet
@@ -1862,12 +1912,6 @@ structure Program =
           (foreachPrim (p, fn prim => if f prim then escape true else ())
            ; false))
 
-      fun mainFunction (T {functions, main, ...}) =
-         case List.peek (functions, fn f =>
-                         Func.equals (main, Function.name f)) of
-            NONE => Error.bug "SsaTree.Program.mainFunction: no main function"
-          | SOME f => f
-
       fun dfs (p, v) =
          let
             val T {functions, main, ...} = p
@@ -1890,7 +1934,7 @@ structure Program =
                         val _ = Array.update (visited, i, true)
                         val f = Vector.sub (functions, i)
                         val v' = v f
-                        val _ = Function.dfs 
+                        val _ = Function.dfs
                                 (f, fn Block.T {transfer, ...} =>
                                  (Transfer.foreachFunc (transfer, visit)
                                   ; fn () => ()))
@@ -1899,7 +1943,8 @@ structure Program =
                         ()
                      end
                end
-            val _ = visit main
+            (* FIXME: have a constant time way to get the Func.t *)
+            val _ = visit (Function.name (mainFunction p))
             val _ = Vector.foreach (functions, rem o Function.name)
          in
             ()
