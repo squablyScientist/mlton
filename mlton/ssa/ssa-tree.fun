@@ -982,14 +982,24 @@ structure FunctionEntry =
 
       fun function (T{function, ...}) = function
       fun name (T{name, ...}) = name
+
+      fun layoutHeaders (T{args, name, start, ...}) =
+         let
+            open Layout
+         in
+            seq [str "fun_entry ",
+                 FuncEntry.layout name,
+                 str " ",
+                 layoutFormals args,
+                 str " = ", Label.layout start, str " ()"]
+         end
    end
 
 structure Function =
    struct
       structure CPromise = ClearablePromise
 
-      type dest = {args: (Var.t * Type.t) vector,
-                   blocks: Block.t vector,
+      type dest = {blocks: Block.t vector,
                    entries: FunctionEntry.t vector,
                    mayInline: bool,
                    name: Func.t,
@@ -1025,8 +1035,9 @@ structure Function =
 
       fun foreachVar (f: t, fx: Var.t * Type.t -> unit): unit =
          let
-            val {args, blocks, ...} = dest f
-            val _ = Vector.foreach (args, fx)
+            val {blocks, entries, ...} = dest f
+            val _ = Vector.foreach(entries, fn (FunctionEntry.T{args, ...}) =>
+                     Vector.foreach (args, fx))
             val _ =
                Vector.foreach
                (blocks, fn Block.T {args, statements, ...} =>
@@ -1337,23 +1348,28 @@ structure Function =
 
       fun clear (T {controlFlow, dest, ...}) =
          let
-            val {args, blocks, ...} = dest
-            val _ = (Vector.foreach (args, Var.clear o #1)
-                     ; Vector.foreach (blocks, Block.clear))
+            val {blocks, entries, ...} = dest
+            val _ = Vector.foreach (entries, fn (FunctionEntry.T{args, ...})
+                     => Vector.foreach (args, Var.clear o #1))
+            val _ = Vector.foreach (blocks, Block.clear)
             val _ = CPromise.clear controlFlow
          in
             ()
          end
 
-      fun layoutHeader (f: t): Layout.t =
+      fun layoutHeaders (f: t): Layout.t =
          let
-            val {args, name, raises, returns, start, ...} = dest f
+            val {entries, name, raises, returns, start, ...} = dest f
             open Layout
+            val entryLayouts =
+               Vector.foldr(entries, [],
+                  fn (entry, entryLayouts) =>
+                     FunctionEntry.layoutHeaders entry :: entryLayouts
+               )
          in
-            seq [str "fun ",
+            align (seq [str "fun ",
                  Func.layout name,
                  str " ",
-                 layoutFormals args,
                  if !Control.showTypes
                     then seq [str ": ",
                               record [("raises",
@@ -1362,8 +1378,8 @@ structure Function =
                                       ("returns",
                                        Option.layout
                                        (Vector.layout Type.layout) returns)]]
-                 else empty,
-                    str " = ", Label.layout start, str " ()"]
+                 else empty]
+               :: entryLayouts)
          end
 
       fun layout (f: t) =
@@ -1371,14 +1387,14 @@ structure Function =
             val {blocks, ...} = dest f
             open Layout
          in
-            align [layoutHeader f,
+            align [layoutHeaders f,
                    indent (align (Vector.toListMap (blocks, Block.layout)), 2)]
          end
 
       fun layouts (f: t, global, output: Layout.t -> unit): unit =
          let
             val {blocks, name, ...} = dest f
-            val _ = output (layoutHeader f)
+            val _ = output (layoutHeaders f)
             val _ = Vector.foreach (blocks, fn b =>
                                     output (Layout.indent (Block.layout b, 2)))
             val _ =
@@ -1439,9 +1455,18 @@ structure Function =
                val (bindLabel, lookupLabel, destroyLabel) =
                   make (Label.new, Label.plist)
             end
-            val {args, blocks, entries, mayInline, name, raises, returns, start, ...} =
+            val {blocks, entries, mayInline, name, raises, returns, start, ...} =
                dest f
-            val args = Vector.map (args, fn (x, ty) => (bindVar x, ty))
+            val entries : FunctionEntry.t vector =
+               Vector.map (entries,
+                  (fn (FunctionEntry.T{args, name, function, start}) =>
+                     FunctionEntry.T{
+                        args = Vector.map(args, fn (x, ty) => (bindVar x, ty)),
+                        name = name,
+                        function = function,
+                        start = start}
+                  )
+               )
             val bindLabel = ignore o bindLabel
             val bindVar = ignore o bindVar
             val _ = 
@@ -1472,9 +1497,7 @@ structure Function =
             val _ = destroyVar ()
             val _ = destroyLabel ()
          in
-            new {args = args,
-                 blocks = blocks,
-                 (* TODO: I don't actually a' rename these.  Should I? *)
+            new {blocks = blocks,
                  entries = entries,
                  mayInline = mayInline,
                  name = name,
@@ -1491,7 +1514,7 @@ structure Function =
          else 
          let
             val _ = Control.diagnostic (fn () => layout f)
-            val {args, blocks, entries, mayInline, name, raises, returns, start} = dest f
+            val {blocks, entries, mayInline, name, raises, returns, start} = dest f
             val extraBlocks = ref []
             val {get = labelBlock, set = setLabelBlock, rem} =
                Property.getSetOnce
@@ -1604,8 +1627,7 @@ structure Function =
             val _ = Vector.foreach (blocks, rem o Block.label)
             val blocks = Vector.concat [Vector.fromList (!extraBlocks), blocks]
             val f = 
-               new {args = args,
-                    blocks = blocks,
+               new {blocks = blocks,
                     entries = entries,
                     mayInline = mayInline,
                     name = name,
@@ -1830,8 +1852,10 @@ structure Program =
                List.foreach
                (functions, fn f =>
                 let
-                   val {args, blocks, ...} = Function.dest f
-                   val _ = Vector.foreach (args, countType o #2)
+                   val {blocks, entries, ...} = Function.dest f
+                   (* Count all of the arguments *)
+                   val _ = Vector.foreach (blocks, fn Block.T{args, ...} =>
+                              Vector.foreach (args, countType o #2))
                    val _ =
                       Vector.foreach
                       (blocks, fn Block.T {args, statements, ...} =>

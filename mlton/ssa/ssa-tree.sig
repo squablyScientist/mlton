@@ -256,8 +256,7 @@ signature ME_SSA_TREE =
                t -> {graph: unit DirectedGraph.t,
                      labelNode: Label.t -> unit DirectedGraph.Node.t,
                      nodeBlock: unit DirectedGraph.Node.t -> Block.t}
-            val dest: t -> {args: (Var.t * Type.t) vector,
-                            blocks: Block.t vector,
+            val dest: t -> {blocks: Block.t vector,
                             entries: FunctionEntry.t vector,
                             mayInline: bool,
                             name: Func.t,
@@ -279,8 +278,7 @@ signature ME_SSA_TREE =
                                                 tree: unit -> Layout.t}
             val mayInline: t -> bool
             val name: t -> Func.t
-            val new: {args: (Var.t * Type.t) vector,
-                      blocks: Block.t vector,
+            val new: {blocks: Block.t vector,
                       entries: FunctionEntry.t vector,
                       mayInline: bool,
                       name: Func.t,
