@@ -1004,8 +1004,7 @@ structure Function =
                    mayInline: bool,
                    name: Func.t,
                    raises: Type.t vector option,
-                   returns: Type.t vector option,
-                   start: Label.t}
+                   returns: Type.t vector option}
 
       (* There is a messy interaction between the laziness used in controlFlow
        * and the property lists on labels because the former stores
@@ -1016,8 +1015,8 @@ structure Function =
        *)
       datatype t =
          T of {controlFlow:
-               {dfsTree: unit -> Block.t Tree.t,
-                dominatorTree: unit -> Block.t Tree.t,
+               {dfsTrees: unit -> Block.t Tree.t list,
+                dominatorForest: unit -> Block.t Tree.t list,
                 graph: unit DirectedGraph.t,
                 labelNode: Label.t -> unit DirectedGraph.Node.t,
                 nodeBlock: unit DirectedGraph.Node.t -> Block.t} CPromise.t,
@@ -1059,12 +1058,12 @@ structure Function =
          fun make sel =
             fn T {controlFlow, ...} => sel (CPromise.force controlFlow) ()
       in
-         val dominatorTree = make #dominatorTree
+         val dominatorForest = make #dominatorForest
       end
 
       fun dfs (f, v) =
          let
-            val {blocks, start, ...} = dest f
+            val {blocks, entries, ...} = dest f
             val numBlocks = Vector.length blocks
             val {get = labelIndex, set = setLabelIndex, rem, ...} =
                Property.getSetOnce (Label.plist,
@@ -1090,7 +1089,8 @@ structure Function =
                         ()
                      end
                end
-            val _ = visit start
+            val _ = Vector.foreach (entries,
+                     fn FunctionEntry.T{start, ...} => visit start)
             val _ = Vector.foreach (blocks, rem o Block.label)
          in
             ()
@@ -1101,7 +1101,7 @@ structure Function =
          structure Node = Graph.Node
          structure Edge = Graph.Edge
       in
-         fun determineControlFlow ({blocks, start, ...}: dest) =
+         fun determineControlFlow ({blocks, entries, ...}: dest) =
             let
                open Dot
                val g = Graph.new ()
@@ -1127,20 +1127,23 @@ structure Function =
                    in
                       ()
                    end)
-               val root = labelNode start
-               val dfsTree =
+               val roots = Vector.foldr(entries, [],
+                  fn (FunctionEntry.T{start, ...}, roots) =>
+                     labelNode start :: roots)
+               val dfsTrees =
                   Promise.lazy
                   (fn () =>
-                   Graph.dfsTree (g, {root = root,
-                                      nodeValue = #block o nodeInfo}))
-               val dominatorTree =
+                   Graph.dfsTrees (g, roots, #block o nodeInfo))
+               (* FIXME: implement the dominatorForest *)
+               val dominatorForest =
                   Promise.lazy
-                  (fn () =>
-                   Graph.dominatorTree (g, {root = root,
-                                            nodeValue = #block o nodeInfo}))
+                  (fn () => raise Fail
+                  "Function.determineControlFlow.dominatorForest unimplemented")
+                   (*Graph.dominatorTree (g, {roots = roots,
+                                            nodeValue = #block o nodeInfo}))*)
             in
-               {dfsTree = dfsTree,
-                dominatorTree = dominatorTree,
+               {dfsTrees = dfsTrees,
+                dominatorForest = dominatorForest,
                 graph = g,
                 labelNode = labelNode,
                 nodeBlock = #block o nodeInfo}
@@ -1148,7 +1151,7 @@ structure Function =
 
          fun layoutDot (f, global: Var.t -> string option) =
             let
-               val {name, start, blocks, ...} = dest f
+               val {name, blocks, entries, ...} = dest f
                fun makeName (name: string,
                              formals: (Var.t * Type.t) vector): string =
                   concat [name, " ",
@@ -1278,19 +1281,32 @@ structure Function =
                    in
                       ()
                    end)
-               val root = labelNode start
+               val roots =
+                  Vector.foldr (entries, [],
+                     fn (FunctionEntry.T{start, ...}, roots) =>
+                        labelNode start :: roots
+                  )
                val graphLayout =
                   Graph.layoutDot
                   (graph, fn {nodeName} => 
                    {title = concat [Func.toString name, " control-flow graph"],
-                    options = [GraphOption.Rank (Min, [{nodeName = nodeName root}])],
+                    options =
+                     [GraphOption.Rank
+                        (Min,
+                        Vector.foldr (entries, [],
+                           fn (FunctionEntry.T{start, ...}, roots) =>
+                              {nodeName = nodeName (labelNode start)} :: roots
+                        ))
+                     ],
                     edgeOptions = edgeOptions,
                     nodeOptions =
                     fn n => let
                                val l = ! (nodeOptions n)
                                open NodeOption
                             in FontColor Black :: Shape Box :: l
-                            end})
+                            end}
+                  )
+               (* FIXME: implement the dominatorForest *)
                fun treeLayout () =
                   let
                      val {get = nodeOptions, set = setNodeOptions, ...} =
@@ -1300,6 +1316,7 @@ structure Function =
                         (blocks, fn Block.T {label, ...} =>
                          setNodeOptions (labelNode label,
                                          [NodeOption.label (Label.toString label)]))
+                     (*
                      val treeLayout =
                         Tree.layoutDot
                         (Graph.dominatorTree (graph,
@@ -1308,8 +1325,10 @@ structure Function =
                          {title = concat [Func.toString name, " dominator tree"],
                           options = [],
                           nodeOptions = nodeOptions})
+                        *)
                   in
-                     treeLayout
+                     (* treeLayout *)
+                     raise Fail "Function.treeLayout"
                   end
                (*
                fun loopForestLayout () =
@@ -1359,7 +1378,7 @@ structure Function =
 
       fun layoutHeaders (f: t): Layout.t =
          let
-            val {entries, name, raises, returns, start, ...} = dest f
+            val {entries, name, raises, returns, ...} = dest f
             open Layout
             val entryLayouts =
                Vector.foldr(entries, [],
@@ -1455,7 +1474,7 @@ structure Function =
                val (bindLabel, lookupLabel, destroyLabel) =
                   make (Label.new, Label.plist)
             end
-            val {blocks, entries, mayInline, name, raises, returns, start, ...} =
+            val {blocks, entries, mayInline, name, raises, returns, ...} =
                dest f
             val entries : FunctionEntry.t vector =
                Vector.map (entries,
@@ -1493,7 +1512,6 @@ structure Function =
                                               (exp, lookupVar)}),
                          transfer = Transfer.replaceLabelVar
                                     (transfer, lookupLabel, lookupVar)})
-            val start = lookupLabel start
             val _ = destroyVar ()
             val _ = destroyLabel ()
          in
@@ -1502,8 +1520,7 @@ structure Function =
                  mayInline = mayInline,
                  name = name,
                  raises = raises,
-                 returns = returns,
-                 start = start}
+                 returns = returns}
          end
 
       (* TODO: Fix profiling for multi-entry functions *)
@@ -1514,7 +1531,7 @@ structure Function =
          else 
          let
             val _ = Control.diagnostic (fn () => layout f)
-            val {blocks, entries, mayInline, name, raises, returns, start} = dest f
+            val {blocks, entries, mayInline, name, raises, returns} = dest f
             val extraBlocks = ref []
             val {get = labelBlock, set = setLabelBlock, rem} =
                Property.getSetOnce
@@ -1532,13 +1549,17 @@ structure Function =
                                    ty = Type.unit,
                                    var = NONE}
                    val statements =
-                      if Label.equals (label, start)
+                      if Vector.exists
+                       (entries,
+                        fn FunctionEntry.T{start, ...} =>
+                           Label.equals (label, start)
+                       )
                          then (Vector.concat
                                [Vector.new1
                                 (make (Exp.Profile
                                        (ProfileExp.Enter sourceInfo))),
                                 statements])
-                      else statements
+                         else statements
                    fun leave () =
                       make (Exp.Profile (ProfileExp.Leave sourceInfo))
                    fun prefix (l: Label.t,
@@ -1632,8 +1653,7 @@ structure Function =
                     mayInline = mayInline,
                     name = name,
                     raises = raises,
-                    returns = returns,
-                    start = start}
+                    returns = returns}
             val _ = Control.diagnostic (fn () => layout f)
          in
             f

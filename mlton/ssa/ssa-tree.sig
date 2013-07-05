@@ -261,14 +261,13 @@ signature ME_SSA_TREE =
                             mayInline: bool,
                             name: Func.t,
                             raises: Type.t vector option,
-                            returns: Type.t vector option,
-                            start: Label.t}
+                            returns: Type.t vector option}
             (* dfs (f, v) visits the blocks in depth-first order, applying v b
              * for block b to yield v', then visiting b's descendents,
              * then applying v' ().
              *)
             val dfs: t * (Block.t -> unit -> unit) -> unit
-            val dominatorTree: t -> Block.t Tree.t
+            val dominatorForest: t -> Block.t Tree.t list
             val entries: t -> FunctionEntry.t vector
             val foreachVar: t * (Var.t * Type.t -> unit) -> unit
             val layout: t -> Layout.t
@@ -283,8 +282,7 @@ signature ME_SSA_TREE =
                       mayInline: bool,
                       name: Func.t,
                       raises: Type.t vector option,
-                      returns: Type.t vector option,
-                      start: Label.t} -> t
+                      returns: Type.t vector option} -> t
             val profile: t * SourceInfo.t -> t
          end
 
