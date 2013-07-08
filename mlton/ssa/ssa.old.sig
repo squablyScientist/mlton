@@ -11,7 +11,7 @@ signature SSA_STRUCTS =
       include SSA_TREE_STRUCTS
    end
 
-signature ME_SSA = 
+signature SSA = 
    sig
       include SIMPLIFY
    end

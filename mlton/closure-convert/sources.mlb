@@ -21,6 +21,8 @@ local
    lambda-free.fun
    closure-convert.sig
    closure-convert.fun
+   closure-convert.old.sig
+   closure-convert.old.fun
 in
    functor ClosureConvert
 end

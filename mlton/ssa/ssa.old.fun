@@ -6,12 +6,6 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature SSA_STRUCTS = 
-   sig
-      include SSA_TREE_STRUCTS
-   end
-
-signature ME_SSA = 
-   sig
-      include SIMPLIFY
-   end
+functor Ssa (S: SSA_STRUCTS): SSA = 
+   Simplify (Restore (Shrink (PrePasses (
+   TypeCheck (Analyze (DirectExp (SsaTree (S))))))))

@@ -88,14 +88,17 @@ local
    simplify.fun
    simplify2.fun
    ssa.sig
+   ssa.old.sig
    ssa2.sig
    ssa.fun
+   ssa.old.fun
    ssa2.fun
    ssa-to-ssa2.sig
    ssa-to-ssa2.fun
 in
    signature HANDLER
    signature RETURN
+   signature ME_SSA
    signature SSA
    signature SSA2
 
