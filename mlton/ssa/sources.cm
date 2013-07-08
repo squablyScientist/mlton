@@ -26,9 +26,9 @@ is
 
 equatable.sig
 equatable.sml
-ssa-tree.sig
+ssa-tree.old.sig
 ssa-tree2.sig
-ssa-tree.fun
+ssa-tree.old.fun
 ssa-tree2.fun
 direct-exp.sig
 direct-exp.fun
