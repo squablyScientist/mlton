@@ -267,7 +267,7 @@ signature ME_SSA_TREE =
              * then applying v' ().
              *)
             val dfs: t * (Block.t -> unit -> unit) -> unit
-            val dominatorForest: t -> Block.t Tree.t list
+            val dominatorForest: t -> Block.t Tree.t vector
             val entries: t -> FunctionEntry.t vector
             val foreachVar: t * (Var.t * Type.t -> unit) -> unit
             val layout: t -> Layout.t

@@ -1016,7 +1016,7 @@ structure Function =
       datatype t =
          T of {controlFlow:
                {dfsTrees: unit -> Block.t Tree.t list,
-                dominatorForest: unit -> Block.t Tree.t list,
+                dominatorForest: unit -> Block.t Tree.t vector,
                 graph: unit DirectedGraph.t,
                 labelNode: Label.t -> unit DirectedGraph.Node.t,
                 nodeBlock: unit DirectedGraph.Node.t -> Block.t} CPromise.t,
@@ -1134,13 +1134,32 @@ structure Function =
                   Promise.lazy
                   (fn () =>
                    Graph.dfsTrees (g, roots, #block o nodeInfo))
-               (* FIXME: implement the dominatorForest *)
-               val dominatorForest =
-                  Promise.lazy
-                  (fn () => raise Fail
-                  "Function.determineControlFlow.dominatorForest unimplemented")
-                   (*Graph.dominatorTree (g, {roots = roots,
-                                            nodeValue = #block o nodeInfo}))*)
+
+               (* When we build the dominator forest, we create a fake root
+                * element that dominates all of the entry points; this lets us
+                * use the regular dominator tree algorithm.  We then throw away
+                * the root element, after Graph.dominatorTree has returned,
+                * since it was only there to make the forest look like a tree.
+                *)
+               val dominatorForest = Promise.lazy (fn () =>
+                  let
+                     val fakeRoot = newNode ()
+                     val () = Vector.foreach (entries,
+                         fn FunctionEntry.T{start, ...} =>
+                             let
+                                 val entry = labelNode start
+                                 val _ = Graph.addEdge (g, {from = fakeRoot,
+                                                            to = entry})
+                             in
+                                 ()
+                             end
+                         )
+                     val Tree.T (_, trees) =
+                        Graph.dominatorTree (g, {root = fakeRoot,
+                                             nodeValue = #block o nodeInfo})
+                  in
+                     trees
+                  end)
             in
                {dfsTrees = dfsTrees,
                 dominatorForest = dominatorForest,
