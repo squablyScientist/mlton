@@ -19,22 +19,32 @@ local
    ssa-tree.old.fun
    ssa-tree.fun
    ssa-tree2.fun
+   direct-exp.old.sig
+   direct-exp.old.fun
    direct-exp.sig
    direct-exp.fun
+   analyze.old.sig
    analyze.sig
    analyze2.sig
+   analyze.old.fun
    analyze.fun
    analyze2.fun
+   type-check.old.sig
    type-check.sig
    type-check2.sig
+   type-check.old.fun
    type-check.fun
    type-check2.fun
+   prepasses.old.sig
    prepasses.sig
    prepasses2.sig
+   prepasses.old.fun
    prepasses.fun
    prepasses2.fun
+   shrink.old.sig
    shrink.sig
    shrink2.sig
+   shrink.old.fun
    shrink.fun
    shrink2.fun
    flat-lattice.sig
@@ -45,9 +55,12 @@ local
    two-point-lattice.fun
    three-point-lattice.sig
    ann "forceUsed" in three-point-lattice.fun end
+   restore.old.sig
+   restore.old.fun
    restore.sig
    restore.fun
 
+   ssa-transform.old.sig
    ssa-transform.sig
    ssa2-transform.sig
    common-arg.fun
@@ -69,7 +82,9 @@ local
    local-flatten.fun
    local-ref.fun
    loop-invariant.fun
+   poly-equal.old.fun
    poly-equal.fun
+   poly-hash.old.fun
    poly-hash.fun
    profile.sig
    profile.fun
@@ -83,8 +98,10 @@ local
    simplify-types.fun
    useless.fun
    zone.fun
+   simplify.old.sig
    simplify.sig
    simplify2.sig
+   simplify.old.fun
    simplify.fun
    simplify2.fun
    ssa.sig
