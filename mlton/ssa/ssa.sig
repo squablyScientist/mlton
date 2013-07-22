@@ -13,5 +13,5 @@ signature SSA_STRUCTS =
 
 signature ME_SSA = 
    sig
-      include SIMPLIFY
+      include ME_SIMPLIFY
    end

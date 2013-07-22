@@ -120,6 +120,7 @@ in
    signature SSA2
 
    functor FlatLattice
+   functor MeSsa
    functor Ssa
    functor Ssa2
    functor SsaToSsa2
