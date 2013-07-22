@@ -7,14 +7,14 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature ANALYZE_STRUCTS = 
+signature ME_ANALYZE_STRUCTS =
    sig
-      include DIRECT_EXP
+      include ME_DIRECT_EXP
    end
 
-signature ANALYZE = 
+signature ME_ANALYZE =
    sig
-      include ANALYZE_STRUCTS
+      include ME_ANALYZE_STRUCTS
 
       val analyze:
          {coerce: {from: 'a,
@@ -40,7 +40,8 @@ signature ANALYZE =
          }
          -> {
              value: Var.t -> 'a,
-             func: Func.t -> {args: 'a vector,
+             funcEntry: FuncEntry.t -> {args: 'a vector},
+             func: Func.t -> {entries: FuncEntry.t vector,
                               raises: 'a vector option,
                               returns: 'a vector option},
              label: Label.t -> 'a vector
