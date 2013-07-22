@@ -1,4 +1,5 @@
-(* Copyright (C) 2009 Matthew Fluet.
+(* Copyright (C) 2013 David Larsen.
+ * Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -23,7 +24,7 @@
  * Requirements: no violation in globals; this is checked.
  *)
 
-functor Restore (S: RESTORE_STRUCTS): RESTORE =
+functor MeRestore (S: ME_RESTORE_STRUCTS): ME_RESTORE =
 struct
 
 open S
@@ -208,7 +209,7 @@ fun restoreFunction {globals: Statement.t vector}
     in
       fn (f: Function.t) =>
       let
-        val {args, blocks, mayInline, name, returns, raises, start} =
+        val {blocks, entries, mayInline, name, returns, raises} =
            Function.dest f
         (* check for violations *)
         val violations = ref []
@@ -264,25 +265,13 @@ fun restoreFunction {globals: Statement.t vector}
                                  Vector.layout Var.layout violations])
                  end)
 
-        (* init entryBlock *)
-        val entry = Label.newNoname ()
-        val entryBlock = Block.T {label = entry,
-                                  args = args,
-                                  statements = Vector.new0 (),
-                                  transfer = Goto {dst = start,
-                                                   args = Vector.new0 ()}}
-
-        (* compute dominator tree *)
-        val dt = Function.dominatorTree f
-        val dt' = Tree.T (entryBlock, Vector.new1 dt)
-
         (* compute df (dominance frontier) *)
         (*  based on section 19.1 of Appel's "Modern Compiler Implementation in ML" *)
         (* also computes defSites and useSites of violating variables *)
         (* also computes preds, defs, and uses *)
         val dtindex = ref 0
         fun doitTree (Tree.T (Block.T {label, args, statements, transfer},
-                              children))
+                              children)) : unit
           = let
               val li = labelInfo label
 
@@ -373,7 +362,48 @@ fun restoreFunction {globals: Statement.t vector}
             in
               ()
             end
-        val _ = doitTree dt'
+
+        (* Build the dominator forest for the function as given to us. *)
+        val df = Function.dominatorForest f
+
+        (* For each entry, build a new block that jumps to the old entry
+         * point.  Add this to the root of the dominator tree for that
+         * particular entry point (since there should be one tree per entry
+         * point). *)
+        val entryBlocks = Vector.map
+            (entries,
+            fn entry as FunctionEntry.T{args, start, ...} =>
+               let
+                  val entryBlock =
+                     Block.T {label = Label.newNoname (),
+                              args = args,
+                              statements = Vector.new0 (),
+                              transfer = Goto {dst = start,
+                                               args = Vector.new0 ()}}
+
+                  (* Grab the dominator tree for this entry point *)
+                  val dt_index = Vector.index
+                     (df,
+                     fn Tree.T(Block.T{label, ...}, _) =>
+                        Label.equals (start, label)
+                     )
+               in
+                  case dt_index of
+                     SOME i =>
+                        let
+                           (* Add the new entry block to the top of the
+                            * dominator tree and process it. *)
+                           val dt = Vector.sub (df, i)
+                           val () = doitTree (Tree.T (entryBlock, Vector.new1 dt))
+                        in
+                           {newEntryBlock = entryBlock, functionEntry = entry}
+                        end
+                  |  NONE  => Error.bug ("Restore.restoreFunction: dominator" ^
+                                         " forest missing a tree with " ^
+                                         (Label.toString start) ^
+                                         " at the root")
+               end
+            )
 
         (* compute liveness *)
         val _
@@ -466,7 +496,7 @@ fun restoreFunction {globals: Statement.t vector}
               phiArgs := Vector.fromList (!phi) ;
               phi := []
             end
-        val _ = visitBlock entryBlock
+        val _ = Vector.foreach (entryBlocks, visitBlock o #newEntryBlock)
         val _ = Vector.foreach (blocks, visitBlock)
 
         (* Diagnostics *)
@@ -616,28 +646,40 @@ fun restoreFunction {globals: Statement.t vector}
             end
         fun rewrite ()
           = let
-              local
-                val (Block.T {label, args, statements, transfer}, post) 
-                  = visitBlock' entryBlock
-                val entryBlock = Block.T {label = label,
-                                          args = Vector.new0 (),
-                                          statements = statements,
-                                          transfer = transfer}
-                val _ = List.push (blocks, entryBlock)
-              in
-                val args = args
-                val post = post
-              end
-              val _ = Tree.traverse (Function.dominatorTree f, visitBlock)
-              val _ = post ()
+              val insertedEntries = Vector.map
+                  (entryBlocks,
+                  fn {newEntryBlock = entryBlock, functionEntry = entry} =>
+                     let
+                        val FunctionEntry.T {function, name, ...} = entry
+                        val (Block.T {label, args, statements, transfer}, post)
+                           = visitBlock' entryBlock
+                        val entryBlock = Block.T {label = label,
+                                                  args = Vector.new0 (),
+                                                  statements = statements,
+                                                  transfer = transfer}
+                        val _ = List.push(blocks, entryBlock)
+                        val entry = FunctionEntry.T {args = args,
+                                                     function = function,
+                                                     name = name,
+                                                     start = label}
+                     in
+                        {entry = entry, post = post}
+                     end
+                  )
+              val df = Function.dominatorForest f
+              val _ = Vector.foreach (df, fn dt => Tree.traverse (dt, visitBlock))
+
+              (* Run post() for all of the new blocks that were just added. *)
+              val _ = Vector.foreach
+                 (insertedEntries, fn {post, ...} => post () )
+              val entries = Vector.map (insertedEntries, #entry)
             in
-              Function.new {args = args,
-                            blocks = Vector.fromList (!blocks),
+              Function.new {blocks = Vector.fromList (!blocks),
+                            entries = entries,
                             mayInline = mayInline,
                             name = name,
                             raises = raises,
-                            returns = returns,
-                            start = entry}
+                            returns = returns}
             end
         val f = rewrite ()
       in

@@ -6,14 +6,14 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature RESTORE_STRUCTS = 
+signature ME_RESTORE_STRUCTS =
    sig
-      include SHRINK
+      include ME_SHRINK
    end
 
-signature RESTORE = 
+signature ME_RESTORE =
    sig
-      include RESTORE_STRUCTS
+      include ME_RESTORE_STRUCTS
 
       val restoreFunction: 
          {globals: Statement.t vector} -> Function.t -> Function.t
