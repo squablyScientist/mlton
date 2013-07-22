@@ -1,4 +1,5 @@
-(* Copyright (C) 2009 Matthew Fluet.
+(* Copyright (C) 2013 David Larsen
+ * Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -7,14 +8,14 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature DIRECT_EXP_STRUCTS =
+signature ME_DIRECT_EXP_STRUCTS =
   sig
-     include SSA_TREE
+     include ME_SSA_TREE
   end
 
-signature DIRECT_EXP =
+signature ME_DIRECT_EXP =
   sig
-     include DIRECT_EXP_STRUCTS
+     include ME_DIRECT_EXP_STRUCTS
 
      structure DirectExp:
         sig
@@ -33,7 +34,10 @@ signature DIRECT_EXP =
            (* For now, call always uses Handler.None.  This means it should only
             * be used for functions that cannot raise.
             *)
-           val call: {func: Func.t, args: t vector, ty: Type.t} -> t
+           val call: {func: Func.t,
+                      entry: FuncEntry.t,
+                      args: t vector,
+                      ty: Type.t} -> t
            val casee: {test: t, 
                        cases: cases,
                        default: t option,

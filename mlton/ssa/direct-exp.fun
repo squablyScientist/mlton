@@ -1,4 +1,5 @@
-(* Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
+(* Copyright (C) 2013 David Larsen
+ * Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
@@ -6,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor DirectExp (S: DIRECT_EXP_STRUCTS): DIRECT_EXP =
+functor MeDirectExp (S: ME_DIRECT_EXP_STRUCTS): ME_DIRECT_EXP =
 struct
 
 open S
@@ -20,6 +21,7 @@ datatype t =
              overflow: t,
              ty: Type.t}
  | Call of {func: Func.t,
+            entry: FuncEntry.t,
             args: t vector,
             ty: Type.t}
  | Case of {cases: cases,
@@ -129,9 +131,9 @@ in
          Arith {prim, args, overflow, ...} =>
             align [Prim.layoutApp (prim, args, layout),
                    seq [str "Overflow => ", layout overflow]]
-       | Call {func, args, ty} =>
-            seq [Func.layout func, str " ", layouts args,
-                 str ": ", Type.layout ty]
+       | Call {func, entry, args, ty} =>
+            seq [Func.layout func, str "@", FuncEntry.layout entry, str " ",
+                layouts args, str ": ", Type.layout ty]
        | Case {cases, default, test, ...} =>
             align
             [seq [str "case ", layout test, str " of"],
@@ -397,12 +399,13 @@ fun linearize' (e: t, h: Handler.t, k: Cont.t): Label.t * Block.t list =
                                     success = l,
                                     ty = ty}}
                 end)
-          | Call {func, args, ty} =>
+          | Call {func, entry, args, ty} =>
                loops
                (args, h, fn xs =>
                 {statements = [],
                  transfer = (Transfer.Call
                              {func = func,
+                              entry = entry,
                               args = xs,
                               return = Return.NonTail {cont = reify (k, ty),
                                                        handler = h}})})
