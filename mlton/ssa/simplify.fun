@@ -7,11 +7,12 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor Simplify (S: SIMPLIFY_STRUCTS): SIMPLIFY = 
+functor MeSimplify (S: ME_SIMPLIFY_STRUCTS): ME_SIMPLIFY =
 struct
 
 open S
 
+(*
 structure CommonArg = CommonArg (S)
 structure CommonBlock = CommonBlock (S)
 structure CommonSubexp = CommonSubexp (S)
@@ -25,19 +26,25 @@ structure KnownCase = KnownCase (S)
 structure LocalFlatten = LocalFlatten (S)
 structure LocalRef = LocalRef (S)
 structure LoopInvariant = LoopInvariant (S)
-structure PolyEqual = PolyEqual (S)
-structure PolyHash = PolyHash (S)
+*)
+structure PolyEqual = MePolyEqual (S)
+structure PolyHash = MePolyHash (S)
+(*
 structure Profile = Profile (S)
 structure Redundant = Redundant (S)
 structure RedundantTests = RedundantTests (S)
 structure RemoveUnused = RemoveUnused (S)
 structure SimplifyTypes = SimplifyTypes (S)
 structure Useless = Useless (S)
+*)
 
 type pass = {name: string,
              doit: Program.t -> Program.t}
 
 val ssaPassesDefault =
+   (* TODO: Uncomment as these passes are converted into the multi-entry SSA
+            IL.
+
    {name = "removeUnused1", doit = RemoveUnused.transform} ::
    {name = "introduceLoops1", doit = IntroduceLoops.transform} ::
    {name = "loopInvariant1", doit = LoopInvariant.transform} ::
@@ -55,6 +62,7 @@ val ssaPassesDefault =
    {name = "useless", doit = Useless.transform} ::
    {name = "removeUnused2", doit = RemoveUnused.transform} ::
    {name = "simplifyTypes", doit = SimplifyTypes.transform} ::
+   *)
    (* polyEqual should run
     *   - after types are simplified so that many equals are turned into eqs
     *   - before inlining so that equality functions can be inlined
@@ -65,6 +73,7 @@ val ssaPassesDefault =
     *   - before inlining so that hash functions can be inlined
     *)
    {name = "polyHash", doit = PolyHash.transform} ::
+   (*
    {name = "introduceLoops2", doit = IntroduceLoops.transform} ::
    {name = "loopInvariant2", doit = LoopInvariant.transform} ::
    {name = "contify2", doit = Contify.transform} ::
@@ -86,6 +95,7 @@ val ssaPassesDefault =
    {name = "redundant", doit = Redundant.transform} ::
    {name = "knownCase", doit = KnownCase.transform} ::
    {name = "removeUnused4", doit = RemoveUnused.transform} ::
+   *)
    nil
 
 val ssaPassesMinimal =
@@ -151,9 +161,10 @@ local
                                             Int.toString product, ",",
                                             Int.toString small, ")#",
                                             Int.toString (Counter.next count)],
-                             doit = (fn p => 
-                                     Inline.inlineNonRecursive 
-                                     (p, {small = small, product = product}))}
+                             doit = (fn p =>  p
+                                    (* FIXME: re-enable inlining *)
+                                     (*Inline.inlineNonRecursive
+                                     (p, {small = small, product = product})*))}
                     val s = String.dropPrefix (s, String.size "inlineNonRecursive")
                  in
                     case nums s of
@@ -169,9 +180,10 @@ local
                                             Bool.toString repeat, ",",
                                             Option.toString Int.toString size, ")#",
                                             Int.toString (Counter.next count)],
-                             doit = (fn p => 
-                                     Inline.inlineLeaf
-                                     (p, {loops = loops, repeat = repeat, size = size}))}
+                             doit = (fn p => p
+                                    (* FIXME: re-enable inlining *)
+                                     (*Inline.inlineLeaf
+                                     (p, {loops = loops, repeat = repeat, size = size})*))}
                     val s = String.dropPrefix (s, String.size "inlineLeaf")
                  in
                     case nums s of
@@ -184,7 +196,10 @@ local
 
    val passGens = 
       inlinePassGen ::
-      (List.map([("addProfile", Profile.addProfile),
+      (List.map([(* TODO: Uncomment as these passes are converted into the
+                    multi-entry SSA IL.
+
+                 ("addProfile", Profile.addProfile),
                  ("combineConversions",  CombineConversions.transform),
                  ("commonArg", CommonArg.transform),
                  ("commonBlock", CommonBlock.transform),
@@ -198,8 +213,10 @@ local
                  ("localFlatten", LocalFlatten.transform),
                  ("localRef", LocalRef.transform),
                  ("loopInvariant", LoopInvariant.transform),
+                 *)
                  ("polyEqual", PolyEqual.transform),
-                 ("polyHash", PolyHash.transform),
+                 ("polyHash", PolyHash.transform)
+                 (*,
                  ("redundant", Redundant.transform),
                  ("redundantTests", RedundantTests.transform),
                  ("removeUnused", RemoveUnused.transform),
@@ -210,7 +227,8 @@ local
                  ("eliminateDeadBlocks",S.eliminateDeadBlocks),
                  ("orderFunctions",S.orderFunctions),
                  ("reverseFunctions",S.reverseFunctions),
-                 ("shrink", S.shrink)], 
+                 ("shrink", S.shrink)
+                 *)],
                 mkSimplePassGen))
 in
    fun ssaPassesSetCustom s =
@@ -301,9 +319,12 @@ val simplify = fn p => let
                          val p =
                             if !Control.profile <> Control.ProfileNone
                                andalso !Control.profileIL = Control.ProfileSSA
-                               then pass ({name = "addProfile1",
+                               then
+                                    (* FIXME: Re-introduce profiling *)
+                                    (*pass ({name = "addProfile1",
                                            doit = Profile.addProfile,
-                                           midfix = ""}, p)
+                                           midfix = ""}, p)*)
+                                    Error.bug "Profiling unimplemented"
                             else p
                          val p = maybePass ({name = "orderFunctions1",
                                              doit = S.orderFunctions,

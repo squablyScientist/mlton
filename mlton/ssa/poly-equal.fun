@@ -1,4 +1,5 @@
-(* Copyright (C) 2009 Matthew Fluet.
+(* Copyright (C) 2013 David Larsen
+ * Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -7,7 +8,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor PolyEqual (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM = 
+functor MePolyEqual (S: ME_SSA_TRANSFORM_STRUCTS): ME_SSA_TRANSFORM =
 struct
 
 open S
@@ -98,10 +99,10 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
          (Tycon.plist, Property.initRaise ("PolyEqual.tyconInfo", Tycon.layout))
       val isEnum = #isEnum o tyconInfo
       val tyconCons = #cons o tyconInfo
-      val {get = getTyconEqualFunc: Tycon.t -> Func.t option,
+      val {get = getTyconEqualFunc: Tycon.t -> {funcName: Func.t, entryName: FuncEntry.t} option,
            set = setTyconEqualFunc, ...} =
          Property.getSet (Tycon.plist, Property.initConst NONE)
-      val {get = getVectorEqualFunc: Type.t -> Func.t option,
+      val {get = getVectorEqualFunc: Type.t -> {funcName: Func.t, entryName: FuncEntry.t} option,
            set = setVectorEqualFunc,
            destroy = destroyVectorEqualFunc} =
          Property.destGetSet (Type.plist, Property.initConst NONE)
@@ -113,14 +114,16 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
          List.push (newFunctions,
                     Function.profile (Function.new z,
                                       SourceInfo.polyEqual))
-      fun equalTyconFunc (tycon: Tycon.t): Func.t =
+      fun equalTyconFunc (tycon: Tycon.t): {funcName: Func.t, entryName: FuncEntry.t} =
          case getTyconEqualFunc tycon of
             SOME f => f
           | NONE =>
                let
                   val name =
                      Func.newString (concat ["equal_", Tycon.originalName tycon])
-                  val _ = setTyconEqualFunc (tycon, SOME name)
+                  val entryName = FuncEntry.newString "default"
+                  val funcRecord = {funcName = name, entryName = entryName}
+                  val _ = setTyconEqualFunc (tycon, SOME funcRecord)
                   val ty = Type.datatypee tycon
                   val arg1 = (Var.newNoname (), ty)
                   val arg2 = (Var.newNoname (), ty)
@@ -175,18 +178,21 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                             end))})
                   val (start, blocks) = Dexp.linearize (body, Handler.Caller)
                   val blocks = Vector.fromList blocks
+                  val entry = FunctionEntry.T{args = args,
+                                              function = name,
+                                              name = entryName,
+                                              start = start}
                   val _ =
-                     newFunction {args = args,
-                                  blocks = blocks,
+                     newFunction {blocks = blocks,
+                                  entries = Vector.new1 entry,
                                   mayInline = true,
                                   name = name,
                                   raises = NONE,
-                                  returns = returns,
-                                  start = start}
+                                  returns = returns}
                in
-                  name
+                  funcRecord
                end
-      and vectorEqualFunc (ty: Type.t): Func.t =
+      and vectorEqualFunc (ty: Type.t): {funcName: Func.t, entryName: FuncEntry.t} =
          case getVectorEqualFunc ty of
             SOME f => f
           | NONE =>
@@ -194,9 +200,13 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                   (* Build two functions, one that checks the lengths and the
                    * other that loops.
                    *)
-                  val name = Func.newString "vectorEqual"
-                  val _ = setVectorEqualFunc (ty, SOME name)
-                  val loop = Func.newString "vectorEqualLoop"
+                  val vectorEqualFunc = Func.newString "vectorEqual"
+                  val vectorEqualFuncEntry = FuncEntry.newString "default"
+                  val vectorEqualRecord = {funcName = vectorEqualFunc,
+                                           entryName = vectorEqualFuncEntry}
+                  val _ = setVectorEqualFunc (ty, SOME vectorEqualRecord)
+                  val vectorEqualLoopFunc = Func.newString "vectorEqualLoop"
+                  val vectorEqualLoopFuncEntry = FuncEntry.newString "default"
                   val vty = Type.vector ty
                   local
                      val vec1 = (Var.newNoname (), vty)
@@ -226,7 +236,8 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                              Dexp.conjoin
                              (Dexp.wordEqual (dlen1, dlen2, seqIndexWordSize),
                               Dexp.call
-                              {func = loop,
+                              {func = vectorEqualLoopFunc,
+                               entry = vectorEqualLoopFuncEntry,
                                args = (Vector.new4 
                                        (dvec1, dvec2, dlen1,
                                         Dexp.word (WordX.zero seqIndexWordSize))),
@@ -235,14 +246,17 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                      val (start, blocks) = Dexp.linearize (body, Handler.Caller)
                      val blocks = Vector.fromList blocks
                   in
+                     val entry = FunctionEntry.T{args = args,
+                                                 function = vectorEqualFunc,
+                                                 name = vectorEqualFuncEntry,
+                                                 start = start}
                      val _ =
-                        newFunction {args = args,
-                                     blocks = blocks,
+                        newFunction {blocks = blocks,
+                                     entries = Vector.new1 entry,
                                      mayInline = true,
-                                     name = name,
+                                     name = vectorEqualFunc,
                                      raises = NONE,
-                                     returns = returns,
-                                     start = start}
+                                     returns = returns}
                   end
                   local
                      val vec1 = (Var.newNoname (), vty)
@@ -274,23 +288,27 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                             Dexp.conjoin
                             (equalExp (sub (dvec1, di), sub (dvec2, di), ty),
                              Dexp.call {args = args,
-                                        func = loop,
+                                        func = vectorEqualLoopFunc,
+                                        entry = vectorEqualLoopFuncEntry,
                                         ty = Type.bool}))
                         end
                      val (start, blocks) = Dexp.linearize (body, Handler.Caller)
                      val blocks = Vector.fromList blocks
                   in
+                     val entry = FunctionEntry.T {args = args,
+                                                  function = vectorEqualLoopFunc,
+                                                  name = vectorEqualLoopFuncEntry,
+                                                  start = start}
                      val _ =
-                        newFunction {args = args,
-                                     blocks = blocks,
+                        newFunction {blocks = blocks,
+                                     entries = Vector.new1 entry,
                                      mayInline = true,
-                                     name = loop,
+                                     name = vectorEqualLoopFunc,
                                      raises = NONE,
-                                     returns = returns,
-                                     start = start}
+                                     returns = returns}
                   end
                in
-                  name
+                  vectorEqualRecord
                end
       and equalExp (e1: Dexp.t, e2: Dexp.t, ty: Type.t): Dexp.t =
          Dexp.name (e1, fn x1 => 
@@ -313,9 +331,15 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
              | Type.Datatype tycon =>
                   if isEnum tycon orelse hasConstArg ()
                      then eq ()
-                  else Dexp.call {func = equalTyconFunc tycon,
-                                  args = Vector.new2 (dx1, dx2),
-                                  ty = Type.bool}
+                  else
+                     let
+                        val {funcName, entryName} = equalTyconFunc tycon
+                     in
+                        Dexp.call {func = funcName,
+                                   entry = entryName,
+                                   args = Vector.new2 (dx1, dx2),
+                                   ty = Type.bool}
+                     end
              | Type.IntInf => 
                   if hasConstArg ()
                      then eq ()
@@ -356,9 +380,14 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                      loop 0
                   end
              | Type.Vector ty =>
-                  Dexp.call {func = vectorEqualFunc ty,
+               let
+                  val {funcName, entryName} = vectorEqualFunc ty
+               in
+                  Dexp.call {func = funcName,
+                             entry = entryName,
                              args = Vector.new2 (dx1, dx2),
                              ty = Type.bool}
+               end
              | Type.Weak _ => eq ()
              | Type.Word ws => prim (Prim.wordEqual ws, Vector.new0 ())
          end
@@ -545,17 +574,16 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
          List.revMap
          (functions, fn f =>
           let
-             val {args, blocks, mayInline, name, raises, returns, start} =
+             val {blocks, entries, mayInline, name, raises, returns} =
                 Function.dest f
              val f =
                 if #hasEqual (funcInfo name)
-                   then Function.new {args = args,
-                                      blocks = doit blocks,
+                   then Function.new {blocks = doit blocks,
+                                      entries = entries,
                                       mayInline = mayInline,
                                       name = name,
                                       raises = raises,
-                                      returns = returns,
-                                      start = start}
+                                      returns = returns}
                 else f
              val () = Function.clear f
           in

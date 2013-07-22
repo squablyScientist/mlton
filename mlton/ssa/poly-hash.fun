@@ -1,4 +1,5 @@
-(* Copyright (C) 2009-2010 Matthew Fluet.
+(* Copyright (C) 2013 David Larsen.
+ * Copyright (C) 2009-2010 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -7,7 +8,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor PolyHash (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM = 
+functor MePolyHash (S: ME_SSA_TRANSFORM_STRUCTS): ME_SSA_TRANSFORM =
 struct
 
 open S
@@ -333,14 +334,14 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
          Property.getSetOnce
          (Tycon.plist, Property.initRaise ("PolyHash.info", Tycon.layout))
       val tyconCons = #cons o tyconInfo
-      val {get = getHashFunc: Type.t -> Func.t option,
+      val {get = getHashFunc: Type.t -> {funcName: Func.t, entryName: FuncEntry.t} option,
            set = setHashFunc,
            destroy = destroyHashFunc} =
          Property.destGetSet (Type.plist, Property.initConst NONE)
-      val {get = getTyconHashFunc: Tycon.t -> Func.t option, 
+      val {get = getTyconHashFunc: Tycon.t -> {funcName: Func.t, entryName: FuncEntry.t} option,
            set = setTyconHashFunc, ...} =
          Property.getSet (Tycon.plist, Property.initConst NONE)
-      val {get = getVectorHashFunc: Type.t -> Func.t option, 
+      val {get = getVectorHashFunc: Type.t -> {funcName: Func.t, entryName: FuncEntry.t} option,
            set = setVectorHashFunc, 
            destroy = destroyVectorHashFunc} =
          Property.destGetSet (Type.plist, Property.initConst NONE)
@@ -352,14 +353,17 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
          List.push (newFunctions,
                     Function.profile (Function.new z,
                                       SourceInfo.polyHash))
-      fun hashTyconFunc (tycon: Tycon.t): Func.t =
+      fun hashTyconFunc (tycon: Tycon.t): {funcName: Func.t, entryName: FuncEntry.t} =
          case getTyconHashFunc tycon of
             SOME f => f
           | NONE =>
                let
                   val name =
                      Func.newString (concat ["hash_", Tycon.originalName tycon])
-                  val _ = setTyconHashFunc (tycon, SOME name)
+                  val entryName =
+                     FuncEntry.newString "default"
+                  val funcRecord = {funcName = name, entryName = entryName}
+                  val _ = setTyconHashFunc (tycon, SOME funcRecord)
                   val ty = Type.datatypee tycon
                   val st = (Var.newNoname (), Hash.stateTy)
                   val x = (Var.newNoname (), ty)
@@ -393,18 +397,21 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                        end)}
                   val (start, blocks) = Dexp.linearize (body, Handler.Caller)
                   val blocks = Vector.fromList blocks
+                  val entry = FunctionEntry.T{args = args,
+                                              function = name,
+                                              name = entryName,
+                                              start = start}
                   val _ =
-                     newFunction {args = args,
-                                  blocks = blocks,
+                     newFunction {blocks = blocks,
+                                  entries = Vector.new1 entry,
                                   mayInline = true,
                                   name = name,
                                   raises = NONE,
-                                  returns = returns,
-                                  start = start}
+                                  returns = returns}
                in
-                  name
+                  funcRecord
                end
-      and vectorHashFunc (ty: Type.t): Func.t =
+      and vectorHashFunc (ty: Type.t): {funcName: Func.t, entryName: FuncEntry.t} =
          case getVectorHashFunc ty of
             SOME f => f
           | NONE =>
@@ -413,8 +420,11 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                    * other that loops.
                    *)
                   val name = Func.newString "vectorHash"
-                  val _ = setVectorHashFunc (ty, SOME name)
+                  val entryName = FuncEntry.newString "default"
+                  val funcRecord = {funcName = name, entryName = entryName}
+                  val _ = setVectorHashFunc (ty, SOME funcRecord)
                   val loop = Func.newString "vectorHashLoop"
+                  val loopEntry = FuncEntry.newString "default"
                   val vty = Type.vector ty
                   local
                      val st = (Var.newNoname (), Hash.stateTy)
@@ -434,21 +444,25 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                          body =
                          Dexp.call
                          {func = loop,
+                          entry = loopEntry,
                           args = (Vector.new4
                                   (Hash.wordBytes (dst, dlen, seqIndexWordSize),
                                    dvec, dlen, Dexp.word (WordX.zero seqIndexWordSize))),
                           ty = Hash.stateTy}}
                      val (start, blocks) = Dexp.linearize (body, Handler.Caller)
                      val blocks = Vector.fromList blocks
+                     val entry = FunctionEntry.T {args = args,
+                                                  function = name,
+                                                  name = entryName,
+                                                  start = start}
                   in
                      val _ =
-                        newFunction {args = args,
-                                     blocks = blocks,
+                        newFunction {blocks = blocks,
+                                     entries = Vector.new1 entry,
                                      mayInline = true,
                                      name = name,
                                      raises = NONE,
-                                     returns = returns,
-                                     start = start}
+                                     returns = returns}
                   end
                   local
                      val st = (Var.newNoname (), Hash.stateTy)
@@ -490,22 +504,26 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                                       args = Vector.new0 (),
                                       body = Dexp.call {args = args,
                                                         func = loop,
+                                                        entry = loopEntry,
                                                         ty = Hash.stateTy}})}
                         end
                      val (start, blocks) = Dexp.linearize (body, Handler.Caller)
                      val blocks = Vector.fromList blocks
+                     val loopEntry = FunctionEntry.T {args = args,
+                                                      function = loop,
+                                                      name = loopEntry,
+                                                      start = start}
                   in
                      val _ =
-                        newFunction {args = args,
-                                     blocks = blocks,
+                        newFunction {blocks = blocks,
+                                     entries = Vector.new1 loopEntry,
                                      mayInline = true,
                                      name = loop,
                                      raises = NONE,
-                                     returns = returns,
-                                     start = start}
+                                     returns = returns}
                   end
                in
-                  name
+                  funcRecord
                end
       and hashExp (st: Dexp.t, x: Dexp.t, ty: Type.t): Dexp.t =
          Dexp.name (st, fn st =>
@@ -534,9 +552,14 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                         Hash.wordBytes (dst, toWord, ws)
                      end
                 | Type.Datatype tycon =>
-                     Dexp.call {func = hashTyconFunc tycon,
+                  let
+                     val {funcName, entryName} = hashTyconFunc tycon
+                  in
+                     Dexp.call {func = funcName,
+                                entry = entryName,
                                 args = Vector.new2 (dst, dx),
                                 ty = Hash.stateTy}
+                  end
                 | Type.IntInf => 
                      let
                         val sws = WordSize.smallIntInfWord ()
@@ -572,9 +595,16 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                            {con = Con.falsee,
                             args = Vector.new0 (),
                             body = 
-                            Dexp.call {func = vectorHashFunc (Type.word bws),
-                                       args = Vector.new2 (dst, toVector),
-                                       ty = Hash.stateTy}})}}
+                              let
+                                 val {funcName, entryName} =
+                                    vectorHashFunc (Type.word bws)
+                              in
+                                 Dexp.call {func = funcName,
+                                            entry = entryName,
+                                            args = Vector.new2 (dst, toVector),
+                                            ty = Hash.stateTy}
+                              end
+                           })}}
                      end
                 | Type.Real rs =>
                      let
@@ -612,21 +642,28 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                         loop (0, dst)
                      end
                 | Type.Vector ty =>
-                     Dexp.call {func = vectorHashFunc ty,
+                  let
+                     val {funcName, entryName} = vectorHashFunc ty
+                  in
+                     Dexp.call {func = funcName,
+                                entry = entryName,
                                 args = Vector.new2 (dst, dx),
                                 ty = Hash.stateTy}
+                  end
                 | Type.Weak _ => stateful ()
                 | Type.Word ws => Hash.wordBytes (dst, dx, ws)
          in
             body
          end
-      fun hashFunc (ty: Type.t): Func.t =
+      fun hashFunc (ty: Type.t): {funcName: Func.t, entryName: FuncEntry.t} =
          case getHashFunc ty of
             SOME f => f
           | NONE => 
                let
                   val name = Func.newString "hash"
-                  val _ = setHashFunc (ty, SOME name)
+                  val entryName = FuncEntry.newString "default"
+                  val funcRecord = {funcName = name, entryName = entryName}
+                  val _ = setHashFunc (ty, SOME funcRecord)
                   val x = (Var.newNoname (), ty)
                   val args = Vector.new1 x
                   val sti = Var.newNoname ()
@@ -644,16 +681,19 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                       body = dw}
                   val (start, blocks) = Dexp.linearize (body, Handler.Caller)
                   val blocks = Vector.fromList blocks
+                  val entry = FunctionEntry.T {args = args,
+                                               function = name,
+                                               name = entryName,
+                                               start = start}
                   val _ =
-                     newFunction {args = args,
-                                  blocks = blocks,
+                     newFunction {blocks = blocks,
+                                  entries = Vector.new1 entry,
                                   mayInline = true,
                                   name = name,
                                   raises = NONE,
-                                  returns = returns,
-                                  start = start}
+                                  returns = returns}
                in
-                  name
+                  funcRecord
                end
 
       val _ =
@@ -719,11 +759,13 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                                          val ty = Vector.sub (targs, 0)
                                          val x = Vector.sub (args, 0)
                                          val l = Label.newNoname ()
+                                         val {funcName, entryName} = hashFunc ty
                                       in
                                         (finish 
                                          (las, 
                                           Call {args = Vector.new1 x,
-                                                func = hashFunc ty,
+                                                func = funcName,
+                                                entry = entryName,
                                                 return = Return.NonTail 
                                                          {cont = l,
                                                           handler = Handler.Caller}})
@@ -746,17 +788,16 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
          List.revMap 
          (functions, fn f =>
           let
-             val {args, blocks, mayInline, name, raises, returns, start} =
+             val {blocks, entries, mayInline, name, raises, returns} =
                 Function.dest f
              val f =
                 if #hasHash (funcInfo name)
-                   then Function.new {args = args,
-                                      blocks = doit blocks,
+                   then Function.new {blocks = doit blocks,
+                                      entries = entries,
                                       mayInline = mayInline,
                                       name = name,
                                       raises = raises,
-                                      returns = returns,
-                                      start = start}
+                                      returns = returns}
                 else f
              val () = Function.clear f
           in

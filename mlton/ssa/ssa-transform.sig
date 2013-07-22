@@ -5,14 +5,14 @@
  *)
 
 
-signature SSA_TRANSFORM_STRUCTS = 
+signature ME_SSA_TRANSFORM_STRUCTS =
    sig
-      include RESTORE
+      include ME_RESTORE
    end
 
-signature SSA_TRANSFORM = 
+signature ME_SSA_TRANSFORM =
    sig
-      include SSA_TRANSFORM_STRUCTS
+      include ME_SSA_TRANSFORM_STRUCTS
 
       val transform: Program.t -> Program.t
    end
