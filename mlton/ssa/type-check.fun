@@ -7,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor TypeCheck (S: TYPE_CHECK_STRUCTS): TYPE_CHECK = 
+functor MeTypeCheck (S: ME_TYPE_CHECK_STRUCTS): ME_TYPE_CHECK =
 struct
 
 open S
@@ -16,7 +16,7 @@ datatype z = datatype Exp.t
 datatype z = datatype Transfer.t
 
 fun checkScopes (program as
-                 Program.T {datatypes, globals, functions, main}): unit =
+                 Program.T {datatypes, globals, functions, main = _}): unit =
    let
       datatype 'a status =
          Undefined
@@ -160,7 +160,7 @@ fun checkScopes (program as
           | Runtime {args, ...} => getVars args
       fun loopFunc (f: Function.t) =
          let
-            val {args, blocks, raises, returns, start, ...} = Function.dest f
+            val {blocks, entries, raises, returns, ...} = Function.dest f
             (* Descend the dominator tree, verifying that variable definitions
              * dominate variable uses.
              *)
@@ -178,20 +178,29 @@ fun checkScopes (program as
                in
                   ()
                end
-            val _ = Vector.foreach (args, bindVar)
+            val () = Vector.foreach (entries,
+               fn FunctionEntry.T{args, ...}
+                  => Vector.foreach (args, bindVar)
+               )
             val _ = Vector.foreach (blocks, bindLabel o Block.label)
             (* Check that 'start' and all transfer labels are in scope.
              * In the case that something is not in scope,
              * "getLabel" gives a more informative error message
              * than the CFG/dominatorTree construction failure.
              *)
-            val _ = getLabel start
+            val () = Vector.foreach (entries,
+               fn FunctionEntry.T{start, ...} => getLabel start
+               )
             val _ = Vector.foreach
                     (blocks, fn Block.T {transfer, ...} =>
                      Transfer.foreachLabel (transfer, getLabel))
-            val _ = loop (Function.dominatorTree f)
+            (* Decend the dominator tree for each entry point. *)
+            val _ = Vector.foreach (Function.dominatorForest f, loop)
             val _ = Vector.foreach (blocks, unbindLabel o Block.label)
-            val _ = Vector.foreach (args, unbindVar o #1)
+            val () = Vector.foreach (entries,
+               fn FunctionEntry.T{args, ...}
+                  => Vector.foreach (args, unbindVar o #1)
+               )
             val _ = Option.app (returns, loopTypes)
             val _ = Option.app (raises, loopTypes)
             val _ = Function.clear f
@@ -209,7 +218,12 @@ fun checkScopes (program as
                                Vector.foreach (args, loopType)))
       val _ = Vector.foreach (globals, loopStatement)
       val _ = List.foreach (functions, bindFunc o Function.name)
-      val _ = getFunc main
+      (*
+       * XXX: Program.mainFunction takes linear time.  Since we just want the
+       * ID (Func.t), should we just add mainFunc to SSA.Program.T to get back
+       * down to constant time?
+       *)
+      val _ = getFunc (Function.name (Program.mainFunction program))
       val _ = List.foreach (functions, loopFunc)
       val _ = Program.clearTop program
       val _ = destroyLoopType ()
@@ -226,7 +240,7 @@ structure Function =
       fun checkProf (f: t): unit =
          let
             val debug = false
-            val {blocks, start, ...} = dest f
+            val {blocks, entries, ...} = dest f
             val {get = labelInfo, rem, set = setLabelInfo, ...} =
                Property.getSetOnce
                (Label.plist,
@@ -235,6 +249,11 @@ structure Function =
                                     setLabelInfo (label,
                                                   {block = b,
                                                    sources = ref NONE}))
+
+            (*
+             * Check to make sure that Enter/Leave statements match up in
+             * functions.
+             *)
             fun goto (l: Label.t, sources: SourceInfo.t list) =
                let
                   fun bug (msg: string): 'a =
@@ -289,6 +308,10 @@ structure Function =
                                case exp of
                                   Profile pe =>
                                      (case pe of
+                                     (* FIXME: This method of checking to make
+                                      * sure that Enter/Leave statements match
+                                      * won't work for functions with multiple
+                                      * entry points. *)
                                          Enter s => s :: sources
                                        | Leave s =>
                                             (case sources of
@@ -335,7 +358,8 @@ structure Function =
                            then ()
                         else bug "mismatched block"
                end
-            val _ = goto (start, [])
+            val () = Vector.foreach
+               (entries, fn FunctionEntry.T{start, ...} => goto (start, []))
             val _ = Vector.foreach (blocks, fn Block.T {label, ...} => rem label)
          in
             ()

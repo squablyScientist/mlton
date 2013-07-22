@@ -6,14 +6,14 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature TYPE_CHECK_STRUCTS = 
+signature ME_TYPE_CHECK_STRUCTS =
    sig
-      include ANALYZE
+      include ME_ANALYZE
    end
 
-signature TYPE_CHECK = 
+signature ME_TYPE_CHECK =
    sig
-      include TYPE_CHECK_STRUCTS
+      include ME_TYPE_CHECK_STRUCTS
 
       val typeCheck: Program.t -> unit
    end
