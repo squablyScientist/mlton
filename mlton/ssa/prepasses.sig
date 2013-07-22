@@ -5,14 +5,14 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature PREPASSES_STRUCTS = 
+signature ME_PREPASSES_STRUCTS =
    sig
-      include TYPE_CHECK
+      include ME_TYPE_CHECK
    end
 
-signature PREPASSES = 
+signature ME_PREPASSES =
    sig
-      include PREPASSES_STRUCTS
+      include ME_PREPASSES_STRUCTS
 
       (* A critical edge is one that connects a block with two or more
        * succesors to one with two or more predecessors.
