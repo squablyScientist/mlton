@@ -6,14 +6,14 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature SHRINK_STRUCTS = 
+signature ME_SHRINK_STRUCTS =
    sig
-      include PREPASSES
+      include ME_PREPASSES
    end
 
-signature SHRINK = 
+signature ME_SHRINK =
    sig
-      include SHRINK_STRUCTS
+      include ME_SHRINK_STRUCTS
 
       val shrinkFunction: 
          {globals: Statement.t vector} -> Function.t -> Function.t

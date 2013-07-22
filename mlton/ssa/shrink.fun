@@ -7,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor Shrink (S: SHRINK_STRUCTS): SHRINK = 
+functor MeShrink (S: ME_SHRINK_STRUCTS): ME_SHRINK =
 struct
 
 open S
@@ -232,11 +232,13 @@ fun shrinkFunction {globals: Statement.t vector} =
       fn f: Function.t =>
       let
          val _ = Function.clear f
-         val {args, blocks, mayInline, name, raises, returns, start, ...} =
+         val {blocks, entries, mayInline, name, raises, returns, ...} =
             Function.dest f
-         val _ = Vector.foreach
+         val _ = Vector.foreach (entries, fn FunctionEntry.T{args, ...} =>
+            Vector.foreach
                  (args, fn (x, ty) => 
                   setVarInfo (x, VarInfo.new (x, SOME ty)))
+            )
          (* Index the labels by their defining block in blocks. *)
          val {get = labelIndex, set = setLabelIndex, ...} =
             Property.getSetOnce (Label.plist,
@@ -497,7 +499,10 @@ fun shrinkFunction {globals: Statement.t vector} =
                       ; incLabel return
                       ; normal ())
             end
-         val _ = incLabel start
+         val () = Vector.foreach
+            (entries,
+            fn FunctionEntry.T{start, ...} => incLabel start
+            )
          fun indexMeaning i =
             case Array.sub (states, i) of
                State.Visited m => m
@@ -577,7 +582,11 @@ fun shrinkFunction {globals: Statement.t vector} =
                               State.Visited m => doit m
                             | _ => ())
                     else ())
-                val _ = bumpMeaning (labelMeaning start)
+                val () = Vector.foreach
+                  (entries,
+                  fn FunctionEntry.T{start, ...} =>
+                     (bumpMeaning (labelMeaning start))
+                  )
              in
                 Array.equals (inDegree, inDegree', Int.equals)
                 orelse
@@ -856,7 +865,7 @@ fun shrinkFunction {globals: Statement.t vector} =
                                         ty = ty})
                    end
              | Bug => ([], Bug)
-             | Call {func, args, return} =>
+             | Call {func, entry, args, return} =>
                   let
                      val (statements, return) =
                         case return of
@@ -924,6 +933,7 @@ fun shrinkFunction {globals: Statement.t vector} =
                   in 
                      (statements,
                       Call {func = func,
+                            entry = entry,
                             args = simplifyVars args,
                             return = return})
                   end
@@ -1250,16 +1260,26 @@ fun shrinkFunction {globals: Statement.t vector} =
                              sideEffect = true,
                              value = NONE}
             end) arg
-         val start = labelMeaning start
-         val _ = forceMeaningBlock start
+         val entries = Vector.map
+            (entries,
+            fn FunctionEntry.T{args, function, name, start} =>
+               let
+                  val start = labelMeaning start
+                  val () = forceMeaningBlock start
+               in
+                  FunctionEntry.T{args = args,
+                                  function = function,
+                                  name = name,
+                                  start = meaningLabel start}
+               end
+            )
          val f = 
-            Function.new {args = args,
-                          blocks = Vector.fromList (!newBlocks),
+            Function.new {blocks = Vector.fromList (!newBlocks),
+                          entries = entries,
                           mayInline = mayInline,
                           name = name,
                           raises = raises,
-                          returns = returns,
-                          start = meaningLabel start}
+                          returns = returns}
          val _ = if true then () else save (f, "post")
          val _ = Function.clear f
       in
@@ -1300,17 +1320,16 @@ fun eliminateUselessProfile (f: Function.t): Function.t =
                            statements = statements,
                            transfer = transfer}
                end
-         val {args, blocks, mayInline, name, raises, returns, start} =
+         val {blocks, entries, mayInline, name, raises, returns} =
             Function.dest f
          val blocks = Vector.map (blocks, eliminateInBlock)
       in
-         Function.new {args = args,
-                       blocks = blocks,
+         Function.new {blocks = blocks,
                        mayInline = mayInline,
+                       entries = entries,
                        name = name,
                        raises = raises,
-                       returns = returns,
-                       start = start}
+                       returns = returns}
       end
 
 val traceShrinkFunction =
