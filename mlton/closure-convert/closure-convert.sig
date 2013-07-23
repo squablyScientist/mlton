@@ -6,16 +6,16 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature CLOSURE_CONVERT_STRUCTS = 
+signature ME_CLOSURE_CONVERT_STRUCTS =
    sig
-      structure Ssa: SSA
+      structure Ssa: ME_SSA
       structure Sxml: SXML
       sharing Sxml.Atoms = Ssa.Atoms
    end
 
-signature CLOSURE_CONVERT = 
+signature ME_CLOSURE_CONVERT =
    sig
-      include CLOSURE_CONVERT_STRUCTS
+      include ME_CLOSURE_CONVERT_STRUCTS
 
       val closureConvert: Sxml.Program.t -> Ssa.Program.t
    end

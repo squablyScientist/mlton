@@ -16,7 +16,7 @@
  * with "getNewVar".  "newScope" also handles resetting the variable to its
  * old value once the processing of the lambda is done.
  *)
-functor ClosureConvert (S: CLOSURE_CONVERT_STRUCTS): CLOSURE_CONVERT = 
+functor MeClosureConvert (S: ME_CLOSURE_CONVERT_STRUCTS): ME_CLOSURE_CONVERT =
 struct
 
 open S
@@ -43,12 +43,14 @@ in
    structure Datatype = Datatype
    structure Dexp = DirectExp
    structure Func = Func
+   structure FuncEntry = FuncEntry
    structure Function = Function
+   structure FunctionEntry = FunctionEntry
    structure SourceInfo = SourceInfo
    structure Type = Type
 end
 
-structure Value = AbstractValue (structure Ssa = Ssa
+structure Value = MeAbstractValue (structure Ssa = Ssa
                                  structure Sxml = Sxml)
 local open Value
 in structure Lambdas = Lambdas
@@ -102,17 +104,22 @@ structure Accum =
                                               Dexp.var (var, ty))),
                                      ty = Type.tuple tys}},
                  Ssa.Handler.Caller)
+             val funcName = Func.newNoname ()
+             val entryName = FuncEntry.newNoname ()
+             val entry = FunctionEntry.T{args = Vector.new0 (),
+                                         function = funcName,
+                                         name = entryName,
+                                         start = start}
              val {blocks, ...} =
                 Function.dest
                 (Ssa.shrinkFunction
                  {globals = Vector.new0 ()}
-                 (Function.new {args = Vector.new0 (),
-                                blocks = Vector.fromList blocks,
+                 (Function.new {blocks = Vector.fromList blocks,
+                                entries = Vector.new1 entry,
                                 mayInline = false, (* doesn't matter *)
-                                name = Func.newNoname (),
+                                name = funcName,
                                 raises = NONE,
-                                returns = SOME (Vector.new1 (Type.tuple tys)),
-                                start = start}))
+                                returns = SOME (Vector.new1 (Type.tuple tys))}))
           in
              if 1 <> Vector.length blocks
                 then Error.bug (concat ["ClosureConvert.Accum.done: ",
@@ -173,6 +180,7 @@ structure LambdaInfo =
                 * so the closure conversion output has some readability.
                 *)
                name: Func.t,
+               entry: FuncEntry.t,
                recs: Var.t vector ref,
                (* The type of its environment record. *)
                ty: Type.t option ref
@@ -371,6 +379,7 @@ fun closureConvert
                       LambdaInfo.T {con = ref Con.bogus,
                                     frees = ref (Vector.new0 ()),
                                     name = Func.newString (Var.originalName x),
+                                    entry = Ssa.FuncEntry.newString "default",
                                     recs = ref (Vector.new0 ()),
                                     ty = ref NONE})
                   val _ = newVar (arg, Value.fromType argType)
@@ -682,13 +691,14 @@ fun closureConvert
               (cons, fn {lambda, con} =>
                let
                   val {arg = param, body, ...} = Slambda.dest lambda
-                  val info as LambdaInfo.T {name, ...} = lambdaInfo lambda
+                  val info as LambdaInfo.T {name, entry, ...} = lambdaInfo lambda
                   val result = expValue body
                   val env = (Var.newString "env", lambdaInfoType info)
                in {con = con,
                    args = Vector.new1 env,
                    body = coerce (Dexp.call
                                   {func = name,
+                                   entry = entry,
                                    args = Vector.new2 (Dexp.var env,
                                                        coerce (argExp, argVal,
                                                                value param)),
@@ -743,21 +753,24 @@ fun closureConvert
          if !Control.closureConvertShrink
             then Ssa.shrinkFunction {globals = Vector.new0 ()}
          else fn f => f
-      fun addFunc (ac, {args, body, isMain, mayInline, name, returns}) =
+      fun addFunc (ac, {args, body, entryName, isMain, mayInline, name, returns}) =
          let
             val (start, blocks) =
                Dexp.linearize (body, Ssa.Handler.Caller)
+            val entry = FunctionEntry.T {args = args,
+                                         function = name,
+                                         name = entryName,
+                                         start = start}
             val f =
                shrinkFunction
-               (Function.new {args = args,
-                              blocks = Vector.fromList blocks,
+               (Function.new {blocks = Vector.fromList blocks,
+                              entries = Vector.new1 entry,
                               mayInline = mayInline,
                               name = name,
                               raises = if isMain
                                           then NONE
                                           else raises,
-                              returns = SOME returns,
-                              start = start})
+                              returns = SOME returns})
             val f =
                if isMain
                   then Function.profile (f, SourceInfo.main)
@@ -1079,7 +1092,7 @@ fun closureConvert
              | SprimExp.Var y => simple (convertVarExp y)
          end) arg
       and convertLambda (lambda: Slambda.t,
-                         info as LambdaInfo.T {frees, name, recs, ...},
+                         info as LambdaInfo.T {frees, name, entry, recs, ...},
                          ac: Accum.t): Accum.t =
          let
             val {arg = argVar, body, mayInline, ...} = Slambda.dest lambda
@@ -1113,6 +1126,7 @@ fun closureConvert
                                isMain = false,
                                mayInline = mayInline,
                                name = name,
+                               entryName = entry,
                                returns = returns})
               end))
          end
@@ -1120,6 +1134,7 @@ fun closureConvert
       (*    main body of closure convert    *)
       (*------------------------------------*)
       val main = Func.newString "main"
+      val mainEntry = FuncEntry.newString "default"
       val {functions, globals} =
          Control.trace (Control.Pass, "convert")
          (fn () =>
@@ -1130,6 +1145,7 @@ fun closureConvert
                                     mayInline = false,
                                     isMain = true,
                                     name = main,
+                                    entryName = mainEntry,
                                     returns = Vector.new1 Type.unit})
           in Accum.done ac
           end) ()
@@ -1138,7 +1154,7 @@ fun closureConvert
          Ssa.Program.T {datatypes = datatypes,
                         globals = globals,
                         functions = functions,
-                        main = main}
+                        main = mainEntry}
       val _ = destroyConvertType ()
       val _ = Value.destroy ()
       val _ = Ssa.Program.clear program

@@ -7,15 +7,15 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature ABSTRACT_VALUE_STRUCTS = 
+signature ME_ABSTRACT_VALUE_STRUCTS =
    sig
       structure Sxml: SXML
-      structure Ssa: SSA
+      structure Ssa: ME_SSA
    end
 
-signature ABSTRACT_VALUE = 
+signature ME_ABSTRACT_VALUE =
    sig
-      include ABSTRACT_VALUE_STRUCTS
+      include ME_ABSTRACT_VALUE_STRUCTS
 
       structure Lambda:
          sig
