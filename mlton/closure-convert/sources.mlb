@@ -13,7 +13,9 @@ local
    ../ssa/sources.mlb
    ../xml/sources.mlb
 
+   abstract-value.old.sig
    abstract-value.sig
+   abstract-value.old.fun
    abstract-value.fun
    globalize.sig
    globalize.fun
