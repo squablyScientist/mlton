@@ -798,8 +798,8 @@ structure Transfer =
                        Label.layout overflow, str " ()"]
              | Bug => str "Bug"
              | Call {func, entry, args, return} =>
-                  seq [FuncEntry.layout entry, str " ", layoutTuple args,
-                       str " ", Return.layout return]
+                  seq [Func.layout func, str "@", FuncEntry.layout entry,
+                       str " ", layoutTuple args, str " ", Return.layout return]
              | Case arg => layoutCase arg
              | Goto {dst, args} =>
                   seq [Label.layout dst, str " ", layoutTuple args]
@@ -1227,7 +1227,8 @@ structure Function =
                           | Bug => ["bug"]
                           | Call {func, entry, args, return} =>
                                let
-                                  val e = FuncEntry.toString entry
+                                  val f = Func.toString func
+                                  val fe = FuncEntry.toString entry
                                   val args = Var.prettys (args, global)
                                   val _ =
                                      case return of
@@ -1239,7 +1240,7 @@ structure Function =
                                                 edge (l, "", Dashed))))
                                       | Return.Tail => ()
                                in
-                                  [e, " ", args]
+                                  [f, "@", fe, " ", args]
                                end
                           | Case {test, cases, default, ...} =>
                                let
