@@ -1905,8 +1905,11 @@ structure Program =
                 let
                    val {blocks, entries, ...} = Function.dest f
                    (* Count all of the arguments *)
-                   val _ = Vector.foreach (blocks, fn Block.T{args, ...} =>
-                              Vector.foreach (args, countType o #2))
+                   val _ = Vector.foreach
+                     (entries,
+                      fn FunctionEntry.T{args, ...} =>
+                         Vector.foreach (args, countType o #2)
+                     )
                    val _ =
                       Vector.foreach
                       (blocks, fn Block.T {args, statements, ...} =>
