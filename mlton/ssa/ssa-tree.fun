@@ -1722,7 +1722,7 @@ structure Program =
                val {get = nodeOptions, set = setNodeOptions, ...} =
                   Property.getSetOnce
                   (Node.plist, Property.initRaise ("options", Node.layout))
-               val {get = funcNode, destroy} =
+               val {get = funcNode, destroy = destroyFunc} =
                   Property.destGet
                   (Func.plist, Property.initFun
                    (fn f =>
@@ -1737,7 +1737,7 @@ structure Program =
                     in
                        n
                     end))
-               val {get = funcEntryNode, destroy} =
+               val {get = funcEntryNode, destroy = destroyFuncEntry} =
                   Property.destGet
                   (FuncEntry.plist, Property.initFun
                    (fn f =>
@@ -1804,7 +1804,8 @@ structure Program =
                     options = [GraphOption.Rank (Min, [{nodeName = nodeName root}])],
                     edgeOptions = edgeOptions,
                     nodeOptions = nodeOptions})
-               val _ = destroy ()
+               val _ = destroyFunc ()
+               val _ = destroyFuncEntry ()
             in
                l
             end
