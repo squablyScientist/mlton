@@ -1535,6 +1535,13 @@ structure Function =
                                               (exp, lookupVar)}),
                          transfer = Transfer.replaceLabelVar
                                     (transfer, lookupLabel, lookupVar)})
+            val entries = Vector.map (entries,
+               fn FunctionEntry.T {args, name, function, start} =>
+                  FunctionEntry.T {args = args,
+                                   function = function,
+                                   name = name,
+                                   start = lookupLabel start}
+               )
             val _ = destroyVar ()
             val _ = destroyLabel ()
          in
