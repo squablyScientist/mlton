@@ -864,7 +864,10 @@ structure Transfer =
                                          Label.hash success))
              | Bug => bug
              | Call {func, entry, args, return} =>
-                  hashVars (args, hash2 (FuncEntry.hash entry, Return.hash return))
+                  hashVars (args,
+                            hash2 (hash2 (Func.hash func, FuncEntry.hash entry),
+                                   Return.hash return)
+                           )
              | Case {test, cases, default} =>
                   hash2 (Var.hash test, 
                          Cases.fold
