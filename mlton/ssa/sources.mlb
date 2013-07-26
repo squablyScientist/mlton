@@ -15,9 +15,11 @@ local
    equatable.sml
    ssa-tree.old.sig
    ssa-tree.sig
+   ssa-tree2.old.sig
    ssa-tree2.sig
    ssa-tree.old.fun
    ssa-tree.fun
+   ssa-tree2.old.fun
    ssa-tree2.fun
    direct-exp.old.sig
    direct-exp.old.fun
