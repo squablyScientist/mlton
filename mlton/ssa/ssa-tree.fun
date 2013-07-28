@@ -1329,7 +1329,7 @@ structure Function =
                             in FontColor Black :: Shape Box :: l
                             end}
                   )
-               (* FIXME: implement the dominatorForest *)
+               (* FIXME: implement layout for dominator forest *)
                fun treeLayout () =
                   let
                      val {get = nodeOptions, set = setNodeOptions, ...} =
@@ -1351,7 +1351,7 @@ structure Function =
                         *)
                   in
                      (* treeLayout *)
-                     raise Fail "Function.treeLayout"
+                     Error.bug "Function.treeLayout unimplemented"
                   end
                (*
                fun loopForestLayout () =

@@ -12,7 +12,7 @@ signature SSA_TREE2_STRUCTS =
       include ATOMS
    end
 
-signature SSA_TREE2 = 
+signature ME_SSA_TREE2 =
    sig
       include SSA_TREE2_STRUCTS
 
@@ -174,6 +174,7 @@ signature SSA_TREE2 =
                          ty: Type.t} (* int or word *)
              | Bug  (* MLton thought control couldn't reach here. *)
              | Call of {args: Var.t vector,
+                        entry: FuncEntry.t,
                         func: Func.t,
                         return: Return.t}
              | Case of {cases: Cases.t,
@@ -227,6 +228,15 @@ signature SSA_TREE2 =
             val layout: t -> Layout.t
          end
 
+      structure FunctionEntry:
+         sig
+            datatype t =
+               T of {args: (Var.t * Type.t) vector,
+                     function: Func.t,
+                     name: FuncEntry.t,
+                     start: Label.t}
+         end
+
       structure Function:
          sig
             type t
@@ -241,19 +251,18 @@ signature SSA_TREE2 =
                t -> {graph: unit DirectedGraph.t,
                      labelNode: Label.t -> unit DirectedGraph.Node.t,
                      nodeBlock: unit DirectedGraph.Node.t -> Block.t}
-            val dest: t -> {args: (Var.t * Type.t) vector,
-                            blocks: Block.t vector,
+            val dest: t -> {blocks: Block.t vector,
+                            entries: FunctionEntry.t vector,
                             mayInline: bool,
                             name: Func.t,
                             raises: Type.t vector option,
-                            returns: Type.t vector option,
-                            start: Label.t}
+                            returns: Type.t vector option}
             (* dfs (f, v) visits the blocks in depth-first order, applying v b
              * for block b to yield v', then visiting b's descendents,
              * then applying v' ().
              *)
             val dfs: t * (Block.t -> unit -> unit) -> unit
-            val dominatorTree: t -> Block.t Tree.t
+            val dominatorForest: t -> Block.t Tree.t vector
             val foreachVar: t * (Var.t * Type.t -> unit) -> unit
             val layout: t -> Layout.t
             val layoutDot:
@@ -261,13 +270,12 @@ signature SSA_TREE2 =
                                                 graph: Layout.t,
                                                 tree: unit -> Layout.t}
             val name: t -> Func.t
-            val new: {args: (Var.t * Type.t) vector,
-                      blocks: Block.t vector,
+            val new: {blocks: Block.t vector,
+                      entries: FunctionEntry.t vector,
                       mayInline: bool,
                       name: Func.t,
                       raises: Type.t vector option,
-                      returns: Type.t vector option,
-                      start: Label.t} -> t
+                      returns: Type.t vector option} -> t
             val profile: t * SourceInfo.t -> t
          end
 

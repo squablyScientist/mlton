@@ -1,4 +1,5 @@
-(* Copyright (C) 2009 Matthew Fluet.
+(* Copyright (C) 2013 David Larsen.
+ * Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -7,7 +8,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor SsaTree2 (S: SSA_TREE2_STRUCTS): SSA_TREE2 = 
+functor MeSsaTree2 (S: SSA_TREE2_STRUCTS): ME_SSA_TREE2 =
 struct
 
 open S
@@ -923,6 +924,7 @@ structure Transfer =
                    ty: Type.t}
        | Bug (* MLton thought control couldn't reach here. *)
        | Call of {args: Var.t vector,
+                  entry: FuncEntry.t,
                   func: Func.t,
                   return: Return.t}
        | Case of {test: Var.t,
@@ -985,8 +987,9 @@ structure Transfer =
                          success = fl success,
                          ty = ty}
              | Bug => Bug
-             | Call {func, args, return} =>
+             | Call {func, entry, args, return} =>
                   Call {func = func, 
+                        entry = entry,
                         args = fxs args,
                         return = Return.map (return, fl)}
              | Case {test, cases, default} =>
@@ -1039,9 +1042,9 @@ structure Transfer =
                        str " Overflow => ",
                        Label.layout overflow, str " ()"]
              | Bug => str "Bug"
-             | Call {func, args, return} =>
-                  seq [Func.layout func, str " ", layoutTuple args,
-                       str " ", Return.layout return]
+             | Call {func, entry, args, return} =>
+                  seq [Func.layout func, str "@", FuncEntry.layout entry,
+                       str " ", layoutTuple args, str " ", Return.layout return]
              | Case arg => layoutCase arg
              | Goto {dst, args} =>
                   seq [Label.layout dst, str " ", layoutTuple args]
@@ -1068,9 +1071,10 @@ structure Transfer =
                Label.equals (overflow, overflow') andalso
                Label.equals (success, success')
           | (Bug, Bug) => true
-          | (Call {func, args, return}, 
-             Call {func = func', args = args', return = return'}) =>
+          | (Call {func, entry, args, return},
+             Call {func = func', entry = entry', args = args', return = return'}) =>
                Func.equals (func, func') andalso
+               FuncEntry.equals (entry, entry') andalso
                varsEquals (args, args') andalso
                Return.equals (return, return')
           | (Case {test, cases, default},
@@ -1106,8 +1110,11 @@ structure Transfer =
                   hashVars (args, hash2 (Label.hash overflow,
                                          Label.hash success))
              | Bug => bug
-             | Call {func, args, return} =>
-                  hashVars (args, hash2 (Func.hash func, Return.hash return))
+             | Call {func, entry, args, return} =>
+                  hashVars (args,
+                            hash2 (hash2 (Func.hash func, FuncEntry.hash entry),
+                                   Return.hash return)
+                           )
              | Case {test, cases, default} =>
                   hash2 (Var.hash test, 
                          Cases.fold
@@ -1206,17 +1213,36 @@ structure Datatype =
           ; Vector.foreach (cons, Con.clear o #con))
    end
 
+structure FunctionEntry =
+   struct
+      datatype t =
+         T of {args: (Var.t * Type.t) vector,
+               function: Func.t,
+               name: FuncEntry.t,
+               start: Label.t}
+
+      fun layoutHeaders (T{args, name, start, ...}) =
+         let
+            open Layout
+         in
+            seq [str "fun_entry ",
+                 FuncEntry.layout name,
+                 str " ",
+                 layoutFormals args,
+                 str " = ", Label.layout start, str " ()"]
+         end
+   end
+
 structure Function =
    struct
       structure CPromise = ClearablePromise
 
-      type dest = {args: (Var.t * Type.t) vector,
-                   blocks: Block.t vector,
+      type dest = {blocks: Block.t vector,
+                   entries: FunctionEntry.t vector,
                    mayInline: bool,
                    name: Func.t,
                    raises: Type.t vector option,
-                   returns: Type.t vector option,
-                   start: Label.t}
+                   returns: Type.t vector option}
 
       (* There is a messy interaction between the laziness used in controlFlow
        * and the property lists on labels because the former stores
@@ -1227,8 +1253,8 @@ structure Function =
        *)
       datatype t =
          T of {controlFlow:
-               {dfsTree: unit -> Block.t Tree.t,
-                dominatorTree: unit -> Block.t Tree.t,
+               {dfsTrees: unit -> Block.t Tree.t list,
+                dominatorForest: unit -> Block.t Tree.t vector,
                 graph: unit DirectedGraph.t,
                 labelNode: Label.t -> unit DirectedGraph.Node.t,
                 nodeBlock: unit DirectedGraph.Node.t -> Block.t} CPromise.t,
@@ -1244,16 +1270,20 @@ structure Function =
 
       fun foreachVar (f: t, fx: Var.t * Type.t -> unit): unit =
          let
-            val {args, blocks, ...} = dest f
-            val _ = Vector.foreach (args, fx)
-            val _ =
-               Vector.foreach
-               (blocks, fn Block.T {args, statements, ...} =>
-                (Vector.foreach (args, fx)
-                 ; Vector.foreach (statements, fn s =>
-                                   Statement.foreachDef (s, fx))))
+            val {blocks, entries, ...} = dest f
          in
-            ()
+            Vector.foreach (entries, fn FunctionEntry.T{args, ...} =>
+               let
+                  val _ = Vector.foreach (args, fx)
+                  val _ =
+                     Vector.foreach
+                     (blocks, fn Block.T {args, statements, ...} =>
+                      (Vector.foreach (args, fx)
+                       ; Vector.foreach (statements, fn s =>
+                                         Statement.foreachDef (s, fx))))
+               in
+                  ()
+               end)
          end
 
       fun controlFlow (T {controlFlow, ...}) =
@@ -1267,12 +1297,12 @@ structure Function =
          fun make sel =
             fn T {controlFlow, ...} => sel (CPromise.force controlFlow) ()
       in
-         val dominatorTree = make #dominatorTree
+         val dominatorForest = make #dominatorForest
       end
 
       fun dfs (f, v) =
          let
-            val {blocks, start, ...} = dest f
+            val {blocks, entries, ...} = dest f
             val numBlocks = Vector.length blocks
             val {get = labelIndex, set = setLabelIndex, rem, ...} =
                Property.getSetOnce (Label.plist,
@@ -1298,7 +1328,10 @@ structure Function =
                         ()
                      end
                end
-            val _ = visit start
+            val () = Vector.foreach
+               (entries,
+                fn FunctionEntry.T{start, ...} => visit start
+               )
             val _ = Vector.foreach (blocks, rem o Block.label)
          in
             ()
@@ -1309,7 +1342,7 @@ structure Function =
          structure Node = Graph.Node
          structure Edge = Graph.Edge
       in
-         fun determineControlFlow ({blocks, start, ...}: dest) =
+         fun determineControlFlow ({blocks, entries, ...}: dest) =
             let
                open Dot
                val g = Graph.new ()
@@ -1335,20 +1368,35 @@ structure Function =
                    in
                       ()
                    end)
-               val root = labelNode start
-               val dfsTree =
+               val roots = Vector.foldr (entries, [],
+                  fn (FunctionEntry.T{start, ...}, roots) =>
+                     labelNode start :: roots)
+               val dfsTrees =
                   Promise.lazy
                   (fn () =>
-                   Graph.dfsTree (g, {root = root,
-                                      nodeValue = #block o nodeInfo}))
-               val dominatorTree =
-                  Promise.lazy
-                  (fn () =>
-                   Graph.dominatorTree (g, {root = root,
-                                            nodeValue = #block o nodeInfo}))
+                   Graph.dfsTrees (g, roots, #block o nodeInfo))
+               val dominatorForest = Promise.lazy (fn () =>
+                  let
+                     val fakeRoot = newNode ()
+                     val () = Vector.foreach (entries,
+                         fn FunctionEntry.T{start, ...} =>
+                             let
+                                 val entry = labelNode start
+                                 val _ = Graph.addEdge (g, {from = fakeRoot,
+                                                            to = entry})
+                             in
+                                 ()
+                             end
+                         )
+                     val Tree.T (_, trees) =
+                        Graph.dominatorTree (g, {root = fakeRoot,
+                                             nodeValue = #block o nodeInfo})
+                  in
+                     trees
+                  end)
             in
-               {dfsTree = dfsTree,
-                dominatorTree = dominatorTree,
+               {dfsTrees = dfsTrees,
+                dominatorForest = dominatorForest,
                 graph = g,
                 labelNode = labelNode,
                 nodeBlock = #block o nodeInfo}
@@ -1356,7 +1404,7 @@ structure Function =
 
          fun layoutDot (f, global: Var.t -> string option) =
             let
-               val {name, start, blocks, ...} = dest f
+               val {name, blocks, entries, ...} = dest f
                fun makeName (name: string,
                              formals: (Var.t * Type.t) vector): string =
                   concat [name, " ",
@@ -1411,9 +1459,10 @@ structure Function =
                                                     Layout.str
                                                     (Var.pretty (x, global))))])
                           | Bug => ["bug"]
-                          | Call {func, args, return} =>
+                          | Call {func, entry, args, return} =>
                                let
                                   val f = Func.toString func
+                                  val fe = FuncEntry.toString entry
                                   val args = Var.prettys (args, global)
                                   val _ =
                                      case return of
@@ -1425,7 +1474,7 @@ structure Function =
                                                 edge (l, "", Dashed))))
                                       | Return.Tail => ()
                                in
-                                  [f, " ", args]
+                                  [f, "@", fe, " ", args]
                                end
                           | Case {test, cases, default, ...} =>
                                let
@@ -1491,19 +1540,32 @@ structure Function =
                    in
                       ()
                    end)
-               val root = labelNode start
+               val roots =
+                  Vector.foldr (entries, [],
+                     fn (FunctionEntry.T{start, ...}, roots) =>
+                        labelNode start :: roots
+                  )
                val graphLayout =
                   Graph.layoutDot
                   (graph, fn {nodeName} => 
                    {title = concat [Func.toString name, " control-flow graph"],
-                    options = [GraphOption.Rank (Min, [{nodeName = nodeName root}])],
+                    options =
+                     [GraphOption.Rank
+                        (Min,
+                        Vector.foldr (entries, [],
+                           fn (FunctionEntry.T{start, ...}, roots) =>
+                              {nodeName = nodeName (labelNode start)} :: roots
+                        ))
+                     ],
                     edgeOptions = edgeOptions,
                     nodeOptions =
                     fn n => let
                                val l = ! (nodeOptions n)
                                open NodeOption
                             in FontColor Black :: Shape Box :: l
-                            end})
+                            end}
+                  )
+               (* FIXME: implement layout for dominator forest *)
                fun treeLayout () =
                   let
                      val {get = nodeOptions, set = setNodeOptions, ...} =
@@ -1513,6 +1575,7 @@ structure Function =
                         (blocks, fn Block.T {label, ...} =>
                          setNodeOptions (labelNode label,
                                          [NodeOption.label (Label.toString label)]))
+                     (*
                      val treeLayout =
                         Tree.layoutDot
                         (Graph.dominatorTree (graph,
@@ -1521,8 +1584,10 @@ structure Function =
                          {title = concat [Func.toString name, " dominator tree"],
                           options = [],
                           nodeOptions = nodeOptions})
+                     *)
                   in
-                     treeLayout
+                     (* treeLayout *)
+                     Error.bug "Function.treeLayout unimplemented"
                   end
                (*
                fun loopForestLayout () =
@@ -1561,23 +1626,28 @@ structure Function =
 
       fun clear (T {controlFlow, dest, ...}) =
          let
-            val {args, blocks, ...} = dest
-            val _ = (Vector.foreach (args, Var.clear o #1)
-                     ; Vector.foreach (blocks, Block.clear))
+            val {blocks, entries, ...} = dest
+            val _ = Vector.foreach (entries, fn (FunctionEntry.T{args, ...})
+                     => Vector.foreach (args, Var.clear o #1))
+            val _ = Vector.foreach (blocks, Block.clear)
             val _ = CPromise.clear controlFlow
          in
             ()
          end
 
-      fun layoutHeader (f: t): Layout.t =
+      fun layoutHeaders (f: t): Layout.t =
          let
-            val {args, name, raises, returns, start, ...} = dest f
+            val {entries, name, raises, returns, ...} = dest f
             open Layout
+            val entryLayouts =
+               Vector.foldr(entries, [],
+                  fn (entry, entryLayouts) =>
+                     FunctionEntry.layoutHeaders entry :: entryLayouts
+               )
          in
-            seq [str "fun ",
+            align (seq [str "fun ",
                  Func.layout name,
                  str " ",
-                 layoutFormals args,
                  if !Control.showTypes
                     then seq [str ": ",
                               record [("raises",
@@ -1586,8 +1656,8 @@ structure Function =
                                       ("returns",
                                        Option.layout
                                        (Vector.layout Type.layout) returns)]]
-                 else empty,
-                    str " = ", Label.layout start, str " ()"]
+                 else empty]
+               :: entryLayouts)
          end
 
       fun layout (f: t) =
@@ -1595,14 +1665,14 @@ structure Function =
             val {blocks, ...} = dest f
             open Layout
          in
-            align [layoutHeader f,
+            align [layoutHeaders f,
                    indent (align (Vector.toListMap (blocks, Block.layout)), 2)]
          end
 
       fun layouts (f: t, global, output: Layout.t -> unit): unit =
          let
             val {blocks, name, ...} = dest f
-            val _ = output (layoutHeader f)
+            val _ = output (layoutHeaders f)
             val _ = Vector.foreach (blocks, fn b =>
                                     output (Layout.indent (Block.layout b, 2)))
             val _ =
@@ -1662,9 +1732,18 @@ structure Function =
                val (bindLabel, lookupLabel, destroyLabel) =
                   make (Label.new, Label.plist)
             end
-            val {args, blocks, mayInline, name, raises, returns, start, ...} =
+            val {blocks, entries, mayInline, name, raises, returns, ...} =
                dest f
-            val args = Vector.map (args, fn (x, ty) => (bindVar x, ty))
+            val entries : FunctionEntry.t vector =
+               Vector.map (entries,
+                  (fn (FunctionEntry.T{args, name, function, start}) =>
+                     FunctionEntry.T{
+                        args = Vector.map(args, fn (x, ty) => (bindVar x, ty)),
+                        name = name,
+                        function = function,
+                        start = start}
+                  )
+               )
             val bindLabel = ignore o bindLabel
             val bindVar = ignore o bindVar
             val _ = 
@@ -1687,21 +1766,27 @@ structure Function =
                                              use = lookupVar}))),
                          transfer = Transfer.replaceLabelVar
                                     (transfer, lookupLabel, lookupVar)})
-            val start = lookupLabel start
+            val entries = Vector.map (entries,
+               fn FunctionEntry.T {args, name, function, start} =>
+                  FunctionEntry.T {args = args,
+                                   function = function,
+                                   name = name,
+                                   start = lookupLabel start}
+               )
             val _ = destroyVar ()
             val _ = destroyLabel ()
          in
-            new {args = args,
-                 blocks = blocks,
+            new {blocks = blocks,
+                 entries = entries,
                  mayInline = mayInline,
                  name = name,
                  raises = raises,
-                 returns = returns,
-                 start = start}
+                 returns = returns}
          end
       (* quell unused warning *)
       val _ = alphaRename
 
+      (* TODO: Fix profiling for multi-entry functions *)
       fun profile (f: t, sourceInfo): t =
          if !Control.profile = Control.ProfileNone
             orelse !Control.profileIL <> Control.ProfileSource
@@ -1709,7 +1794,7 @@ structure Function =
          else 
          let
             val _ = Control.diagnostic (fn () => layout f)
-            val {args, blocks, mayInline, name, raises, returns, start} = dest f
+            val {blocks, entries, mayInline, name, raises, returns} = dest f
             val extraBlocks = ref []
             val {get = labelBlock, set = setLabelBlock, rem} =
                Property.getSetOnce
@@ -1723,12 +1808,16 @@ structure Function =
                (blocks, fn Block.T {args, label, statements, transfer} =>
                 let
                    val statements =
-                      if Label.equals (label, start)
+                      if Vector.exists
+                       (entries,
+                        fn FunctionEntry.T{start, ...} =>
+                           Label.equals (label, start)
+                       )
                          then (Vector.concat
                                [Vector.new1
                                 (Profile (ProfileExp.Enter sourceInfo)),
                                 statements])
-                      else statements
+                         else statements
                    fun leave () = Profile (ProfileExp.Leave sourceInfo)
                    fun prefix (l: Label.t,
                                statements: Statement.t vector): Label.t =
@@ -1776,7 +1865,7 @@ structure Function =
                        transfer)
                    val (statements, transfer) =
                       case transfer of
-                         Call {args, func, return} =>
+                         Call {args, entry, func, return} =>
                             let
                                datatype z = datatype Return.t
                             in
@@ -1796,6 +1885,7 @@ structure Function =
                                             in
                                                (statements,
                                                 Call {args = args,
+                                                      entry = entry,
                                                       func = func,
                                                       return = return})
                                             end
@@ -1815,13 +1905,12 @@ structure Function =
             val _ = Vector.foreach (blocks, rem o Block.label)
             val blocks = Vector.concat [Vector.fromList (!extraBlocks), blocks]
             val f = 
-               new {args = args,
-                    blocks = blocks,
+               new {blocks = blocks,
+                    entries = entries,
                     mayInline = mayInline,
                     name = name,
                     raises = raises,
-                    returns = returns,
-                    start = start}
+                    returns = returns}
             val _ = Control.diagnostic (fn () => layout f)
          in
             f
@@ -2012,8 +2101,13 @@ structure Program =
                List.foreach
                (functions, fn f =>
                 let
-                   val {args, blocks, ...} = Function.dest f
-                   val _ = Vector.foreach (args, countType o #2)
+                   val {blocks, entries, ...} = Function.dest f
+                   (* Count all of the arguments *)
+                   val _ = Vector.foreach
+                     (entries,
+                      fn FunctionEntry.T{args, ...} =>
+                         Vector.foreach (args, countType o #2)
+                     )
                    val _ =
                       Vector.foreach
                       (blocks, fn Block.T {args, statements, ...} =>
