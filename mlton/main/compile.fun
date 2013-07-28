@@ -628,33 +628,40 @@ fun preCodegen {input: MLBString.t}: Machine.Program.t =
                                 Layouts Sxml.Program.layouts)
             else ()
          end
-      val messa =
-         Control.passTypeCheck
-         {display = Control.Layouts MeSsa.Program.layouts,
-          name = "meClosureConvert",
-          stats = MeSsa.Program.layoutStats,
-          style = Control.No,
-          suffix = "messa",
-          thunk = fn () => MeClosureConvert.closureConvert sxml,
-          typeCheck = MeSsa.typeCheck}
-      val messa =
-         Control.passTypeCheck
-         {display = Control.Layouts MeSsa.Program.layouts,
-          name = "meSsaSimplify",
-          stats = MeSsa.Program.layoutStats,
-          style = Control.No,
-          suffix = "messa",
-          thunk = fn () => MeSsa.simplify messa,
-          typeCheck = MeSsa.typeCheck}
-      val _ =
-         let
-            open Control
-         in
-            if !keepSSA
-               then saveToFile ({suffix = "messa"}, No, messa,
-                                Layouts MeSsa.Program.layouts)
-            else ()
-         end
+      val () =
+         if !Control.checkMultiEntry
+            then let
+                    val messa =
+                       Control.passTypeCheck
+                       {display = Control.Layouts MeSsa.Program.layouts,
+                        name = "meClosureConvert",
+                        stats = MeSsa.Program.layoutStats,
+                        style = Control.No,
+                        suffix = "messa",
+                        thunk = fn () => MeClosureConvert.closureConvert sxml,
+                        typeCheck = MeSsa.typeCheck}
+                    val messa =
+                       Control.passTypeCheck
+                       {display = Control.Layouts MeSsa.Program.layouts,
+                        name = "meSsaSimplify",
+                        stats = MeSsa.Program.layoutStats,
+                        style = Control.No,
+                        suffix = "messa",
+                        thunk = fn () => MeSsa.simplify messa,
+                        typeCheck = MeSsa.typeCheck}
+                    val _ =
+                       let
+                          open Control
+                       in
+                          if !keepSSA
+                             then saveToFile ({suffix = "messa"}, No, messa,
+                                              Layouts MeSsa.Program.layouts)
+                          else ()
+                       end
+                 in
+                    ()
+                 end
+         else ()
       val ssa =
          Control.passTypeCheck
          {display = Control.Layouts Ssa.Program.layouts,
