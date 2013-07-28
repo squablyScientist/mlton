@@ -1,4 +1,4 @@
-(* Copyright (C) 2013 David Larsen.
+(* Copyright (C) 2013 Matthew Fluet, David Larsen.
  * Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
@@ -1147,6 +1147,12 @@ structure Function =
                val dominatorForest = Promise.lazy (fn () =>
                   let
                      val fakeRoot = newNode ()
+                     val fakeBlock =
+                        Block.T {args = Vector.new0 (),
+                                 label = Label.newNoname (),
+                                 statements = Vector.new0 (),
+                                 transfer = Transfer.Bug}
+                     val _ = setNodeInfo (fakeRoot, {block = fakeBlock})
                      val () = Vector.foreach (entries,
                          fn FunctionEntry.T{start, ...} =>
                              let
@@ -1159,7 +1165,7 @@ structure Function =
                          )
                      val Tree.T (_, trees) =
                         Graph.dominatorTree (g, {root = fakeRoot,
-                                             nodeValue = #block o nodeInfo})
+                                                 nodeValue = #block o nodeInfo})
                   in
                      trees
                   end)
