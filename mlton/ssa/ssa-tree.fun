@@ -1316,23 +1316,12 @@ structure Function =
                    in
                       ()
                    end)
-               val roots =
-                  Vector.foldr (entries, [],
-                     fn (FunctionEntry.T{start, ...}, roots) =>
-                        labelNode start :: roots
-                  )
+               val roots = Vector.toListMap (entries, labelNode o FunctionEntry.start)
                val graphLayout =
                   Graph.layoutDot
                   (graph, fn {nodeName} => 
                    {title = concat [Func.toString name, " control-flow graph"],
-                    options =
-                     [GraphOption.Rank
-                        (Min,
-                        Vector.foldr (entries, [],
-                           fn (FunctionEntry.T{start, ...}, roots) =>
-                              {nodeName = nodeName (labelNode start)} :: roots
-                        ))
-                     ],
+                    options = [GraphOption.Rank (Min, List.map (roots, fn root => {nodeName = nodeName root}))],
                     edgeOptions = edgeOptions,
                     nodeOptions =
                     fn n => let
