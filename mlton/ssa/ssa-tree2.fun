@@ -1375,9 +1375,22 @@ structure Function =
                   Promise.lazy
                   (fn () =>
                    Graph.dfsTrees (g, roots, #block o nodeInfo))
+
+               (* When we build the dominator forest, we create a fake root
+                * element that dominates all of the entry points; this lets us
+                * use the regular dominator tree algorithm.  We then throw away
+                * the root element, after Graph.dominatorTree has returned,
+                * since it was only there to make the forest look like a tree.
+                *)
                val dominatorForest = Promise.lazy (fn () =>
                   let
                      val fakeRoot = newNode ()
+                     val fakeBlock =
+                        Block.T {args = Vector.new0 (),
+                                 label = Label.newNoname (),
+                                 statements = Vector.new0 (),
+                                 transfer = Transfer.Bug}
+                     val _ = setNodeInfo (fakeRoot, {block = fakeBlock})
                      val () = Vector.foreach (entries,
                          fn FunctionEntry.T{start, ...} =>
                              let
@@ -1390,7 +1403,7 @@ structure Function =
                          )
                      val Tree.T (_, trees) =
                         Graph.dominatorTree (g, {root = fakeRoot,
-                                             nodeValue = #block o nodeInfo})
+                                                 nodeValue = #block o nodeInfo})
                   in
                      trees
                   end)
