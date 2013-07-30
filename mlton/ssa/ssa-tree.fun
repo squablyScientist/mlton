@@ -986,7 +986,7 @@ structure FunctionEntry =
       local
          fun make f (T r) = f r
       in
-         (* val args = make #args *)
+         val args = make #args
          val function = make #function
          val name = make #name
          val start = make #start

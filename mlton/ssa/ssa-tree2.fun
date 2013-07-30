@@ -1221,6 +1221,15 @@ structure FunctionEntry =
                name: FuncEntry.t,
                start: Label.t}
 
+      local
+         fun make f (T r) = f r
+      in
+         val args = make #args
+         val function = make #function
+         val name = make #name
+         val start = make #start
+      end
+
       fun layoutHeaders (T{args, name, start, ...}) =
          let
             open Layout
