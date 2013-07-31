@@ -7,14 +7,14 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature ANALYZE2_STRUCTS = 
+signature ME_ANALYZE2_STRUCTS = 
    sig
-      include SSA_TREE2
+      include ME_SSA_TREE2
    end
 
-signature ANALYZE2 = 
+signature ME_ANALYZE2 = 
    sig
-      include ANALYZE2_STRUCTS
+      include ME_ANALYZE2_STRUCTS
 
       val analyze:
          {base: 'a Base.t -> 'a,
@@ -46,9 +46,10 @@ signature ANALYZE2 =
                    offset: int,
                    value: 'a} -> unit,
           useFromTypeOnBinds: bool}
-         -> {func: Func.t -> {args: 'a vector,
+         -> {func: Func.t -> {entries: FuncEntry.t vector,
                               raises: 'a vector option,
                               returns: 'a vector option},
+             funcEntry: FuncEntry.t -> {args: 'a vector},
              label: Label.t -> 'a vector,
              value: Var.t -> 'a}
    end
