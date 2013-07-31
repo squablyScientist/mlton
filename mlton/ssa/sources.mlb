@@ -30,27 +30,35 @@ local
    direct-exp.fun
    analyze.old.sig
    analyze.sig
+   analyze2.old.sig
    analyze2.sig
    analyze.old.fun
    analyze.fun
+   analyze2.old.fun
    analyze2.fun
    type-check.old.sig
    type-check.sig
+   type-check2.old.sig
    type-check2.sig
    type-check.old.fun
    type-check.fun
+   type-check2.old.fun
    type-check2.fun
    prepasses.old.sig
    prepasses.sig
+   prepasses2.old.sig
    prepasses2.sig
    prepasses.old.fun
    prepasses.fun
+   prepasses2.old.fun
    prepasses2.fun
    shrink.old.sig
    shrink.sig
+   shrink2.old.sig
    shrink2.sig
    shrink.old.fun
    shrink.fun
+   shrink2.old.fun
    shrink2.fun
    flat-lattice.sig
    ann "forceUsed" in flat-lattice.fun end
@@ -105,15 +113,19 @@ local
    zone.fun
    simplify.old.sig
    simplify.sig
+   simplify2.old.sig
    simplify2.sig
    simplify.old.fun
    simplify.fun
+   simplify2.old.fun
    simplify2.fun
    ssa.old.sig
    ssa.sig
+   ssa2.old.sig
    ssa2.sig
    ssa.old.fun
    ssa.fun
+   ssa2.old.fun
    ssa2.fun
    ssa-to-ssa2.sig
    ssa-to-ssa2.fun
