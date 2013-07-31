@@ -300,5 +300,7 @@ signature ME_SSA_TREE2 =
             val hasPrim: t * (Type.t Prim.t -> bool) -> bool
             val layouts: t * (Layout.t -> unit) -> unit
             val layoutStats: t -> Layout.t
+            val mainFunction: t -> Function.t
+            val mainFunctionEntry: t -> FunctionEntry.t
          end
    end
