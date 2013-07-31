@@ -1274,6 +1274,7 @@ structure Function =
       in
          val blocks = make #blocks
          val dest = make (fn d => d)
+         val entries = make #entries
          val name = make #name
       end
 
@@ -1950,7 +1951,7 @@ structure Program =
                datatypes: Datatype.t vector,
                globals: Statement.t vector,
                functions: Function.t list,
-               main: Func.t
+               main: FuncEntry.t
                }
    end
 
@@ -1971,7 +1972,7 @@ structure Program =
                val {get = nodeOptions, set = setNodeOptions, ...} =
                   Property.getSetOnce
                   (Node.plist, Property.initRaise ("options", Node.layout))
-               val {get = funcNode, destroy} =
+               val {get = funcNode, destroy = destroyFunc} =
                   Property.destGet
                   (Func.plist, Property.initFun
                    (fn f =>
@@ -1982,6 +1983,21 @@ structure Program =
                           (n,
                            let open NodeOption
                            in [FontColor Black, label (Func.toString f)]
+                           end)
+                    in
+                       n
+                    end))
+               val {get = funcEntryNode, destroy = destroyFuncEntry} =
+                  Property.destGet
+                  (FuncEntry.plist, Property.initFun
+                   (fn f =>
+                    let
+                       val n = Graph.newNode graph
+                       val _ =
+                          setNodeOptions
+                          (n,
+                           let open NodeOption
+                           in [FontColor Black, label (FuncEntry.toString f)]
                            end)
                     in
                        n
@@ -2030,7 +2046,7 @@ structure Program =
                    in
                       ()
                    end)
-               val root = funcNode main
+               val root = funcEntryNode main
                val l =
                   Graph.layoutDot
                   (graph, fn {nodeName} =>
@@ -2038,7 +2054,8 @@ structure Program =
                     options = [GraphOption.Rank (Min, [{nodeName = nodeName root}])],
                     edgeOptions = edgeOptions,
                     nodeOptions = nodeOptions})
-               val _ = destroy ()
+               val _ = destroyFunc ()
+               val _ = destroyFuncEntry ()
             in
                l
             end
@@ -2058,7 +2075,7 @@ structure Program =
             ; Vector.foreach (datatypes, output o Datatype.layout)
             ; output (str "\n\nGlobals:")
             ; Vector.foreach (globals, output o Statement.layout)
-            ; output (seq [str "\n\nMain: ", Func.layout main])
+            ; output (seq [str "\n\nMain: ", FuncEntry.layout main])
             ; output (str "\n\nFunctions:")
             ; List.foreach (functions, fn f =>
                             Function.layouts (f, global, output))
@@ -2075,21 +2092,31 @@ structure Program =
                  end
          end
 
-      fun layoutStats (T {datatypes, globals, functions, main, ...}) =
+      fun mainFunction (T {functions, main, ...}) =
+         case List.peek (functions, fn f =>
+               Vector.exists (Function.entries f, fn e =>
+                         FuncEntry.equals (main, FunctionEntry.name e))) of
+            NONE => Error.bug "SsaTree.Program.mainFunction: no main function"
+          | SOME f => f
+
+      fun mainFunctionEntry (program as T{main,...}) =
+         case Vector.peek (Function.entries (mainFunction program), fn e =>
+             FuncEntry.equals (main, FunctionEntry.name e)) of
+            NONE     => Error.bug "SsaTree.Program.mainFunctionEntry: no main function entry"
+          | SOME  e  => e
+
+      fun layoutStats (program as T {datatypes, globals, functions, main, ...}) =
          let
             val (mainNumVars, mainNumBlocks) =
-               case List.peek (functions, fn f =>
-                               Func.equals (main, Function.name f)) of
-                  NONE => Error.bug "SsaTree2.Program.layoutStats: no main"
-                | SOME f =>
-                     let
-                        val numVars = ref 0
-                        val _ = Function.foreachVar (f, fn _ => Int.inc numVars)
-                        val {blocks, ...} = Function.dest f
-                        val numBlocks = Vector.length blocks
-                     in
+               let
+                  val f = mainFunction program
+                  val numVars = ref 0
+                  val _ = Function.foreachVar (f, fn _ => Int.inc numVars)
+                  val {blocks, ...} = Function.dest f
+                  val numBlocks = Vector.length blocks
+               in
                         (!numVars, numBlocks)
-                     end
+               end
             val numTypes = ref 0
             val {get = countType, destroy} =
                Property.destGet
@@ -2246,7 +2273,8 @@ structure Program =
                         ()
                      end
                end
-            val _ = visit main
+            (* FIXME: have a constant time way to get the Func.t *)
+            val _ = visit (Function.name (mainFunction p))
             val _ = Vector.foreach (functions, rem o Function.name)
          in
             ()

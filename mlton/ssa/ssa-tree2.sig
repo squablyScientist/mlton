@@ -285,7 +285,7 @@ signature ME_SSA_TREE2 =
                T of {datatypes: Datatype.t vector,
                      functions: Function.t list,
                      globals: Statement.t vector,
-                     main: Func.t (* Must be nullary. *)}
+                     main: FuncEntry.t (* Must be nullary. *)}
 
             val clear: t -> unit
             val clearTop: t -> unit
