@@ -5,14 +5,14 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature PREPASSES2_STRUCTS = 
+signature ME_PREPASSES2_STRUCTS =
    sig
-      include TYPE_CHECK2
+      include ME_TYPE_CHECK2
    end
 
-signature PREPASSES2 = 
+signature ME_PREPASSES2 =
    sig
-      include PREPASSES2_STRUCTS
+      include ME_PREPASSES2_STRUCTS
 
       val eliminateDeadBlocksFunction: Function.t -> Function.t
       val eliminateDeadBlocks: Program.t -> Program.t

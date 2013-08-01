@@ -5,7 +5,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor PrePasses2 (S: PREPASSES2_STRUCTS): PREPASSES2 = 
+functor MePrePasses2 (S: ME_PREPASSES2_STRUCTS): ME_PREPASSES2 =
 struct
 
 open S
@@ -15,7 +15,7 @@ struct
 
 fun eliminateFunction f =
    let
-      val {args, blocks, mayInline, name, raises, returns, start} =
+      val {blocks, entries, mayInline, name, raises, returns} =
          Function.dest f
       val {get = isLive, set = setLive, rem} =
          Property.getSetOnce (Label.plist, Property.initConst false)
@@ -31,13 +31,12 @@ fun eliminateFunction f =
                   Vector.keepAll
                   (blocks, isLive o Block.label)
             in
-               Function.new {args = args,
-                             blocks = blocks,
+               Function.new {blocks = blocks,
+                             entries = entries,
                              mayInline = mayInline,
                              name = name,
                              raises = raises,
-                             returns = returns,
-                             start = start}
+                             returns = returns}
             end
        val _ = Vector.foreach (blocks, rem o Block.label)
    in
@@ -67,7 +66,7 @@ fun orderFunctions (p as Program.T {globals, datatypes, main, ...}) =
          Program.dfs
          (p, fn f =>
           let
-             val {args, mayInline, name, raises, returns, start, ...} =
+             val {mayInline, entries, name, raises, returns, ...} =
                 Function.dest f
              val blocks = ref []
              val () =
@@ -75,13 +74,12 @@ fun orderFunctions (p as Program.T {globals, datatypes, main, ...}) =
                 (f, fn b =>
                  (List.push (blocks, b)
                   ; fn () => ()))
-             val f = Function.new {args = args,
-                                   blocks = Vector.fromListRev (!blocks),
+             val f = Function.new {blocks = Vector.fromListRev (!blocks),
+                                   entries = entries,
                                    mayInline = mayInline,
                                    name = name,
                                    raises = raises,
-                                   returns = returns,
-                                   start = start}
+                                   returns = returns}
           in
              List.push (functions, f)
              ; fn () => ()
