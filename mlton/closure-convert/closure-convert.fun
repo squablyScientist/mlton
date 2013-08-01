@@ -379,7 +379,7 @@ fun closureConvert
                       LambdaInfo.T {con = ref Con.bogus,
                                     frees = ref (Vector.new0 ()),
                                     name = Func.newString (Var.originalName x),
-                                    entry = Ssa.FuncEntry.newString "default",
+                                    entry = FuncEntry.newString "default",
                                     recs = ref (Vector.new0 ()),
                                     ty = ref NONE})
                   val _ = newVar (arg, Value.fromType argType)

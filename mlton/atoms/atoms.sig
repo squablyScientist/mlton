@@ -80,6 +80,7 @@ signature ATOMS =
       sharing Ffi = Atoms.Ffi
       sharing Field = Atoms.Field
       sharing Func = Atoms.Func
+      sharing FuncEntry = Atoms.FuncEntry
       sharing Label = Atoms.Label
       sharing Prim = Atoms.Prim
       sharing ProfileLabel = Atoms.ProfileLabel
