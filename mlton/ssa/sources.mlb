@@ -127,6 +127,8 @@ local
    ssa.fun
    ssa2.old.fun
    ssa2.fun
+   ssa-to-ssa2.old.sig
+   ssa-to-ssa2.old.fun
    ssa-to-ssa2.sig
    ssa-to-ssa2.fun
 in
