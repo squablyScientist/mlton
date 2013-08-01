@@ -6,14 +6,14 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature SIMPLIFY2_STRUCTS = 
+signature ME_SIMPLIFY2_STRUCTS =
    sig
-      include SHRINK2
+      include ME_SHRINK2
    end
 
-signature SIMPLIFY2 = 
+signature ME_SIMPLIFY2 =
    sig
-      include SIMPLIFY2_STRUCTS
+      include ME_SIMPLIFY2_STRUCTS
 
       val simplify: Program.t -> Program.t
    end

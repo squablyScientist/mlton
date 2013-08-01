@@ -324,7 +324,7 @@ val simplify = fn p => let
                                     (*pass ({name = "addProfile1",
                                            doit = Profile.addProfile,
                                            midfix = ""}, p)*)
-                                    Error.bug "Profiling unimplemented"
+                                    Error.bug "SSA Profiling unimplemented"
                             else p
                          val p = maybePass ({name = "orderFunctions1",
                                              doit = S.orderFunctions,
