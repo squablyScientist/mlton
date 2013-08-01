@@ -7,14 +7,14 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature SSA_TREE2_STRUCTS = 
+signature ME_SSA_TREE2_STRUCTS =
    sig
       include ATOMS
    end
 
 signature ME_SSA_TREE2 =
    sig
-      include SSA_TREE2_STRUCTS
+      include ME_SSA_TREE2_STRUCTS
 
       structure Prod:
          sig
