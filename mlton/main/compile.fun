@@ -1,4 +1,4 @@
-(* Copyright (C) 2011,2013 Matthew Fluet.
+(* Copyright (C) 2011,2013 Matthew Fluet and David Larsen
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -73,6 +73,7 @@ structure Sxml = Sxml (open Xml)
 structure Ssa = Ssa (open Atoms)
 structure MeSsa = MeSsa (open Atoms)
 structure Ssa2 = Ssa2 (open Atoms)
+structure MeSsa2 = MeSsa2 (open Atoms)
 structure Machine = Machine (open Atoms
                              structure Label = Ssa.Label)
 local
@@ -110,6 +111,8 @@ structure MeClosureConvert = MeClosureConvert (structure Ssa = MeSsa
                                                structure Sxml = Sxml)
 structure SsaToSsa2 = SsaToSsa2 (structure Ssa = Ssa
                                  structure Ssa2 = Ssa2)
+structure MeSsaToSsa2 = MeSsaToSsa2 (structure Ssa = MeSsa
+                                     structure Ssa2 = MeSsa2)
 structure Backend = Backend (structure Ssa = Ssa2
                              structure Machine = Machine
                              fun funcToLabel f = f)
@@ -656,6 +659,33 @@ fun preCodegen {input: MLBString.t}: Machine.Program.t =
                           if !keepSSA
                              then saveToFile ({suffix = "messa"}, No, messa,
                                               Layouts MeSsa.Program.layouts)
+                          else ()
+                       end
+                    val messa2 =
+                       Control.passTypeCheck
+                       {display = Control.Layouts MeSsa2.Program.layouts,
+                        name = "toMeSsa2",
+                        stats = MeSsa2.Program.layoutStats,
+                        style = Control.No,
+                        suffix = "messa2",
+                        thunk = fn () => MeSsaToSsa2.convert messa,
+                        typeCheck = MeSsa2.typeCheck}
+                    val messa2 =
+                       Control.passTypeCheck
+                       {display = Control.Layouts MeSsa2.Program.layouts,
+                        name = "meSsa2Simplify",
+                        stats = MeSsa2.Program.layoutStats,
+                        style = Control.No,
+                        suffix = "messa2",
+                        thunk = fn () => MeSsa2.simplify messa2,
+                        typeCheck = MeSsa2.typeCheck}
+                    val _ =
+                       let
+                          open Control
+                       in
+                          if !keepSSA2
+                             then saveToFile ({suffix = "messa2"}, No, messa2,
+                                              Layouts MeSsa2.Program.layouts)
                           else ()
                        end
                  in

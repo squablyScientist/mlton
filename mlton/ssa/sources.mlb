@@ -142,5 +142,7 @@ in
    functor Ssa
    functor MeSsa
    functor Ssa2
+   functor MeSsa2
    functor SsaToSsa2
+   functor MeSsaToSsa2
 end
