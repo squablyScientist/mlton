@@ -5,7 +5,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor SsaToSsa2 (S: SSA_TO_SSA2_STRUCTS): SSA_TO_SSA2 = 
+functor MeSsaToSsa2 (S: ME_SSA_TO_SSA2_STRUCTS): ME_SSA_TO_SSA2 =
 struct
 
 open S
@@ -252,8 +252,9 @@ fun convert (S.Program.T {datatypes, functions, globals, main}) =
                                   success = success,
                                   ty = convertType ty}
           | S.Transfer.Bug => S2.Transfer.Bug
-          | S.Transfer.Call {args, func, return} =>
+          | S.Transfer.Call {args, entry, func, return} =>
                S2.Transfer.Call {args = args,
+                                 entry = entry,
                                  func = func,
                                  return = convertReturn return}
           | S.Transfer.Case {cases, default, test} =>
@@ -279,20 +280,26 @@ fun convert (S.Program.T {datatypes, functions, globals, main}) =
          List.map
          (functions, fn f =>
           let
-             val {args, blocks, mayInline, name, raises, returns, start} =
+             val {blocks, entries, mayInline, name, raises, returns} =
                 S.Function.dest f
              fun rr tvo = Option.map (tvo, convertTypes)
              val blocks = Vector.map (blocks, convertBlock)
              val blocks = Vector.concat [blocks, Vector.fromList (!extraBlocks)]
              val () = extraBlocks := []
+             val entries = Vector.map
+                (entries, fn S.FunctionEntry.T {args, function, name, start} =>
+                   S2.FunctionEntry.T {args = convertFormals args,
+                                       function = function,
+                                       name = name,
+                                       start = start}
+                )
           in
-             S2.Function.new {args = convertFormals args,
-                              blocks = blocks,
+             S2.Function.new {blocks = blocks,
+                              entries = entries,
                               mayInline = mayInline,
                               name = name,
                               raises = rr raises,
-                              returns = rr returns,
-                              start = start}
+                              returns = rr returns}
           end)
       val globals = convertStatements globals
       val program = 
