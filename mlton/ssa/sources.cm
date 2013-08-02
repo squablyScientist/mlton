@@ -12,11 +12,14 @@ Group
 signature HANDLER
 signature RETURN
 signature ME_SSA
+signature ME_SSA2
 signature SSA
 signature SSA2
 
 functor FlatLattice
 functor MeSsa
+functor MeSsa2
+functor MeSsaToSsa2
 functor Ssa
 functor Ssa2
 functor SsaToSsa2
@@ -33,9 +36,11 @@ handler.sig
 return.sig
 ssa-tree.old.sig
 ssa-tree.sig
+ssa-tree2.old.sig
 ssa-tree2.sig
 ssa-tree.old.fun
 ssa-tree.fun
+ssa-tree2.old.fun
 ssa-tree2.fun
 direct-exp.old.sig
 direct-exp.sig
@@ -43,27 +48,35 @@ direct-exp.old.fun
 direct-exp.fun
 analyze.old.sig
 analyze.sig
+analyze2.old.sig
 analyze2.sig
 analyze.old.fun
 analyze.fun
+analyze2.old.fun
 analyze2.fun
 type-check.old.sig
 type-check.sig
-type-check2.sig
 type-check.old.fun
 type-check.fun
+type-check2.old.sig
+type-check2.sig
+type-check2.old.fun
 type-check2.fun
 prepasses.old.sig
 prepasses.sig
+prepasses2.old.sig
 prepasses2.sig
 prepasses.old.fun
 prepasses.fun
+prepasses2.old.fun
 prepasses2.fun
 shrink.old.sig
 shrink.sig
+shrink2.old.sig
 shrink2.sig
 shrink.old.fun
 shrink.fun
+shrink2.old.fun
 shrink2.fun
 flat-lattice.sig
 flat-lattice.fun
@@ -118,15 +131,21 @@ useless.fun
 zone.fun
 simplify.old.sig
 simplify.sig
+simplify2.old.sig
 simplify2.sig
 simplify.old.fun
 simplify.fun
+simplify2.old.fun
 simplify2.fun
 ssa.old.sig
 ssa.sig
+ssa2.old.sig
 ssa2.sig
 ssa.old.fun
 ssa.fun
+ssa2.old.fun
 ssa2.fun
+ssa-to-ssa2.old.sig
+ssa-to-ssa2.old.fun
 ssa-to-ssa2.sig
 ssa-to-ssa2.fun
