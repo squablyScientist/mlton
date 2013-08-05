@@ -25,6 +25,8 @@ local
    switch.sig
    switch.fun
    err.sml
+   rssa.old.sig
+   rssa.old.fun
    rssa.sig
    rssa.fun
    machine.sig
