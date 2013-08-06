@@ -1,4 +1,5 @@
-(* Copyright (C) 2009 Matthew Fluet.
+(* Copyright (C) 2013 David Larsen.
+ * Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -7,7 +8,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature RSSA_STRUCTS = 
+signature ME_RSSA_STRUCTS =
    sig
       include ATOMS
 
@@ -28,9 +29,9 @@ signature RSSA_STRUCTS =
       sharing Scale = Type.Scale
    end
 
-signature RSSA = 
+signature ME_RSSA =
    sig
-      include RSSA_STRUCTS
+      include ME_RSSA_STRUCTS
 
       structure Switch: SWITCH
       sharing Atoms = Switch
@@ -128,6 +129,7 @@ signature RSSA =
                           *)
                          return: Label.t option}
              | Call of {args: Operand.t vector,
+                        entry: FuncEntry.t,
                         func: Func.t,
                         return: Return.t}
              | Goto of {args: Operand.t vector,
@@ -138,6 +140,7 @@ signature RSSA =
              | Raise of Operand.t vector
              | Return of Operand.t vector
              | Switch of Switch.t
+             | Bug
 
             val bug: unit -> t
             (* foldDef (t, a, f)
@@ -186,18 +189,31 @@ signature RSSA =
             val layout: t -> Layout.t
          end
 
+      structure FunctionEntry:
+         sig
+            datatype t =
+                T of {args: (Var.t * Type.t) vector,
+                      function: Func.t,
+                      name: FuncEntry.t,
+                      start: Label.t}
+
+            val args: t -> (Var.t * Type.t) vector
+            val function: t ->  Func.t
+            val name: t -> FuncEntry.t
+            val start: t -> Label.t
+         end
+
       structure Function:
          sig
             type t
 
             val blocks: t -> Block.t vector
             val clear: t -> unit
-            val dest: t -> {args: (Var.t * Type.t) vector,
-                            blocks: Block.t vector,
+            val dest: t -> {blocks: Block.t vector,
+                            entries: FunctionEntry.t vector,
                             name: Func.t,
                             raises: Type.t vector option,
-                            returns: Type.t vector option,
-                            start: Label.t}
+                            returns: Type.t vector option}
             (* dfs (f, v) visits the blocks in depth-first order, applying v b
              * for block b to yield v', then visiting b's descendents,
              * then applying v' ().
@@ -205,12 +221,11 @@ signature RSSA =
             val dfs: t * (Block.t -> unit -> unit) -> unit
             val foreachVar: t * (Var.t * Type.t -> unit) -> unit
             val name: t -> Func.t
-            val new: {args: (Var.t * Type.t) vector,
-                      blocks: Block.t vector,
+            val new: {blocks: Block.t vector,
+                      entries: FunctionEntry.t vector,
                       name: Func.t,
                       raises: Type.t vector option,
-                      returns: Type.t vector option,
-                      start: Label.t} -> t
+                      returns: Type.t vector option} -> t
          end
 
       structure Program:
@@ -218,7 +233,7 @@ signature RSSA =
             datatype t =
                T of {functions: Function.t list,
                      handlesSignals: bool,
-                     main: Function.t,
+                     main: {func: Function.t, entry: FuncEntry.t},
                      objectTypes: ObjectType.t vector}
 
             val clear: t -> unit

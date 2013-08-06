@@ -1,4 +1,5 @@
-(* Copyright (C) 2009 Matthew Fluet.
+(* Copyright (C) 2013 David Larsen.
+ * Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -7,7 +8,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor Rssa (S: RSSA_STRUCTS): RSSA =
+functor MeRssa (S: ME_RSSA_STRUCTS): ME_RSSA =
 struct
 
 open S
@@ -372,6 +373,7 @@ structure Transfer =
                    func: Type.t CFunction.t,
                    return: Label.t option}
        | Call of {args: Operand.t vector,
+                  entry: FuncEntry.t,
                   func: Func.t,
                   return: Return.t}
        | Goto of {args: Operand.t vector,
@@ -379,6 +381,7 @@ structure Transfer =
        | Raise of Operand.t vector
        | Return of Operand.t vector
        | Switch of Switch.t
+       | Bug
 
       fun layout t =
          let
@@ -398,8 +401,9 @@ structure Transfer =
                        record [("args", Vector.layout Operand.layout args),
                                ("func", CFunction.layout (func, Type.layout)),
                                ("return", Option.layout Label.layout return)]]
-             | Call {args, func, return} =>
-                  seq [Func.layout func, str " ",
+             | Call {args, entry, func, return} =>
+                  seq [Func.layout func, str "@",
+                       FuncEntry.layout entry, str " ",
                        Vector.layout Operand.layout args,
                        str " ", Return.layout return]
              | Goto {dst, args} =>
@@ -516,8 +520,9 @@ structure Transfer =
                   CCall {args = opers args,
                          func = func,
                          return = return}
-             | Call {args, func, return} =>
+             | Call {args, entry, func, return} =>
                   Call {args = opers args,
+                        entry = entry,
                         func = func,
                         return = return}
              | Goto {args, dst} =>
@@ -619,14 +624,42 @@ structure Block =
          end
    end
 
+structure FunctionEntry =
+   struct
+      datatype t =
+         T of {args: (Var.t * Type.t) vector,
+               function: Func.t,
+               name: FuncEntry.t,
+               start: Label.t}
+
+      fun layoutHeaders (T{args, name, start, ...}) =
+         let
+            open Layout
+         in
+            seq [str "fun_entry ",
+                 FuncEntry.layout name,
+                 str " ",
+                 layoutFormals args,
+                 str " = ", Label.layout start, str " ()"]
+         end
+
+      local
+         fun make f (T r) = f r
+      in
+         val args = make #args
+         val function = make #function
+         val name = make #name
+         val start = make #start
+      end
+   end
+
 structure Function =
    struct
-      datatype t = T of {args: (Var.t * Type.t) vector,
-                         blocks: Block.t vector,
+      datatype t = T of {blocks: Block.t vector,
+                         entries: FunctionEntry.t vector,
                          name: Func.t,
                          raises: Type.t vector option,
-                         returns: Type.t vector option,
-                         start: Label.t}
+                         returns: Type.t vector option}
 
       local
          fun make f (T r) = f r
@@ -638,17 +671,26 @@ structure Function =
       fun dest (T r) = r
       val new = T
 
-      fun clear (T {name, args, blocks, ...}) =
+      fun clear (T {name, blocks, entries, ...}) =
          (Func.clear name
-          ; Vector.foreach (args, Var.clear o #1)
-          ; Vector.foreach (blocks, Block.clear))
+          ; Vector.foreach (blocks, Block.clear)
+          ; Vector.foreach (entries, fn FunctionEntry.T {args, ...} =>
+                            Vector.foreach (args, Var.clear o #1)
+                           )
+         )
 
-      fun layoutHeader (T {args, name, raises, returns, start, ...}): Layout.t =
+      fun layoutHeader (T {entries, name, raises, returns, ...}): Layout.t =
          let
             open Layout
+            val entryLayouts =
+               Vector.foldr(entries, [],
+                  fn (entry, entryLayouts) =>
+                     FunctionEntry.layoutHeaders entry :: entryLayouts
+               )
          in
-            seq [str "fun ", Func.layout name,
-                 str " ", layoutFormals args,
+            align (seq
+               [str "fun ",
+                Func.layout name,
                  if !Control.showTypes
                     then seq [str ": ",
                               record [("raises",
@@ -657,8 +699,8 @@ structure Function =
                                       ("returns",
                                        Option.layout
                                        (Vector.layout Type.layout) returns)]]
-                 else empty,
-                 str " = ", Label.layout start, str " ()"]
+                 else empty]
+               :: entryLayouts)
          end
 
       fun layouts (f as T {blocks, ...}, output) =
@@ -674,15 +716,17 @@ structure Function =
                    indent (align (Vector.toListMap (blocks, Block.layout)), 2)]
          end
 
-      fun foreachVar (T {args, blocks, ...}, f) =
-         (Vector.foreach (args, f)
-          ; (Vector.foreach
+      fun foreachVar (T {blocks, entries, ...}, f) =
+         (Vector.foreach (entries, fn FunctionEntry.T {args, ...} =>
+            Vector.foreach (args, f))
+         ; (Vector.foreach
              (blocks, fn Block.T {args, statements, transfer, ...} =>
               (Vector.foreach (args, f)
                ; Vector.foreach (statements, fn s => Statement.foreachDef (s, f))
-               ; Transfer.foreachDef (transfer, f)))))
+               ; Transfer.foreachDef (transfer, f))))
+         )
 
-      fun dfs (T {blocks, start, ...}, v) =
+      fun dfs (T {blocks, entries, ...}, v) =
          let
             val numBlocks = Vector.length blocks
             val {get = labelIndex, set = setLabelIndex, rem, ...} =
@@ -709,7 +753,8 @@ structure Function =
                         ()
                      end
                end
-            val _ = visit start
+            val _ = Vector.foreach (entries,
+                     fn FunctionEntry.T{start, ...} => visit start)
             val _ = Vector.foreach (blocks, rem o Block.label)
          in
             ()
@@ -718,7 +763,7 @@ structure Function =
       structure Graph = DirectedGraph
       structure Node = Graph.Node
 
-      fun dominatorTree (T {blocks, start, ...}): Block.t Tree.t =
+      fun dominatorForest (T {blocks, entries, ...}): Block.t Tree.t vector =
          let
             open Dot
             val g = Graph.new ()
@@ -747,14 +792,41 @@ structure Function =
                 in
                    ()
                 end)
+
+            (* When we build the dominator forest, we create a fake root
+             * element that dominates all of the entry points; this lets us
+             * use the regular dominator tree algorithm.  We then throw away
+             * the root element, after Graph.dominatorTree has returned,
+             * since it was only there to make the forest look like a tree.
+             *)
+            val fakeRoot = newNode ()
+            val fakeBlock =
+               Block.T {args = Vector.new0 (),
+                        kind = Kind.Jump,
+                        label = Label.newNoname (),
+                        statements = Vector.new0 (),
+                        transfer = Transfer.Bug}
+            val _ = setNodeInfo (fakeRoot, {block = fakeBlock})
+            val () = Vector.foreach (entries,
+                fn FunctionEntry.T{start, ...} =>
+                    let
+                        val entry = labelNode start
+                        val _ = Graph.addEdge (g, {from = fakeRoot,
+                                                   to = entry})
+                    in
+                        ()
+                    end
+                )
+            val Tree.T (_, trees) =
+               Graph.dominatorTree (g, {root = fakeRoot,
+                                        nodeValue = #block o nodeInfo})
          in
-            Graph.dominatorTree (g, {root = labelNode start,
-                                     nodeValue = #block o nodeInfo})
+            trees
          end
 
       fun dropProfile (f: t): t =
          let
-            val {args, blocks, name, raises, returns, start} = dest f
+            val {blocks, entries, name, raises, returns} = dest f
             val blocks =
                Vector.map
                (blocks, fn Block.T {args, kind, label, statements, transfer} =>
@@ -768,17 +840,16 @@ structure Function =
                                         | _ => true),
                          transfer = transfer})
          in
-            new {args = args,
-                 blocks = blocks,
+            new {blocks = blocks,
+                 entries = entries,
                  name = name,
                  raises = raises,
-                 returns = returns,
-                 start = start}
+                 returns = returns}
          end
 
       fun shrink (f: t): t =
          let
-            val {args, blocks, name, raises, returns, start} = dest f
+            val {blocks, entries, name, raises, returns} = dest f
             val {get = labelInfo, rem, set = setLabelInfo, ...} =
                Property.getSetOnce
                (Label.plist, Property.initRaise ("info", Label.layout))
@@ -789,7 +860,7 @@ structure Function =
                                       inline = ref false,
                                       occurrences = ref 0}))
             fun visitLabel l = Int.inc (#occurrences (labelInfo l))
-            val () = visitLabel start
+            val () = Vector.foreach (entries, visitLabel o FunctionEntry.start)
             val () =
                Vector.foreach (blocks, fn Block.T {transfer, ...} =>
                                Transfer.foreachLabel (transfer, visitLabel))
@@ -861,12 +932,11 @@ structure Function =
                  end))
             val () = Vector.foreach (blocks, rem o Block.label)
          in
-            new {args = args,
-                 blocks = blocks,
+            new {blocks = blocks,
+                 entries = entries,
                  name = name,
                  raises = raises,
-                 returns = returns,
-                 start = start}
+                 returns = returns}
          end
    end
 
@@ -875,12 +945,12 @@ structure Program =
       datatype t =
          T of {functions: Function.t list,
                handlesSignals: bool,
-               main: Function.t,
+               main: {func: Function.t, entry: FuncEntry.t},
                objectTypes: ObjectType.t vector}
 
       fun clear (T {functions, main, ...}) =
          (List.foreach (functions, Function.clear)
-          ; Function.clear main)
+          ; Function.clear (#func main))
 
       fun layouts (T {functions, main, objectTypes, ...},
                    output': Layout.t -> unit): unit =
@@ -893,7 +963,7 @@ structure Program =
                                output (seq [str "opt_", Int.layout i,
                                             str " = ", ObjectType.layout ty]))
             ; output (str "\nMain:")
-            ; Function.layouts (main, output)
+            ; Function.layouts (#func main, output)
             ; output (str "\nFunctions:")
             ; List.foreach (functions, fn f => Function.layouts (f, output))
          end
@@ -904,7 +974,7 @@ structure Program =
             val numBlocks = ref 0
             val _ =
                List.foreach
-               (main::functions, fn f =>
+               ((#func main)::functions, fn f =>
                 let
                    val {blocks, ...} = Function.dest f
                 in
@@ -928,7 +998,7 @@ structure Program =
          (Control.profile := Control.ProfileNone
           ; T {functions = List.map (functions, Function.dropProfile),
                handlesSignals = handlesSignals,
-               main = Function.dropProfile main,
+               main = {func = Function.dropProfile (#func main), entry = #entry main},
                objectTypes = objectTypes})
       (* quell unused warning *)
       val _ = dropProfile
@@ -936,7 +1006,7 @@ structure Program =
       fun dfs (p, v) =
          let
             val T {functions, main, ...} = p
-            val functions = Vector.fromList (main::functions)
+            val functions = Vector.fromList ((#func main)::functions)
             val numFunctions = Vector.length functions
             val {get = funcIndex, set = setFuncIndex, rem, ...} =
                Property.getSetOnce (Func.plist,
@@ -964,20 +1034,21 @@ structure Program =
                         ()
                      end
                end
-            val _ = visit (Function.name main)
+            val _ = visit (Function.name (#func main))
             val _ = Vector.foreach (functions, rem o Function.name)
          in
             ()
          end
 
-      fun orderFunctions (p as T {handlesSignals, objectTypes, ...}) =
+      fun orderFunctions (p as T {handlesSignals, objectTypes, main, ...}) =
          let
             val functions = ref []
+            val {entry = mainFuncEntry, ...} = main
             val () =
                dfs
                (p, fn f =>
                 let
-                   val {args, name, raises, returns, start, ...} =
+                   val {name, entries, raises, returns, ...} =
                       Function.dest f
                    val blocks = ref []
                    val () =
@@ -985,12 +1056,11 @@ structure Program =
                       (f, fn b =>
                        (List.push (blocks, b)
                         ; fn () => ()))
-                   val f = Function.new {args = args,
-                                         blocks = Vector.fromListRev (!blocks),
+                   val f = Function.new {blocks = Vector.fromListRev (!blocks),
+                                         entries = entries,
                                          name = name,
                                          raises = raises,
-                                         returns = returns,
-                                         start = start}
+                                         returns = returns}
                 in
                    List.push (functions, f)
                    ; fn () => ()
@@ -1002,7 +1072,7 @@ structure Program =
          in
             T {functions = functions,
                handlesSignals = handlesSignals,
-               main = main,
+               main = {func = main, entry = mainFuncEntry},
                objectTypes = objectTypes}
          end
 
@@ -1102,9 +1172,12 @@ structure Program =
             fun loopFormals args = Vector.foreach (args, dontReplace)
             fun loopFunction (f: Function.t): Function.t =
                let
-                  val {args, name, raises, returns, start, ...} =
+                  val {name, entries, raises, returns, ...} =
                      Function.dest f
-                  val () = loopFormals args
+                  val () = Vector.foreach
+                     (entries,
+                      loopFormals o FunctionEntry.args
+                     )
                   val blocks = ref []
                   val () =
                      Function.dfs
@@ -1126,31 +1199,32 @@ structure Program =
                       end)
                   val blocks = Vector.fromList (!blocks)
                in
-                  Function.new {args = args,
-                                blocks = blocks,
+                  Function.new {blocks = blocks,
+                                entries = entries,
                                 name = name,
                                 raises = raises,
-                                returns = returns,
-                                start = start}
+                                returns = returns}
                end
             (* Must process main first, because it defines globals that are
              * used in other functions.
              *)
-            val main = loopFunction main
+            val {func = mainFunc, entry = mainEntry} = main
+            val mainFunc = loopFunction mainFunc
             val functions = List.revMap (functions, loopFunction)
          in
             T {functions = functions,
                handlesSignals = handlesSignals,
-               main = main,
+               main = {func = mainFunc, entry = mainEntry},
                objectTypes = objectTypes}
          end
 
       fun shrink (T {functions, handlesSignals, main, objectTypes}) =
          let
+            val {func = mainFunc, entry = mainEntry} = main
             val p = 
                T {functions = List.revMap (functions, Function.shrink),
                   handlesSignals = handlesSignals,
-                  main = Function.shrink main,
+                  main = {func = Function.shrink mainFunc, entry = mainEntry},
                   objectTypes = objectTypes}
             val p = copyProp p
             val () = clear p
@@ -1211,7 +1285,7 @@ structure Program =
             val debug = false
             fun checkFunction (f: Function.t): unit =
                let
-                  val {name, start, blocks, ...} = Function.dest f
+                  val {entries, name, blocks, ...} = Function.dest f
                   val {get = labelInfo: Label.t -> HandlerInfo.t,
                        rem = remLabelInfo, 
                        set = setLabelInfo} =
@@ -1349,9 +1423,17 @@ structure Program =
                             | Return _ => tail "return"
                             | Switch s => Switch.foreachLabel (s, goto)
                         end
-                  val info as HandlerInfo.T {global, ...} = labelInfo start
-                  val _ = ExnStack.forcePoint (global, ExnStack.Point.Caller)
-                  val _ = visitInfo info
+                  val () = Vector.foreach
+                     (entries,
+                      fn FunctionEntry.T {start, ...} =>
+                        let
+                           val info as HandlerInfo.T {global, ...} = labelInfo start
+                           val _ = ExnStack.forcePoint (global, ExnStack.Point.Caller)
+                           val _ = visitInfo info
+                        in
+                           ()
+                        end
+                     )
                   val _ =
                      Control.diagnostics
                      (fn display =>
@@ -1429,19 +1511,23 @@ structure Program =
             fun loopFunc (f: Function.t, isMain: bool): unit =
                let
                   val bindVar = fn x => bindVar (x, isMain)
-                  val {args, blocks, ...} = Function.dest f
-                  val _ = Vector.foreach (args, bindVar o #1)
+                  val {blocks, entries, ...} = Function.dest f
+                  val _ = Vector.foreach
+                     (entries,
+                      fn FunctionEntry.T {args, ...} =>
+                        Vector.foreach (args, bindVar o #1)
+                     )
                   val _ = Vector.foreach (blocks, bindLabel o Block.label)
                   val _ =
                      Vector.foreach
                      (blocks, fn Block.T {transfer, ...} =>
                       Transfer.foreachLabel (transfer, getLabel))
-                  (* Descend the dominator tree, verifying that variable
+                  (* Descend the dominator trees, verifying that variable
                    * definitions dominate variable uses.
                    *)
-                  val _ =
+                  val _ = Vector.foreach (Function.dominatorForest f, fn tree =>
                      Tree.traverse
-                     (Function.dominatorTree f,
+                     (tree,
                       fn Block.T {args, statements, transfer, ...} =>
                       let
                          val _ = Vector.foreach (args, bindVar o #1)
@@ -1469,13 +1555,18 @@ structure Program =
                                ()
                             end
                       end)
+                     )
                   val _ = Vector.foreach (blocks, unbindLabel o Block.label)
-                  val _ = Vector.foreach (args, unbindVar o #1)
+                  val _ = Vector.foreach
+                     (entries,
+                      fn FunctionEntry.T {args, ...} =>
+                        Vector.foreach (args, unbindVar o #1)
+                     )
                in
                   ()
                end
             val _ = List.foreach (functions, bindFunc o Function.name)
-            val _ = loopFunc (main, true)
+            val _ = loopFunc (#func main, true)
             val _ = List.foreach (functions, fn f => loopFunc (f, false))
             val _ = clear program
          in ()
@@ -1629,16 +1720,31 @@ structure Program =
                 | SOME ts => 
                      Vector.equals (formals, ts, fn ((_, t), t') =>
                                     Type.isSubtype (t', t))
-            fun callIsOk {args, func, raises, return, returns} =
+            fun callIsOk {args, func, funcEntry, raises, return, returns} =
                let
-                  val Function.T {args = formals,
+                  val Function.T {entries = entries,
                                   raises = raises',
                                   returns = returns', ...} =
                      funcInfo func
 
+                  (* Make sure the call uses valid 'func' and 'funcEntry' names. *)
+                  val entry = Vector.peek
+                     (entries,
+                      fn FunctionEntry.T {function, name, ...} =>
+                        Func.equals (func, function)
+                        andalso
+                        FuncEntry.equals (funcEntry, name)
+                     )
                in
-                  Vector.equals (args, formals, fn (z, (_, t)) =>
-                                 Type.isSubtype (Operand.ty z, t))
+                  (* Once we are sure that the 'funcEntry' name being used is a
+                   * valid entry for the function, make sure the types of the
+                   * arguments match up with the arguments of the 'funcEntry'
+                   * being called. *)
+                  case entry of
+                     SOME (FunctionEntry.T {args = formals, ...}) =>
+                        Vector.equals (args, formals, fn (z, (_, t)) =>
+                                       Type.isSubtype (Operand.ty z, t))
+                  |  NONE  => false
                   andalso
                   (case return of
                       Return.Dead =>
@@ -1678,10 +1784,14 @@ structure Program =
                          andalso tailIsOk (returns, returns'))
                end
 
-            fun checkFunction (Function.T {args, blocks, raises, returns, start,
+            fun checkFunction (Function.T {blocks, entries, raises, returns,
                                            ...}) =
                let
-                  val _ = Vector.foreach (args, setVarType)
+                  val _ = Vector.foreach
+                     (entries,
+                      fn FunctionEntry.T {args, ...} =>
+                        Vector.foreach (args, setVarType)
+                     )
                   val _ =
                      Vector.foreach
                      (blocks, fn b as Block.T {args, label, statements,
@@ -1692,7 +1802,10 @@ structure Program =
                                          Statement.foreachDef
                                          (s, setVarType))
                        ; Transfer.foreachDef (transfer, setVarType)))
-                  val _ = labelIsNullaryJump start
+                  val _ = Vector.foreach
+                     (entries,
+                      ignore o labelIsNullaryJump o FunctionEntry.start
+                     )
                   fun transferOk (t: Transfer.t): bool =
                      let
                         datatype z = datatype Transfer.t
@@ -1730,11 +1843,12 @@ structure Program =
                                              CFunction.equals (func, f)
                                         | _ => false
                               end
-                         | Call {args, func, return} =>
+                         | Call {args, entry, func, return} =>
                               let
                                  val _ = checkOperands args
                               in
                                  callIsOk {args = args,
+                                           funcEntry = entry,
                                            func = func,
                                            raises = raises,
                                            return = return,
@@ -1827,16 +1941,23 @@ structure Program =
                List.foreach
                (functions, fn f as Function.T {name, ...} =>
                 setFuncInfo (name, f))
-            val _ = checkFunction main
+            val _ = checkFunction (#func main)
             val _ = List.foreach (functions, checkFunction)
             val _ =
                check'
-               (main, "main function",
+               (#func main, "main function",
                 fn f =>
                 let
-                   val {args, ...} = Function.dest f
+                   val {entries, ...} = Function.dest f
+                   val entry : FunctionEntry.t option = Vector.peek
+                     (entries,
+                      fn FunctionEntry.T {name, ...} =>
+                        FuncEntry.equals (name, #entry main)
+                     )
                 in
-                   0 = Vector.length args
+                   case entry of
+                     SOME (FunctionEntry.T {args, ...}) => 0 = Vector.length args
+                   |  NONE => false
                 end,
                 Function.layout)
             val _ = clear p
