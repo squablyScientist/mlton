@@ -41,8 +41,12 @@ rssa.sig
 rssa.fun
 machine.sig
 machine.fun
+representation.old.sig
 representation.sig
+packed-representation.old.fun
 packed-representation.fun
+ssa-to-rssa.old.sig
+ssa-to-rssa.old.fun
 ssa-to-rssa.sig
 ssa-to-rssa.fun
 rssa-transform.sig

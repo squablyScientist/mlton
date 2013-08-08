@@ -1,4 +1,5 @@
-(* Copyright (C) 2009,2011 Matthew Fluet.
+(* Copyright (C) 2013 David Larsen.
+ * Copyright (C) 2009,2011 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -7,7 +8,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor SsaToRssa (S: SSA_TO_RSSA_STRUCTS): SSA_TO_RSSA =
+functor MeSsaToRssa (S: ME_SSA_TO_RSSA_STRUCTS): ME_SSA_TO_RSSA =
 struct
 
 open S
@@ -561,7 +562,7 @@ datatype z = datatype Operand.t
 datatype z = datatype Statement.t
 datatype z = datatype Transfer.t
 
-structure PackedRepresentation = PackedRepresentation (structure Rssa = Rssa
+structure PackedRepresentation = MePackedRepresentation (structure Rssa = Rssa
                                                        structure Ssa = Ssa)
 
 structure Type =
@@ -896,7 +897,7 @@ fun convert (program as S.Program.T {functions, globals, main, ...},
                         end
                end
           | S.Transfer.Bug => ([], Transfer.bug ())
-          | S.Transfer.Call {func, args, return} =>
+          | S.Transfer.Call {func, entry, args, return} =>
                let
                   datatype z = datatype S.Return.t
                   val return =
@@ -917,6 +918,7 @@ fun convert (program as S.Program.T {functions, globals, main, ...},
                       | Tail => Return.Tail
                in
                   ([], Transfer.Call {func = func,
+                                      entry = entry,
                                       args = vos args,
                                       return = return})
                end
@@ -1491,7 +1493,7 @@ fun convert (program as S.Program.T {functions, globals, main, ...},
          let
             val _ =
                S.Function.foreachVar (f, fn (x, t) => setVarInfo (x, {ty = t}))
-            val {args, blocks, name, raises, returns, start, ...} =
+            val {blocks, entries, name, raises, returns, ...} =
                S.Function.dest f
             val _ =
                Vector.foreach
@@ -1502,34 +1504,56 @@ fun convert (program as S.Program.T {functions, globals, main, ...},
             val blocks = Vector.map (blocks, translateBlock)
             val blocks = Vector.concat [Vector.fromList (!extraBlocks), blocks]
             val _ = extraBlocks := []
+            val entries = Vector.map
+                (entries,
+                 fn S.FunctionEntry.T {args, function, name, start} =>
+                    FunctionEntry.T {args = translateFormals args,
+                                     function = function,
+                                     name = name,
+                                     start = start}
+                )
             fun transTypes (ts : S.Type.t vector option)
                : Type.t vector option =
                Option.map (ts, fn ts => Vector.keepAllMap (ts, toRtype))
          in
-            Function.new {args = translateFormals args,
+            Function.new {entries = entries,
                           blocks = blocks,
                           name = name,
                           raises = transTypes raises,
-                          returns = transTypes returns,
-                          start = start}
+                          returns = transTypes returns}
          end
-      val main =
+      val main : Function.t =
           let
              val start = Label.newNoname ()
              val bug = Label.newNoname ()
+             val main_name = Func.newNoname ()
+             val entry = S.FunctionEntry.T {args = Vector.new0 (),
+                                            function = main_name,
+                                            name = main,
+                                            start = start}
+             val ssaMainFunction = S.Program.mainFunction program
+             val {name = ssaMainFuncName, ...} = S.Function.dest ssaMainFunction
+
+             (* Sanity test: 'main' == S.Program.mainFunctionEntry *)
+             val S.FunctionEntry.T {name = ssaMainFuncEntry, ...} =
+                S.Program.mainFunctionEntry program
+             val () =
+                if FuncEntry.equals (main, ssaMainFuncEntry)
+                    then ()
+                    else Error.bug "'main' is not a function entry in the main SSA function."
           in
              translateFunction
              (S.Function.profile
               (S.Function.new
-               {args = Vector.new0 (),
-                blocks = (Vector.new2
+               {blocks = (Vector.new2
                           (S.Block.T
                            {label = start,
                             args = Vector.new0 (),
                             statements = globals,
                             transfer = (S.Transfer.Call
                                         {args = Vector.new0 (),
-                                         func = main,
+                                         entry = main,
+                                         func = ssaMainFuncName,
                                          return =
                                          S.Return.NonTail
                                          {cont = bug,
@@ -1539,17 +1563,25 @@ fun convert (program as S.Program.T {functions, globals, main, ...},
                             args = Vector.new0 (),
                             statements = Vector.new0 (),
                             transfer = S.Transfer.Bug})),
+                entries = Vector.new1 entry,
                 mayInline = false, (* doesn't matter *)
-                name = Func.newNoname (),
+                name = main_name,
                 raises = NONE,
-                returns = NONE,
-                start = start},
+                returns = NONE},
                S.SourceInfo.main))
           end
       val functions = List.revMap (functions, translateFunction)
+      val {entries, ...} = Function.dest main
+      (* The RSSA main just created should only have 1 entry point. *)
+      val () = case Vector.length entries of
+            1 => ()
+        |   n => Error.bug ("Backend.RSSA newly created main function has " ^
+                            (Int.toString n) ^
+                            " entry points, but should only have 1.")
+      val FunctionEntry.T{name = entryName, ...} = Vector.sub (entries, 0)
       val p = Program.T {functions = functions,
                          handlesSignals = handlesSignals,
-                         main = main,
+                         main = {func = main, entry = entryName},
                          objectTypes = objectTypes}
       val _ = Program.clear p
    in

@@ -137,6 +137,7 @@ in
    signature SSA
    signature ME_SSA
    signature SSA2
+   signature ME_SSA2
 
    functor FlatLattice
    functor Ssa

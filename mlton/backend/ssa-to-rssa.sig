@@ -1,4 +1,5 @@
-(* Copyright (C) 1999-2006 Henry Cejtin, Matthew Fluet, Suresh
+(* Copyright (C) 2013 David Larsen.
+ * Copyright (C) 1999-2006 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
@@ -7,13 +8,14 @@
  *)
 
 
-signature SSA_TO_RSSA_STRUCTS =
+signature ME_SSA_TO_RSSA_STRUCTS =
    sig
-      structure Rssa: RSSA
-      structure Ssa: SSA2
+      structure Rssa: ME_RSSA
+      structure Ssa: ME_SSA2
       sharing Rssa.CFunction = Ssa.CFunction
       sharing Rssa.Const = Ssa.Const
       sharing Rssa.Func = Ssa.Func
+      sharing Rssa.FuncEntry = Ssa.FuncEntry
       sharing Rssa.Label = Ssa.Label
       sharing Rssa.Prim = Ssa.Prim
       sharing Rssa.ProfileExp = Ssa.ProfileExp
@@ -21,9 +23,9 @@ signature SSA_TO_RSSA_STRUCTS =
       sharing Rssa.Var = Ssa.Var
    end
 
-signature SSA_TO_RSSA =
+signature ME_SSA_TO_RSSA =
    sig
-      include SSA_TO_RSSA_STRUCTS
+      include ME_SSA_TO_RSSA_STRUCTS
 
       val convert:
          Ssa.Program.t
