@@ -79,15 +79,22 @@ local
    common-arg.fun
    common-block.fun
    common-subexp.fun
+   global.old.sig
+   global.old.fun
    global.sig
    global.fun
+   multi.old.sig
+   multi.old.fun
    multi.sig
    multi.fun
    combine-conversions.fun
+   constant-propagation.old.fun
    constant-propagation.fun
    contify.fun
    deep-flatten.fun
    flatten.fun
+   inline.old.sig
+   inline.old.fun
    inline.sig
    inline.fun
    introduce-loops.fun
