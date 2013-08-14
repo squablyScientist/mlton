@@ -17,7 +17,7 @@ A label is actually-multi-used if it may be executed more than once
 during the execution of the program.
 *)
 
-functor Multi (S: MULTI_STRUCTS): MULTI =
+functor MeMulti (S: ME_MULTI_STRUCTS): ME_MULTI =
 struct
 
 open S
@@ -131,7 +131,7 @@ structure VarInfo =
                         multiUsed = MultiUsed.new ()}
    end
 
-fun multi (p as Program.T {functions, main, ...})
+fun multi (p as Program.T {functions, ...})
   = let
       val usesThreadsOrConts 
         = Program.hasPrim (p, fn p =>
@@ -182,7 +182,9 @@ fun multi (p as Program.T {functions, main, ...})
                  setFuncNode (Function.name f, n) ;
                  setNodeFunction (n, f)
                end)
-      val _ = Calls.inc (FuncInfo.calls (funcInfo main))
+      val mainFunction = Program.mainFunction p
+      val mainFuncName = Function.name mainFunction
+      val _ = Calls.inc (FuncInfo.calls (funcInfo mainFuncName))
       val _ = List.foreach
               (functions, fn f =>
                let
@@ -320,22 +322,20 @@ fun multi (p as Program.T {functions, main, ...})
       val rec forceMultiThreadedFunc
         = fn f =>
           let
-            val {args, blocks, ...} = Function.dest f
+            val {blocks, entries, ...} = Function.dest f
           in
-            Vector.foreach
-            (args, forceMultiThreadedVar o #1) ;
-            Vector.foreach
-            (blocks, forceMultiThreadedBlock)
+            (Vector.foreach (entries, fn FunctionEntry.T {args, ...} =>
+               Vector.foreach (args, forceMultiThreadedVar o #1))
+            ; Vector.foreach (blocks, forceMultiThreadedBlock))
           end
       val rec forceMultiUsedFunc
         = fn f =>
           let
-            val {args, blocks, ...} = Function.dest f
+            val {blocks, entries, ...} = Function.dest f
           in
-            Vector.foreach
-            (args, forceMultiUsedVar o #1) ;
-            Vector.foreach
-            (blocks, forceMultiUsedBlock)
+            (Vector.foreach (entries, fn FunctionEntry.T {args, ...} =>
+               Vector.foreach (args, forceMultiUsedVar o #1))
+            ; Vector.foreach (blocks, forceMultiUsedBlock))
           end
 
       fun visitFunc multiUsed f

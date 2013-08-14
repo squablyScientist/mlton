@@ -7,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor Inline (S: INLINE_STRUCTS): INLINE = 
+functor MeInline (S: ME_INLINE_STRUCTS): ME_INLINE =
 struct
 
 open S
@@ -450,7 +450,7 @@ fun transform {program as Program.T {datatypes, globals, functions, main},
                                transfer = transfer}
                 in
                   case transfer of
-                     Call {func, args, return = return'} =>
+                     Call {args, entry, func, return = return'} =>
                         let
                            val return = Return.compose (return, return')
                         in
@@ -458,13 +458,25 @@ fun transform {program as Program.T {datatypes, globals, functions, main},
                               then 
                               let
                                  local
-                                    val {name, args, start, blocks, ...} =
+                                    val {entries, blocks, ...} =
                                        (Function.dest o Function.alphaRename) 
                                        (#function (funcInfo func))
                                     val blocks = doit (blocks, return)
                                     val _ = List.push (newBlocks, blocks)
+                                    val calledEntry =
+                                        Vector.peek
+                                            (entries,
+                                             fn FunctionEntry.T {name, ...} =>
+                                                FuncEntry.equals (entry, name)
+                                            )
+                                    val FunctionEntry.T {args, name, start, ...} =
+                                        case calledEntry of
+                                                SOME e => e
+                                            |   NONE   => Error.bug "Inline.transform: call to a non-existant function entry."
                                     val name =
-                                       Label.newString (Func.originalName name)
+                                       Label.newString
+                                        ((Func.originalName func) ^ "_" ^
+                                         (FuncEntry.originalName name))
                                     val _ = 
                                        List.push 
                                        (newBlocks,
@@ -483,6 +495,7 @@ fun transform {program as Program.T {datatypes, globals, functions, main},
                                             args = args})
                               end
                            else new (Call {func = func,
+                                           entry = entry,
                                            args = args,
                                            return = return})
                         end
@@ -508,23 +521,23 @@ fun transform {program as Program.T {datatypes, globals, functions, main},
          List.fold
          (functions, [], fn (f, ac) =>
           let
-             val {args, blocks, mayInline, name, raises, returns, start} =
+             val {blocks, entries, mayInline, name, raises, returns} =
                 Function.dest f
              fun keep () =
                 let
                    val blocks = doit (blocks, Return.Tail)
                 in
-                   shrink (Function.new {args = args,
-                                         blocks = blocks,
+                   shrink (Function.new {blocks = blocks,
+                                         entries = entries,
                                          mayInline = mayInline,
                                          name = name,
                                          raises = raises,
-                                         returns = returns,
-                                         start = start})
+                                         returns = returns})
                    :: ac
                 end
           in
-             if Func.equals (name, main)
+             if Vector.exists (entries, fn FunctionEntry.T{name, ...} =>
+                 FuncEntry.equals(name, main))
                 then if inlineIntoMain
                         then keep ()
                      else f :: ac

@@ -89,6 +89,9 @@ val ssaPassesDefault =
    nil
 
 val ssaPassesMinimal =
+   {name = "inlineLeaf1", doit = fn p =>
+    Inline.inlineLeaf (p, !Control.inlineLeafA)} ::
+   {name = "constantPropagation", doit = ConstantPropagation.transform} ::
    (* polyEqual cannot be omitted.  It implements MLton_equal. *)
    {name = "polyEqual", doit = PolyEqual.transform} ::
    (* polyHash cannot be omitted.  It implements MLton_hash. *)

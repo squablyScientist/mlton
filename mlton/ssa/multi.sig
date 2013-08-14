@@ -6,14 +6,14 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature MULTI_STRUCTS = 
+signature ME_MULTI_STRUCTS =
    sig
-      include SSA_TREE
+      include ME_SSA_TREE
    end
 
-signature MULTI = 
+signature ME_MULTI =
    sig
-      include MULTI_STRUCTS
+      include ME_MULTI_STRUCTS
 
       val multi: Program.t -> 
                  {(* Program has an occurence of Thread_switchTo. *)

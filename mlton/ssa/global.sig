@@ -7,14 +7,14 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature GLOBAL_STRUCTS = 
+signature ME_GLOBAL_STRUCTS =
    sig
-      include SSA_TREE
+      include ME_SSA_TREE
    end
 
-signature GLOBAL = 
+signature ME_GLOBAL =
    sig
-      include GLOBAL_STRUCTS
+      include ME_GLOBAL_STRUCTS
 
       val make:
          unit -> {

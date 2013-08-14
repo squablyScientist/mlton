@@ -17,10 +17,14 @@ structure CommonArg = CommonArg (S)
 structure CommonBlock = CommonBlock (S)
 structure CommonSubexp = CommonSubexp (S)
 structure CombineConversions = CombineConversions (S)
-structure ConstantPropagation = ConstantPropagation (S)
+*)
+structure ConstantPropagation = MeConstantPropagation (S)
+(*
 structure Contify = Contify (S)
 structure Flatten = Flatten (S)
-structure Inline = Inline (S)
+*)
+structure Inline = MeInline (S)
+(*
 structure IntroduceLoops = IntroduceLoops (S)
 structure KnownCase = KnownCase (S)
 structure LocalFlatten = LocalFlatten (S)
@@ -48,13 +52,17 @@ val ssaPassesDefault =
    {name = "removeUnused1", doit = RemoveUnused.transform} ::
    {name = "introduceLoops1", doit = IntroduceLoops.transform} ::
    {name = "loopInvariant1", doit = LoopInvariant.transform} ::
+   *)
    {name = "inlineLeaf1", doit = fn p => 
     Inline.inlineLeaf (p, !Control.inlineLeafA)} ::
    {name = "inlineLeaf2", doit = fn p => 
     Inline.inlineLeaf (p, !Control.inlineLeafB)} ::
+   (*
    {name = "contify1", doit = Contify.transform} ::
    {name = "localFlatten1", doit = LocalFlatten.transform} ::
+   *)
    {name = "constantPropagation", doit = ConstantPropagation.transform} ::
+   (*
    (* useless should run 
     *   - after constant propagation because constant propagation makes
     *     slots of tuples that are constant useless
@@ -77,8 +85,10 @@ val ssaPassesDefault =
    {name = "introduceLoops2", doit = IntroduceLoops.transform} ::
    {name = "loopInvariant2", doit = LoopInvariant.transform} ::
    {name = "contify2", doit = Contify.transform} ::
+   *)
    {name = "inlineNonRecursive", doit = fn p =>
     Inline.inlineNonRecursive (p, !Control.inlineNonRec)} ::
+   (*
    {name = "localFlatten2", doit = LocalFlatten.transform} ::
    {name = "removeUnused3", doit = RemoveUnused.transform} ::
    {name = "contify3", doit = Contify.transform} ::
@@ -99,6 +109,9 @@ val ssaPassesDefault =
    nil
 
 val ssaPassesMinimal =
+   {name = "inlineLeaf1", doit = fn p =>
+    Inline.inlineLeaf (p, !Control.inlineLeafA)} ::
+   {name = "constantPropagation", doit = ConstantPropagation.transform} ::
    (* polyEqual cannot be omitted.  It implements MLton_equal. *)
    {name = "polyEqual", doit = PolyEqual.transform} ::
    (* polyHash cannot be omitted.  It implements MLton_hash. *)
@@ -161,10 +174,9 @@ local
                                             Int.toString product, ",",
                                             Int.toString small, ")#",
                                             Int.toString (Counter.next count)],
-                             doit = (fn p =>  p
-                                    (* FIXME: re-enable inlining *)
-                                     (*Inline.inlineNonRecursive
-                                     (p, {small = small, product = product})*))}
+                             doit = (fn p =>
+                                     Inline.inlineNonRecursive
+                                     (p, {small = small, product = product}))}
                     val s = String.dropPrefix (s, String.size "inlineNonRecursive")
                  in
                     case nums s of
@@ -180,10 +192,9 @@ local
                                             Bool.toString repeat, ",",
                                             Option.toString Int.toString size, ")#",
                                             Int.toString (Counter.next count)],
-                             doit = (fn p => p
-                                    (* FIXME: re-enable inlining *)
-                                     (*Inline.inlineLeaf
-                                     (p, {loops = loops, repeat = repeat, size = size})*))}
+                             doit = (fn p =>
+                                     Inline.inlineLeaf
+                                     (p, {loops = loops, repeat = repeat, size = size}))}
                     val s = String.dropPrefix (s, String.size "inlineLeaf")
                  in
                     case nums s of
@@ -204,7 +215,9 @@ local
                  ("commonArg", CommonArg.transform),
                  ("commonBlock", CommonBlock.transform),
                  ("commonSubexp", CommonSubexp.transform),
+                 *)
                  ("constantPropagation", ConstantPropagation.transform),
+                 (*
                  ("contify", Contify.transform),
                  ("dropProfile", Profile.dropProfile),
                  ("flatten", Flatten.transform),

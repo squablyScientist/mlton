@@ -19,13 +19,13 @@
  * they are global in order to avoid infinite loops.
  *)
 
-functor ConstantPropagation (S: SSA_TRANSFORM_STRUCTS) : SSA_TRANSFORM = 
+functor MeConstantPropagation (S: ME_SSA_TRANSFORM_STRUCTS) : ME_SSA_TRANSFORM =
 struct
 
 open S
 
-structure Multi = Multi (S)
-structure Global = Global (S)
+structure Multi = MeMulti (S)
+structure Global = MeGlobal (S)
 
 structure Type =
    struct
@@ -978,16 +978,15 @@ fun transform (program: Program.t): Program.t =
                   transfer = doitTransfer transfer}
       fun doitFunction f =
          let
-            val {args, blocks, mayInline, name, raises, returns, start} =
+            val {blocks, entries, mayInline, name, raises, returns} =
                Function.dest f
          in
-            Function.new {args = args,
-                          blocks = Vector.map (blocks, doitBlock),
+            Function.new {blocks = Vector.map (blocks, doitBlock),
+                          entries = entries,
                           mayInline = mayInline,
                           name = name,
                           raises = raises,
-                          returns = returns,
-                          start = start}
+                          returns = returns}
          end
       val functions = List.revMap (functions, doitFunction)
       val globals = Vector.keepAllMap (globals, doitStatement)
