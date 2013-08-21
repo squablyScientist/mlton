@@ -1,4 +1,5 @@
-(* Copyright (C) 1999-2006 Henry Cejtin, Matthew Fluet, Suresh
+(* Copyright (C) 2013 David Larsen.
+ * Copyright (C) 1999-2006 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
@@ -29,7 +30,7 @@
  * list for a particular block is constant time -- the variable is either at the
  * head of the list or it's not there.
  *)
-functor Live (S: LIVE_STRUCTS): LIVE = 
+functor MeLive (S: ME_LIVE_STRUCTS): ME_LIVE =
 struct
 
 open S
@@ -80,7 +81,7 @@ fun live (function, {shouldConsider: Var.t -> bool}) =
       val shouldConsider =
          Trace.trace ("Live.shouldConsider", Var.layout, Bool.layout)
          shouldConsider
-      val {args, blocks, ...} = Function.dest function
+      val {blocks, entries, ...} = Function.dest function
       val _ =
          Control.diagnostic
          (fn () =>
@@ -155,8 +156,12 @@ fun live (function, {shouldConsider: Var.t -> bool}) =
       (* Add the control-flow edges and set the defines and uses for each
        * variable.
        *)
-      val head = LiveInfo.new "main"
-      val _ = Vector.foreach (args, fn (x, _) => setDefined (x, head))
+      val _ = Vector.foreach (entries, fn FunctionEntry.T {args, name, ...} =>
+         let
+            val head = LiveInfo.new (FuncEntry.toString name)
+         in
+            Vector.foreach (args, fn (x, _) => setDefined (x, head))
+         end)
       val _ =
          Vector.foreach
          (blocks,

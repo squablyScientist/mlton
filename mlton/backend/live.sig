@@ -6,14 +6,14 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature LIVE_STRUCTS = 
+signature ME_LIVE_STRUCTS =
    sig
-      include RSSA
+      include ME_RSSA
    end
 
-signature LIVE = 
+signature ME_LIVE =
    sig
-      include LIVE_STRUCTS
+      include ME_LIVE_STRUCTS
 
       val live:
          Function.t * {shouldConsider: Var.t -> bool}

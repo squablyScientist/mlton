@@ -1,4 +1,5 @@
-(* Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
+(* Copyright (C) 2013 David Larsen.
+ * Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
@@ -6,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor AllocateRegisters (S: ALLOCATE_REGISTERS_STRUCTS): ALLOCATE_REGISTERS = 
+functor MeAllocateRegisters (S: ME_ALLOCATE_REGISTERS_STRUCTS): ME_ALLOCATE_REGISTERS =
 struct
 
 open S
@@ -17,6 +18,7 @@ local
    open Rssa
 in
    structure Func = Func
+   structure FunctionEntry = FunctionEntry
    structure Function = Function
    structure Kind = Kind
    structure Label = Label
@@ -34,7 +36,7 @@ in
    structure StackOffset = StackOffset
 end
 
-structure Live = Live (Rssa)
+structure Live = MeLive (Rssa)
 
 structure Allocation:
    sig
@@ -278,7 +280,7 @@ structure Info =
 (*                     allocate                      *)
 (* ------------------------------------------------- *)
 
-fun allocate {argOperands,
+fun allocate {mkArgOperands,
               function = f: Rssa.Function.t,
               varInfo: Var.t -> {operand: Machine.Operand.t option ref option,
                                  ty: Type.t}} =
@@ -307,7 +309,7 @@ fun allocate {argOperands,
                              end)
       val {labelLive, remLabelLive} =
          Live.live (f, {shouldConsider = isSome o #operand o varInfo})
-      val {args, blocks, name, ...} = Function.dest f
+      val {blocks, entries, name, ...} = Function.dest f
       (*
        * Decide which variables will live in stack slots and which
        * will live in registers.
@@ -324,7 +326,11 @@ fun allocate {argOperands,
       (* !hasHandler = true iff handlers are installed in this function. *)
       val hasHandler: bool ref = ref false
       fun forceStack (x: Var.t): unit = place x := Stack
-      val _ = Vector.foreach (args, forceStack o #1)
+      val _ = Vector.foreach
+         (entries,
+          fn FunctionEntry.T {args, ...} =>
+            Vector.foreach (args, forceStack o #1)
+         )
       val _ =
          Vector.foreach
          (blocks,
@@ -393,16 +399,20 @@ fun allocate {argOperands,
          ("AllocateRegisters.allocateVar", Var.layout, Allocation.layout, Unit.layout)
          allocateVar
       (* Create the initial stack and set the stack slots for the formals. *)
+      (* XXX Temporary hack: Instead of allocating the max(\all entries), I'll
+         sum all of the stack space that all of the entries need. *)
       val stack =
          Allocation.Stack.new
-         (Vector.foldr2
-          (args, argOperands, [],
-           fn ((x, t), z, ac) =>
-           case z of
-              Operand.StackOffset (StackOffset.T {offset, ...}) =>
-                 (valOf (#operand (varInfo x)) := SOME z
-                  ; StackOffset.T {offset = offset, ty = t} :: ac)
-            | _ => Error.bug "AllocateRegisters.allocate: strange argOperand"))
+         (Vector.fold (entries, [], fn (FunctionEntry.T {args, ...}, ac) =>
+            (Vector.foldr2
+             (args, mkArgOperands args, ac,
+              fn ((x, t), z, ac) =>
+              case z of
+                 Operand.StackOffset (StackOffset.T {offset, ...}) =>
+                    (valOf (#operand (varInfo x)) := SOME z
+                     ; StackOffset.T {offset = offset, ty = t} :: ac)
+               | _ => Error.bug "AllocateRegisters.allocate: strange argOperand"))
+         ))
       (* Allocate slots for the link and handler, if necessary. *)
       val handlerLinkOffset =
          if !hasHandler
@@ -535,7 +545,11 @@ fun allocate {argOperands,
                                record [("handler", Bytes.layout handler),
                                        ("link", Bytes.layout link)])
                               handlerLinkOffset])
-             val _ = Vector.foreach (args, diagVar o #1)
+             val _ = Vector.foreach
+               (entries,
+                fn FunctionEntry.T {args, ...} =>
+                  Vector.foreach (args, diagVar o #1)
+               )
              val _ =
                 Vector.foreach
                 (blocks, fn R.Block.T {label, args, statements, ...} =>

@@ -7,20 +7,20 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature ALLOCATE_REGISTERS_STRUCTS = 
+signature ME_ALLOCATE_REGISTERS_STRUCTS =
    sig
-      structure Rssa: RSSA
+      structure Rssa: ME_RSSA
       structure Machine: MACHINE
       sharing Rssa.Runtime = Machine.Runtime
       sharing Rssa.Type = Machine.Type
    end
 
-signature ALLOCATE_REGISTERS = 
+signature ME_ALLOCATE_REGISTERS =
    sig
-      include ALLOCATE_REGISTERS_STRUCTS
+      include ME_ALLOCATE_REGISTERS_STRUCTS
 
       val allocate:
-         {argOperands: Machine.Operand.t vector,
+         {mkArgOperands: (Rssa.Var.t * Rssa.Type.t) vector -> Machine.Operand.t vector,
           function: Rssa.Function.t,
           varInfo: Rssa.Var.t -> {
                                   (* If (isSome operand) then a stack slot or
