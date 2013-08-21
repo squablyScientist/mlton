@@ -57,6 +57,7 @@ implement-profiling.sig
 implement-profiling.fun
 limit-check.old.fun
 limit-check.fun
+signal-check.old.fun
 signal-check.fun
 live.old.sig
 live.old.fun

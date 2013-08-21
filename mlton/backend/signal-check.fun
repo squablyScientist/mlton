@@ -7,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor SignalCheck (S: RSSA_TRANSFORM_STRUCTS): RSSA_TRANSFORM = 
+functor MeSignalCheck (S: ME_RSSA_TRANSFORM_STRUCTS): ME_RSSA_TRANSFORM =
 struct
 
 open S
@@ -28,7 +28,7 @@ end
 
 fun insertInFunction (f: Function.t): Function.t =
    let
-      val {args, blocks, name, raises, returns, start} =
+      val {blocks, entries, name, raises, returns} =
          Function.dest f
       val {get = labelIndex: Label.t -> int, set = setLabelIndex, ...} =
          Property.getSetOnce
@@ -151,17 +151,28 @@ fun insertInFunction (f: Function.t): Function.t =
                 ()
              end)
          end
-      (* Add a signal check at the function entry. *)
-      val newStart = Label.newNoname ()
-      val _ =
-         addSignalCheck
-         (Block.T {args = Vector.new0 (),
-                   kind = Kind.Jump,
-                   label = newStart,
-                   statements = Vector.new0 (),
-                   transfer = Transfer.Goto {args = Vector.new0 (),
-                                             dst = start}})
-      val () = loop (Graph.loopForestSteensgaard (g, {root = labelNode start}))
+      (* Add a signal check at each function entry. *)
+      val entries = Vector.map
+         (entries,
+          fn FunctionEntry.T {args, function, name, start} =>
+            let
+               val newStart = Label.newNoname ()
+               val _ =
+                  addSignalCheck
+                  (Block.T {args = Vector.new0 (),
+                            kind = Kind.Jump,
+                            label = newStart,
+                            statements = Vector.new0 (),
+                            transfer = Transfer.Goto {args = Vector.new0 (),
+                                                      dst = start}})
+               val () = loop (Graph.loopForestSteensgaard (g, {root = labelNode start}))
+            in
+               FunctionEntry.T {args = args,
+                                function = function,
+                                name = name,
+                                start = newStart}
+            end
+         )
       val blocks =
          Vector.keepAllMap
          (blocks, fn b as Block.T {label, ...} =>
@@ -169,12 +180,11 @@ fun insertInFunction (f: Function.t): Function.t =
              then NONE
           else SOME b)
       val blocks = Vector.concat [blocks, Vector.fromList (!extra)]
-      val f = Function.new {args = args,
-                            blocks = blocks,
+      val f = Function.new {blocks = blocks,
+                            entries = entries,
                             name = name,
                             raises = raises,
-                            returns = returns,
-                            start = newStart}
+                            returns = returns}
       val _ = Function.clear f
    in
       f
