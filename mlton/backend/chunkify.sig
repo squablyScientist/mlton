@@ -7,14 +7,14 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature CHUNKIFY_STRUCTS = 
+signature ME_CHUNKIFY_STRUCTS =
    sig
-      include RSSA
+      include ME_RSSA
    end
 
-signature CHUNKIFY = 
+signature ME_CHUNKIFY =
    sig
-      include CHUNKIFY_STRUCTS
+      include ME_CHUNKIFY_STRUCTS
 
       (* Partitions all the labels declared into disjoint sets, referred
        * to as chunks.  Returns the list of chunks.

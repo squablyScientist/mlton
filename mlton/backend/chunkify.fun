@@ -6,7 +6,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor Chunkify (S: CHUNKIFY_STRUCTS): CHUNKIFY = 
+functor MeChunkify (S: ME_CHUNKIFY_STRUCTS): ME_CHUNKIFY =
 struct
 
 open S
@@ -15,7 +15,7 @@ datatype z = datatype Transfer.t
 (* A chunkifier that puts each function in its own chunk. *)
 fun chunkPerFunc (Program.T {functions, main, ...}) =
    Vector.fromListMap
-   (main :: functions, fn f =>
+   ((#func main) :: functions, fn f =>
     let
        val {name, blocks, ...} = Function.dest f
     in
@@ -27,7 +27,7 @@ fun chunkPerFunc (Program.T {functions, main, ...}) =
  *)
 fun oneChunk (Program.T {functions, main, ...}) =
    let
-      val functions = main :: functions
+      val functions = (#func main) :: functions
    in
       Vector.new1
       {funcs = Vector.fromListMap (functions, Function.name),
@@ -56,7 +56,7 @@ fun blockSize (Block.T {statements, transfer, ...}): int =
 (* Compute the list of functions that each function returns to *)
 fun returnsTo (Program.T {functions, main, ...}) =
    let
-      val functions = main :: functions
+      val functions = (#func main) :: functions
       val {get: Func.t -> {returnsTo: Label.t list ref,
                            tailCalls: Func.t list ref},
            rem, ...} =
@@ -107,7 +107,7 @@ structure Graph = EquivalenceGraph
 structure Class = Graph.Class
 fun coalesce (program as Program.T {functions, main, ...}, limit) =
    let
-      val functions = main :: functions
+      val functions = (#func main) :: functions
       val graph = Graph.new ()
       val {get = funcClass: Func.t -> Class.t, set = setFuncClass,
            rem = remFuncClass, ...} =
@@ -125,13 +125,14 @@ fun coalesce (program as Program.T {functions, main, ...}, limit) =
          List.foreach
          (functions, fn f =>
           let
-             val {name, blocks, start, ...} = Function.dest f
+             val {name = funcName, blocks, entries, ...} = Function.dest f
              val _ =
                 Vector.foreach
                 (blocks, fn b as Block.T {label, ...} =>
                  setLabelClass (label,
                                 Graph.newClass (graph, {size = blockSize b})))
-             val _ = setFuncClass (name, labelClass start)
+             val _ = Vector.foreach (entries, fn FunctionEntry.T {start, ...} =>
+                setFuncClass (funcName, labelClass start))
              val _ =
                 Vector.foreach
                 (blocks, fn Block.T {label, transfer, ...} =>
