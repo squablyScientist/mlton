@@ -62,7 +62,7 @@
  * Stack limit checks are completely orthogonal to heap checks, and are simply
  * inserted at the start of each function.
  *)
-functor LimitCheck (S: RSSA_TRANSFORM_STRUCTS): RSSA_TRANSFORM =
+functor MeLimitCheck (S: ME_RSSA_TRANSFORM_STRUCTS): ME_RSSA_TRANSFORM =
 struct
 
 open S
@@ -160,7 +160,7 @@ fun insertFunction (f: Function.t,
                     blockCheckAmount: {blockIndex: int} -> Bytes.t,
                     ensureFree: Label.t -> Bytes.t) =
    let
-      val {args, blocks, name, raises, returns, start} = Function.dest f
+      val {blocks, entries, name, raises, returns} = Function.dest f
       val lessThan = Prim.wordLt (WordSize.csize (), {signed = false})
       val newBlocks = ref []
       local
@@ -226,7 +226,12 @@ fun insertFunction (f: Function.t,
                               return = return}
                        else transfer)
                  | _ => transfer
-             val stack = Label.equals (start, label)
+             (* Determine if the current block is a function entry block. *)
+             val stack = Vector.exists
+                (entries,
+                 fn FunctionEntry.T {start, ...} =>
+                    Label.equals(start, label)
+                )
              fun insert (amount: Operand.t (* of type word *)) =
                 let
                    val collect = Label.newNoname ()
@@ -497,12 +502,11 @@ fun insertFunction (f: Function.t,
               | Transfer.Small _ => smallAllocation ()
           end)
    in
-      Function.new {args = args,
-                    blocks = Vector.fromList (!newBlocks),
+      Function.new {blocks = Vector.fromList (!newBlocks),
+                    entries = entries,
                     name = name,
                     raises = raises,
-                    returns = returns,
-                    start = start}
+                    returns = returns}
    end
 
 fun insertPerBlock (f: Function.t, handlesSignals) =
@@ -523,7 +527,7 @@ val traceMaxPath = Trace.trace ("LimitCheck.maxPath", Int.layout, Bytes.layout)
 
 fun isolateBigTransfers (f: Function.t): Function.t =
    let
-      val {args, blocks, name, raises, returns, start} = Function.dest f
+      val {blocks, entries, name, raises, returns} = Function.dest f
       val newBlocks = ref []
       val () =
          Vector.foreach
@@ -551,18 +555,17 @@ fun isolateBigTransfers (f: Function.t): Function.t =
            | Transfer.Small _ => List.push (newBlocks, block))
       val blocks = Vector.fromListRev (!newBlocks)
    in
-      Function.new {args = args,
-                    blocks = blocks,
+      Function.new {blocks = blocks,
+                    entries = entries,
                     name = name,
                     raises = raises,
-                    returns = returns,
-                    start = start}
+                    returns = returns}
    end
 
 fun insertCoalesce (f: Function.t, handlesSignals) =
    let
       val f = isolateBigTransfers f
-      val {blocks, start, ...} = Function.dest f
+      val {blocks, entries, ...} = Function.dest f
       val n = Vector.length blocks
       val {get = labelIndex, set = setLabelIndex, ...} =
          Property.getSetOnce
@@ -626,9 +629,12 @@ fun insertCoalesce (f: Function.t, handlesSignals) =
           in
              b orelse isBigAlloc
           end)
-      val _ = Array.update (mayHaveCheck, labelIndex start, true)
-      (* Build cfg. *)
-      val _ = Graph.addEdge (g, {from = root, to = labelNode start})
+      (* Add the entry points to the graph. *)
+      val _ = Vector.foreach
+         (entries, fn FunctionEntry.T {start, ...} =>
+            (Array.update (mayHaveCheck, labelIndex start, true)
+            (* Build cfg. *)
+            ; ignore (Graph.addEdge (g, {from = root, to = labelNode start}))))
       datatype z = datatype Control.limitCheck
       val fullCFG = 
          case !Control.limitCheck of
@@ -834,33 +840,47 @@ fun transform (Program.T {functions, handlesSignals, main, objectTypes}) =
             PerBlock => insertPerBlock (f, handlesSignals)
           | _ => insertCoalesce (f, handlesSignals)
       val functions = List.revMap (functions, insert)
-      val {args, blocks, name, raises, returns, start} =
-         Function.dest (insert main)
-      val newStart = Label.newNoname ()
-      val block =
-         Block.T {args = Vector.new0 (),
-                  kind = Kind.Jump,
-                  label = newStart,
-                  statements = (Vector.fromListMap
-                                (!extraGlobals, fn x =>
-                                 Statement.Bind
-                                 {dst = (x, Type.bool),
-                                  isMutable = true,
-                                  src = Operand.cast (Operand.bool true,
-                                                      Type.bool)})),
-                  transfer = Transfer.Goto {args = Vector.new0 (),
-                                            dst = start}}
-      val blocks = Vector.concat [Vector.new1 block, blocks]
-      val main = Function.new {args = args,
-                               blocks = blocks,
-                               name = name,
-                               raises = raises,
-                               returns = returns,
-                               start = newStart}
+      (* The FuncEntry label /should/ stay the same here, so I can continue to
+       * use Program.main.entry as the FuncEntry label for main. *)
+      val {blocks, entries, name, raises, returns} =
+         Function.dest (insert (#func main))
+      val (newEntries, newStartBlocks) = Vector.fold
+         (entries, ([],[]),
+          fn (FunctionEntry.T {args, function, name, start},
+              (newEntries, newStartBlocks)) =>
+            let
+               val newStart = Label.newNoname ()
+               val newStartBlock =
+                  Block.T {args = Vector.new0 (),
+                           kind = Kind.Jump,
+                           label = newStart,
+                           statements = (Vector.fromListMap
+                                         (!extraGlobals, fn x =>
+                                          Statement.Bind
+                                          {dst = (x, Type.bool),
+                                           isMutable = true,
+                                           src = Operand.cast (Operand.bool true,
+                                                               Type.bool)})),
+                           transfer = Transfer.Goto {args = Vector.new0 (),
+                                                     dst = start}}
+               val newEntry = FunctionEntry.T {args = args,
+                                               name = name,
+                                               function = function,
+                                               start = newStart}
+            in
+               (newEntry :: newEntries, newStartBlock :: newStartBlocks)
+            end
+         )
+      val blocks = Vector.concat [Vector.fromList newStartBlocks, blocks]
+      val newMain = Function.new {blocks = blocks,
+                                  entries = Vector.fromList newEntries,
+                                  name = name,
+                                  raises = raises,
+                                  returns = returns}
    in
       Program.T {functions = functions,
                  handlesSignals = handlesSignals,
-                 main = main,
+                 main = {func = newMain, entry = #entry main},
                  objectTypes = objectTypes}
    end
 
