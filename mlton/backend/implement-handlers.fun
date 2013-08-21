@@ -6,7 +6,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor ImplementHandlers (S: RSSA_TRANSFORM_STRUCTS): RSSA_TRANSFORM = 
+functor MeImplementHandlers (S: ME_RSSA_TRANSFORM_STRUCTS): ME_RSSA_TRANSFORM =
 struct
 
 open S
@@ -65,8 +65,9 @@ fun flow (f: Function.t): Function.t =
    else
    let
       val debug = false
-      val {args, blocks, name, raises, returns, start} =
+      val {blocks, entries, name, raises, returns} =
          Function.dest f
+      val startLabels = Vector.map (entries, FunctionEntry.start)
       val {get = labelInfo: Label.t -> {global: ExnStack.t,
                                         handler: HandlerLat.t},
            rem, ...} =
@@ -80,7 +81,7 @@ fun flow (f: Function.t): Function.t =
           let
              val {global, handler} = labelInfo label
              val _ =
-                if Label.equals (label, start)
+                if Vector.contains (startLabels, label, Label.equals)
                    then let
                            val _ = ExnStack.<= (ExnStack.slot, global)
                            val _ = HandlerLat.forceTop handler
@@ -190,29 +191,42 @@ fun flow (f: Function.t): Function.t =
                       statements = statements,
                       transfer = transfer}
           end)
-      val newStart = Label.newNoname ()
-      val startBlock =
-         Block.T {args = Vector.new0 (),
-                  kind = Kind.Jump,
-                  label = newStart,
-                  statements = Vector.new1 SetSlotExnStack,
-                  transfer = Goto {args = Vector.new0 (),
-                                   dst = start}}
-      val blocks = Vector.concat [blocks, Vector.new1 startBlock]
+      val (newEntries, newStartBlocks) = Vector.fold
+         (entries, ([],[]),
+          fn (FunctionEntry.T {args, function, name, start},
+              (newEntries, newStartBlocks)) =>
+            let
+               val newStart = Label.newNoname ()
+               val startBlock =
+                  Block.T {args = Vector.new0 (),
+                           kind = Kind.Jump,
+                           label = newStart,
+                           statements = Vector.new1 SetSlotExnStack,
+                           transfer = Goto {args = Vector.new0 (),
+                                            dst = start}}
+               val newEntry = FunctionEntry.T {args = args,
+                                               name = name,
+                                               function = function,
+                                               start = newStart}
+            in
+               (newEntry :: newEntries, startBlock :: newStartBlocks)
+            end
+         )
+      val blocks = Vector.concat [blocks, Vector.fromList newStartBlocks]
       val () = Vector.foreach (blocks, rem o Block.label)
    in
-      Function.new {args = args,
-                    blocks = blocks,
+      Function.new {blocks = blocks,
+                    entries = Vector.fromList newEntries,
                     name = name,
                     raises = raises,
-                    returns = returns,
-                    start = newStart}
+                    returns = returns}
    end
 
 fun transform (Program.T {functions, handlesSignals, main, objectTypes}) =
    Program.T {functions = List.revMap (functions, flow),
               handlesSignals = handlesSignals,
-              main = flow main,
+              main = {func = flow (#func main),
+                      entry = #entry main},
               objectTypes = objectTypes}
 
 end
