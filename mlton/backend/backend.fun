@@ -7,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor Backend (S: BACKEND_STRUCTS): BACKEND =
+functor MeBackend (S: ME_BACKEND_STRUCTS): ME_BACKEND =
 struct
 
 open S
@@ -34,7 +34,7 @@ in
    structure GCField = GCField
 end
 
-structure Rssa = Rssa (open Ssa Machine)
+structure Rssa = MeRssa (open Ssa Machine)
 structure R = Rssa
 local
    open Rssa
@@ -43,22 +43,25 @@ in
    structure Const = Const
    structure Func = Func
    structure Function = Function
+   structure FunctionEntry = FunctionEntry
    structure Prim = Prim
    structure Type = Type
    structure Var = Var
 end 
 
-structure AllocateRegisters = AllocateRegisters (structure Machine = Machine
-                                                 structure Rssa = Rssa)
-structure Chunkify = Chunkify (Rssa)
-structure ImplementHandlers = ImplementHandlers (structure Rssa = Rssa)
+structure AllocateRegisters = MeAllocateRegisters (structure Machine = Machine
+                                                   structure Rssa = Rssa)
+structure Chunkify = MeChunkify (Rssa)
+structure ImplementHandlers = MeImplementHandlers (structure Rssa = Rssa)
+(* FIXME: Re-implement profiling in the multi-entry ILs.
 structure ImplementProfiling = ImplementProfiling (structure Machine = Machine
                                                    structure Rssa = Rssa)
-structure LimitCheck = LimitCheck (structure Rssa = Rssa)
+*)
+structure LimitCheck = MeLimitCheck (structure Rssa = Rssa)
 structure ParallelMove = ParallelMove ()
-structure SignalCheck = SignalCheck(structure Rssa = Rssa)
-structure SsaToRssa = SsaToRssa (structure Rssa = Rssa
-                                 structure Ssa = Ssa)
+structure SignalCheck = MeSignalCheck(structure Rssa = Rssa)
+structure SsaToRssa = MeSsaToRssa (structure Rssa = Rssa
+                                   structure Ssa = Ssa)
 
 nonfix ^
 fun ^ r = valOf (!r)
@@ -116,7 +119,7 @@ val traceGenBlock =
 
 fun eliminateDeadCode (f: R.Function.t): R.Function.t =
    let
-      val {args, blocks, name, returns, raises, start} = R.Function.dest f
+      val {blocks, entries, name, returns, raises} = R.Function.dest f
       val {get, rem, set, ...} =
          Property.getSetOnce (Label.plist, Property.initConst false)
       val get = Trace.trace ("Backend.labelIsReachable",
@@ -135,12 +138,11 @@ fun eliminateDeadCode (f: R.Function.t): R.Function.t =
                             res
                          end)
    in
-      R.Function.new {args = args,
-                      blocks = blocks,
+      R.Function.new {blocks = blocks,
+                      entries = entries,
                       name = name,
                       returns = returns,
-                      raises = raises,
-                      start = start}
+                      raises = raises}
    end
 
 fun toMachine (program: Ssa.Program.t, codegen) =
@@ -198,14 +200,19 @@ fun toMachine (program: Ssa.Program.t, codegen) =
             val p = maybePass ({name = "rssaShrink2", 
                                 doit = Program.shrink}, p)
             val () = Program.checkHandlers p
+            (* FIXME: Re-implement profiling in the multi-entry ILs.
             val (p, makeProfileInfo) =
                pass' ({name = "implementProfiling",
                        doit = ImplementProfiling.doit},
                       fn (p,_) => p, p)
+            *)
             val p = maybePass ({name = "rssaOrderFunctions", 
                                 doit = Program.orderFunctions}, p)
          in
+            (* FIXME: Re-implement profiling in the multi-entry ILs.
             (p, makeProfileInfo)
+            *)
+            (p, fn _ => NONE)
          end
       val (program, makeProfileInfo) =
          Control.passTypeCheck
@@ -214,7 +221,7 @@ fun toMachine (program: Ssa.Program.t, codegen) =
           name = "rssaSimplify",
           stats = fn (program,_) => Rssa.Program.layoutStats program,
           style = Control.No,
-          suffix = "rssa",
+          suffix = "merssa",
           thunk = fn () => rssaSimplify program,
           typeCheck = R.Program.typeCheck o #1}
       val _ =
@@ -222,7 +229,7 @@ fun toMachine (program: Ssa.Program.t, codegen) =
             open Control
          in
             if !keepRSSA
-               then saveToFile ({suffix = "rssa"},
+               then saveToFile ({suffix = "merssa"},
                                 No,
                                 program,
                                 Layouts Rssa.Program.layouts)
@@ -668,7 +675,7 @@ let
       fun genFunc (f: Function.t, isMain: bool): unit =
          let
             val f = eliminateDeadCode f
-            val {args, blocks, name, raises, returns, start, ...} =
+            val {blocks, entries, name, raises, returns, ...} =
                Function.dest f
             val raises = Option.map (raises, fn ts => raiseOperands ts)
             val returns =
@@ -691,7 +698,7 @@ let
                end
             fun newVarInfos xts = Vector.foreach (xts, newVarInfo)
             (* Set the constant operands, labelInfo, and varInfo. *)
-            val _ = newVarInfos args
+            val _ = Vector.foreach (entries, newVarInfos o FunctionEntry.args)
             val _ =
                Rssa.Function.dfs
                (f, fn R.Block.T {args, label, statements, transfer, ...} =>
@@ -760,12 +767,12 @@ let
             in
                val {handlerLinkOffset, labelInfo = labelRegInfo, ...} =
                   let
-                     val argOperands =
+                     fun mkArgOperands args =
                         Vector.map
                         (callReturnOperands (args, #2, Bytes.zero),
                          M.Operand.StackOffset)
                   in
-                     AllocateRegisters.allocate {argOperands = argOperands,
+                     AllocateRegisters.allocate {mkArgOperands = mkArgOperands,
                                                  function = f,
                                                  varInfo = varInfo}
                   end
@@ -837,7 +844,10 @@ let
                                                | SOME l => frameInfo l),
                                  func = func,
                                  return = return})
-                   | R.Transfer.Call {func, args, return} =>
+                   (* Calls are made to entry points, not functions. 'func's
+                    * were just left around for convenience when building the
+                    * call graph, not for actual transfers. *)
+                   | R.Transfer.Call {func = _, entry, args, return} =>
                         let
                            datatype z = datatype R.Return.t
                            val (contLive, frameSize, return) =
@@ -873,7 +883,7 @@ let
                               Vector.concat [operandsLive contLive,
                                              Vector.map (dsts, Live.StackOffset)]
                            val transfer =
-                              M.Transfer.Call {label = funcToLabel func,
+                              M.Transfer.Call {label = funcToLabel entry,
                                                live = live,
                                                return = return}
                         in
@@ -914,6 +924,8 @@ let
                                     size = size,
                                     test = translateOperand test}))
                         end
+                   | R.Transfer.Bug =>
+                     Error.bug "Backend.genTransfer: encountered a 'Bug' transfer."
                end
             val genTransfer =
                Trace.trace ("Backend.genTransfer",
@@ -924,26 +936,30 @@ let
             fun genBlock (R.Block.T {args, kind, label, statements, transfer,
                                      ...}) : unit =
                let
-                  val _ =
-                     if Label.equals (label, start)
-                        then let
-                                val live = #live (labelRegInfo start)
-                                val returns =
-                                   Option.map
-                                   (returns, fn returns =>
-                                    Vector.map (returns, Live.StackOffset))
-                             in
-                                Chunk.newBlock
-                                (chunk, 
-                                 {label = funcToLabel name,
-                                  kind = M.Kind.Func,
-                                  live = operandsLive live,
-                                  raises = raises,
-                                  returns = returns,
-                                  statements = Vector.new0 (),
-                                  transfer = M.Transfer.Goto start})
-                             end
-                     else ()
+                  (* Make an entry block for each function entry. *)
+                  val _ = Vector.foreach (entries,
+                     fn FunctionEntry.T {start, name, ...} =>
+                        if Label.equals (label, start)
+                           then
+                              let
+                                 val live = #live (labelRegInfo start)
+                                 val returns =
+                                    Option.map
+                                    (returns, fn returns =>
+                                     Vector.map (returns, Live.StackOffset))
+                              in
+                                 Chunk.newBlock
+                                 (chunk,
+                                  {label = funcToLabel name,
+                                   kind = M.Kind.Func,
+                                   live = operandsLive live,
+                                   raises = raises,
+                                   returns = returns,
+                                   statements = Vector.new0 (),
+                                   transfer = M.Transfer.Goto start})
+                              end
+                           else ()
+                     )
                   val {live, liveNoFormals, size, ...} = labelRegInfo label
                   val chunk = labelChunk label
                   val statements =
@@ -1050,7 +1066,7 @@ let
       (* Generate the main function first.
        * Need to do this in order to set globals.
        *)
-      val _ = genFunc (main, true)
+      val _ = genFunc (#func main, true)
       val _ = List.foreach (functions, fn f => genFunc (f, false))
       val chunks = !chunks
       fun chunkToMachine (Chunk.T {chunkLabel, blocks}) =
@@ -1093,9 +1109,9 @@ let
                              blocks = blocks,
                              regMax = ! o regMax}
          end
-      val mainName = R.Function.name main
+      val mainName = R.Function.name (#func main)
       val main = {chunkLabel = Chunk.label (funcChunk mainName),
-                  label = funcToLabel mainName}
+                  label = funcToLabel (#entry main)}
       val chunks = List.revMap (chunks, chunkToMachine)
       (* The clear is necessary because properties have been attached to Funcs
        * and Labels, and they appear as labels in the resulting program.

@@ -75,5 +75,6 @@ in
    signature RUNTIME
 
    functor Backend
+   functor MeBackend
    functor Machine
 end
