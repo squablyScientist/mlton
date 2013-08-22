@@ -13,6 +13,7 @@ signature REP_TYPE
 signature RUNTIME
 
 functor Backend
+functor MeBackend
 functor Machine
 
 is

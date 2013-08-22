@@ -769,7 +769,7 @@ let
                   let
                      fun mkArgOperands args =
                         Vector.map
-                        (callReturnOperands (args, #2, Bytes.zero),
+                        (callReturnOperands (args, fn (_, t) => t, Bytes.zero),
                          M.Operand.StackOffset)
                   in
                      AllocateRegisters.allocate {mkArgOperands = mkArgOperands,
