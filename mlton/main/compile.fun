@@ -116,6 +116,9 @@ structure MeSsaToSsa2 = MeSsaToSsa2 (structure Ssa = MeSsa
 structure Backend = Backend (structure Ssa = Ssa2
                              structure Machine = Machine
                              fun funcToLabel f = f)
+structure MeBackend = MeBackend (structure Ssa = MeSsa2
+                                 structure Machine = Machine
+                                 fun funcToLabel f = f)
 structure CCodegen = CCodegen (structure Ffi = Ffi
                                structure Machine = Machine)
 structure x86Codegen = x86Codegen (structure CCodegen = CCodegen
@@ -631,7 +634,7 @@ fun preCodegen {input: MLBString.t}: Machine.Program.t =
                                 Layouts Sxml.Program.layouts)
             else ()
          end
-      val () =
+      val memachine =
          if !Control.checkMultiEntry
             then let
                     val messa =
@@ -688,10 +691,40 @@ fun preCodegen {input: MLBString.t}: Machine.Program.t =
                                               Layouts MeSsa2.Program.layouts)
                           else ()
                        end
+                     val codegenImplementsPrim =
+                        case !Control.codegen of
+                           Control.CCodegen => CCodegen.implementsPrim
+                         | Control.x86Codegen => x86Codegen.implementsPrim
+                         | Control.amd64Codegen => amd64Codegen.implementsPrim
+                     val memachine =
+                        Control.passTypeCheck
+                        {display = Control.Layouts Machine.Program.layouts,
+                         name = "mebackend",
+                         stats = fn _ => Layout.empty,
+                         style = Control.No,
+                         suffix = "memachine",
+                         thunk = fn () =>
+                                 (MeBackend.toMachine
+                                  (messa2,
+                                   {codegenImplementsPrim = codegenImplementsPrim})),
+                         typeCheck = fn machine =>
+                                     (* For now, machine type check is too slow to run. *)
+                                     (if !Control.typeCheck
+                                         then Machine.Program.typeCheck machine
+                                      else ())}
+                     val _ =
+                        let
+                           open Control
+                        in
+                           if !keepMachine
+                              then saveToFile ({suffix = "memachine"}, No, memachine,
+                                               Layouts Machine.Program.layouts)
+                           else ()
+                        end
                  in
-                    ()
+                    SOME memachine
                  end
-         else ()
+         else NONE
       val ssa =
          Control.passTypeCheck
          {display = Control.Layouts Ssa.Program.layouts,
@@ -777,7 +810,9 @@ fun preCodegen {input: MLBString.t}: Machine.Program.t =
             else ()
          end
    in
-      machine
+      case memachine of
+         SOME memachine => memachine
+      |  NONE => machine
    end
 
 fun compile {input: MLBString.t, outputC, outputS}: unit =
