@@ -79,6 +79,7 @@ local
    common-arg.fun
    common-block.fun
    common-subexp.fun
+   duplicate-entries.fun
    global.old.sig
    global.old.fun
    global.sig

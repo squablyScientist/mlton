@@ -110,6 +110,7 @@ constant-propagation.old.fun
 constant-propagation.fun
 contify.fun
 deep-flatten.fun
+duplicate-entries.fun
 flatten.fun
 inline.old.sig
 inline.old.fun

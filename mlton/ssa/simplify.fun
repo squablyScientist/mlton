@@ -23,6 +23,7 @@ structure ConstantPropagation = MeConstantPropagation (S)
 structure Contify = Contify (S)
 structure Flatten = Flatten (S)
 *)
+structure DuplicateEntries = MeDuplicateEntries (S)
 structure Inline = MeInline (S)
 (*
 structure IntroduceLoops = IntroduceLoops (S)
@@ -106,6 +107,7 @@ val ssaPassesDefault =
    {name = "knownCase", doit = KnownCase.transform} ::
    {name = "removeUnused4", doit = RemoveUnused.transform} ::
    *)
+   {name = "duplicateEntries", doit = DuplicateEntries.transform} ::
    nil
 
 val ssaPassesMinimal =
