@@ -1281,19 +1281,16 @@ structure Function =
       fun foreachVar (f: t, fx: Var.t * Type.t -> unit): unit =
          let
             val {blocks, entries, ...} = dest f
+            val _ = Vector.foreach (entries, fn FunctionEntry.T{args, ...} =>
+                     Vector.foreach (args, fx))
+            val _ =
+               Vector.foreach
+               (blocks, fn Block.T {args, statements, ...} =>
+                (Vector.foreach (args, fx)
+                 ; Vector.foreach (statements, fn s =>
+                                   Statement.foreachDef (s, fx))))
          in
-            Vector.foreach (entries, fn FunctionEntry.T{args, ...} =>
-               let
-                  val _ = Vector.foreach (args, fx)
-                  val _ =
-                     Vector.foreach
-                     (blocks, fn Block.T {args, statements, ...} =>
-                      (Vector.foreach (args, fx)
-                       ; Vector.foreach (statements, fn s =>
-                                         Statement.foreachDef (s, fx))))
-               in
-                  ()
-               end)
+            ()
          end
 
       fun controlFlow (T {controlFlow, ...}) =
