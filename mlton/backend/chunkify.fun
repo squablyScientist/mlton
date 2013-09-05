@@ -131,13 +131,28 @@ fun coalesce (program as Program.T {functions, main, ...}, limit) =
                 (blocks, fn b as Block.T {label, ...} =>
                  setLabelClass (label,
                                 Graph.newClass (graph, {size = blockSize b})))
-             val _ = Vector.foreach (entries, fn FunctionEntry.T {start, ...} =>
-                setFuncClass (funcName, labelClass start))
+
+             (* Build a class for all of the entry blocks of the function, so
+                that we have a class that "belongs" to the function.  This way,
+                all of the blocks of a function will have the same class, even
+                if they don't have a common tail (which might happen when a set
+                of functions has been turned into one function, with multiple
+                entries, earlier in the pipeline). *)
+             val entryClass = Graph.newClass (graph, {size = 0})
+             val () = Vector.foreach
+                (entries,
+                 fn FunctionEntry.T {start, ...} =>
+                    Graph.==(graph, labelClass start, entryClass))
+             val _ = setFuncClass (funcName, entryClass)
+
              val _ =
                 Vector.foreach
                 (blocks, fn Block.T {label, transfer, ...} =>
                  let
                     val c = labelClass label
+                    (* If the two labels aren't in the same class, make them
+                       part of the same class (Graph.== is a mutating
+                       function).  *)
                     fun same (j: Label.t): unit =
                        Graph.== (graph, c, labelClass j)
                  in
