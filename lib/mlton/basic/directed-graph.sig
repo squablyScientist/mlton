@@ -70,18 +70,21 @@ signature DIRECTED_GRAPH =
          {graph: 'a t,
           layoutNode: 'a Node.t -> Layout.t,
           display: Layout.t -> unit} -> unit
-      (* dominators (graph, {root})
+      (* dominators (graph, {roots})
        * Returns the immediate dominator relation for the subgraph of graph
-       * rooted at root.
-       *  idom n = Root           if n = root
-       *  idom n = Idom n'        where n' is the immediate dominator of n
-       *  idom n = Unreachable    if n is not reachable from root
+       * reachable from roots.
+       *  idom n = Root true      if n has no immediate dominator and n is in roots
+       *  idom n = Root false     if n has no immediate dominator and n is not in roots
+       *  idom n = Idom n'        if n has an immediate dominator n'
+       *  idom n = Unreachable    if n is not reachable from roots
        *)
       datatype 'a idomRes =
          Idom of 'a Node.t
-       | Root
+       | Root of bool
        | Unreachable
-      val dominators: 'a t * {root: 'a Node.t} -> {idom: 'a Node.t -> 'a idomRes}
+      val dominatorForest: 'a t * {roots: 'a Node.t vector,
+                                   nodeValue: 'a Node.t -> 'b} -> 'b Tree.t vector
+      val dominators: 'a t * {roots: 'a Node.t vector} -> {idom: 'a Node.t -> 'a idomRes}
       val dominatorTree: 'a t * {root: 'a Node.t,
                                  nodeValue: 'a Node.t -> 'b} -> 'b Tree.t
       val foreachDescendent: 'a t * 'a Node.t * ('a Node.t -> unit) -> unit
@@ -190,7 +193,7 @@ local
                          out)
           ; Out.newline out
        end)
-   val {idom} = dominators (g, {root = node "entry\nfoo"})
+   val {idom} = dominators (g, {roots = Vector.new1 (node "entry\nfoo")})
    val g2 = new ()
    val {get = oldNode, set = setOldNode, ...} =
       Property.getSetOnce (Node.plist,
