@@ -267,9 +267,9 @@ fun dfsNodes (_: t,
 
 fun dfs (g, z) = dfsNodes (g, nodes g, z)
 
-fun dfsForest (g, {roots: Node.t list, nodeValue: Node.t -> 'a}) : 'a Tree.t list =
-   dfsNodes
-   (g, roots,
+fun dfsForest (g, {roots: Node.t vector, nodeValue: Node.t -> 'a}) : 'a Tree.t vector =
+   (Vector.fromList o dfsNodes)
+   (g, Vector.toList roots,
     ([], fn (_, trees) =>
      let
         fun startNode (n, ()) =
@@ -286,9 +286,13 @@ fun dfsForest (g, {roots: Node.t list, nodeValue: Node.t -> 'a}) : 'a Tree.t lis
      end))
 
 fun dfsTree (g, {root, nodeValue}) =
-   case dfsForest (g, {roots = [root], nodeValue = nodeValue}) of
-      [t] => t
-    | _ => Error.bug "DirectedGraph.dfsTree"
+   let
+      val ts = dfsForest (g, {roots = Vector.new1 root, nodeValue = nodeValue})
+   in
+      if Vector.length ts = 1
+         then Vector.sub (ts, 0)
+      else Error.bug "DirectedGraph.dfsTree"
+   end
 
 fun display {graph, layoutNode, display} =
    dfs (graph,

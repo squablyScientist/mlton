@@ -1024,7 +1024,7 @@ structure Function =
        *)
       datatype t =
          T of {controlFlow:
-               {dfsForest: unit -> Block.t Tree.t list,
+               {dfsForest: unit -> Block.t Tree.t vector,
                 dominatorForest: unit -> Block.t Tree.t vector,
                 graph: unit DirectedGraph.t,
                 labelNode: Label.t -> unit DirectedGraph.Node.t,
@@ -1136,9 +1136,7 @@ structure Function =
                    in
                       ()
                    end)
-               val roots = Vector.foldr(entries, [],
-                  fn (FunctionEntry.T{start, ...}, roots) =>
-                     labelNode start :: roots)
+               val roots = Vector.map (entries, labelNode o FunctionEntry.start)
                val dfsForest =
                   Promise.lazy
                   (fn () =>

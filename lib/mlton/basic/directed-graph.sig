@@ -62,8 +62,8 @@ signature DIRECTED_GRAPH =
                                     node: 'a Node.t -> unit Node.t}
       val dfs: 'a t * ('a, 'b, 'c, 'd, 'e) DfsParam.t -> 'b
       val dfsNodes: 'a t * 'a Node.t list * ('a, 'b, 'c, 'd, 'e) DfsParam.t -> 'b
-      val dfsForest: 'a t * {roots: 'a Node.t list,
-                             nodeValue: 'a Node.t -> 'b} -> 'b Tree.t list
+      val dfsForest: 'a t * {roots: 'a Node.t vector,
+                             nodeValue: 'a Node.t -> 'b} -> 'b Tree.t vector
       val dfsTree: 'a t * {root: 'a Node.t,
                            nodeValue: 'a Node.t -> 'b} -> 'b Tree.t
       val display:
