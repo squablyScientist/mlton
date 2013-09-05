@@ -1,4 +1,4 @@
-(* Copyright (C) 2013 David Larsen.
+(* Copyright (C) 2013 Matthew Fluet, David Larsen.
  * Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
@@ -1262,7 +1262,7 @@ structure Function =
        *)
       datatype t =
          T of {controlFlow:
-               {dfsTrees: unit -> Block.t Tree.t list,
+               {dfsForest: unit -> Block.t Tree.t list,
                 dominatorForest: unit -> Block.t Tree.t vector,
                 graph: unit DirectedGraph.t,
                 labelNode: Label.t -> unit DirectedGraph.Node.t,
@@ -1378,10 +1378,11 @@ structure Function =
                val roots = Vector.foldr (entries, [],
                   fn (FunctionEntry.T{start, ...}, roots) =>
                      labelNode start :: roots)
-               val dfsTrees =
+               val dfsForest =
                   Promise.lazy
                   (fn () =>
-                   Graph.dfsTrees (g, roots, #block o nodeInfo))
+                   Graph.dfsForest (g, {roots = roots,
+                                        nodeValue = #block o nodeInfo}))
 
                (* When we build the dominator forest, we create a fake root
                 * element that dominates all of the entry points; this lets us
@@ -1415,7 +1416,7 @@ structure Function =
                      trees
                   end)
             in
-               {dfsTrees = dfsTrees,
+               {dfsForest = dfsForest,
                 dominatorForest = dominatorForest,
                 graph = g,
                 labelNode = labelNode,

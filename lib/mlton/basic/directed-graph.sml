@@ -1,4 +1,5 @@
-(* Copyright (C) 1999-2006, 2008 Henry Cejtin, Matthew Fluet, Suresh
+(* Copyright (C) 2013 Matthew Fluet.
+ * Copyright (C) 1999-2006, 2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  *
  * MLton is released under a BSD-style license.
@@ -266,7 +267,7 @@ fun dfsNodes (_: t,
 
 fun dfs (g, z) = dfsNodes (g, nodes g, z)
 
-fun dfsTrees (g, roots: Node.t list, nodeValue: Node.t -> 'a): 'a Tree.t list =
+fun dfsForest (g, {roots: Node.t list, nodeValue: Node.t -> 'a}) : 'a Tree.t list =
    dfsNodes
    (g, roots,
     ([], fn (_, trees) =>
@@ -285,7 +286,7 @@ fun dfsTrees (g, roots: Node.t list, nodeValue: Node.t -> 'a): 'a Tree.t list =
      end))
 
 fun dfsTree (g, {root, nodeValue}) =
-   case dfsTrees (g, [root], nodeValue) of
+   case dfsForest (g, {roots = [root], nodeValue = nodeValue}) of
       [t] => t
     | _ => Error.bug "DirectedGraph.dfsTree"
 

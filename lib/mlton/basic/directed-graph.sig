@@ -1,4 +1,5 @@
-(* Copyright (C) 2009 Matthew Fluet.
+(* Copyright (C) 2013 Matthew Fluet.
+ * Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 1999-2005 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  *
@@ -61,7 +62,8 @@ signature DIRECTED_GRAPH =
                                     node: 'a Node.t -> unit Node.t}
       val dfs: 'a t * ('a, 'b, 'c, 'd, 'e) DfsParam.t -> 'b
       val dfsNodes: 'a t * 'a Node.t list * ('a, 'b, 'c, 'd, 'e) DfsParam.t -> 'b
-      val dfsTrees: 'a t * 'a Node.t list * ('a Node.t -> 'b) -> 'b Tree.t list
+      val dfsForest: 'a t * {roots: 'a Node.t list,
+                             nodeValue: 'a Node.t -> 'b} -> 'b Tree.t list
       val dfsTree: 'a t * {root: 'a Node.t,
                            nodeValue: 'a Node.t -> 'b} -> 'b Tree.t
       val display:
