@@ -100,6 +100,7 @@ local
    inline.sig
    inline.fun
    introduce-loops.old.fun
+   introduce-loops.fun
    known-case.fun
    local-flatten.fun
    local-ref.fun
