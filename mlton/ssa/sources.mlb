@@ -118,6 +118,7 @@ local
    remove-unused.old.fun
    remove-unused.fun
    remove-unused2.old.fun
+   remove-unused2.fun
    simplify-types.fun
    useless.fun
    zone.fun

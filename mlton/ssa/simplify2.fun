@@ -1,4 +1,5 @@
-(* Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
+(* Copyright (C) 2013 Matthew Fluet, David Larsen.
+ * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
@@ -39,8 +40,8 @@ structure Profile2 = Profile2 (S)
 
 (* TODO: Convert to multi-entry, then re-enable.
 structure RefFlatten = RefFlatten (S)
-structure RemoveUnused2 = RemoveUnused2 (S)
 *)
+structure RemoveUnused2 = MeRemoveUnused2 (S)
 
 (* structure SimplifyTypes = SimplifyTypes (S) *)
 (* structure Useless = Useless (S) *)
@@ -56,7 +57,7 @@ type pass = {name: string,
 val ssa2PassesDefault = 
    (* {name = "deepFlatten", doit = DeepFlatten.transform2} :: *)
    (* {name = "refFlatten", doit = RefFlatten.transform2} :: *)
-   (* {name = "removeUnused5", doit = RemoveUnused2.transform2} :: *)
+   {name = "removeUnused5", doit = RemoveUnused2.transform2} ::
    (* {name = "zone", doit = Zone.transform2} :: *)
    nil
 
@@ -84,7 +85,7 @@ local
                 (* ("deepFlatten", DeepFlatten.transform2), *)
                 (* ("dropProfile", Profile2.dropProfile), *)
                 (* ("refFlatten", RefFlatten.transform2), *)
-                (* ("removeUnused", RemoveUnused2.transform2),  *)
+                ("removeUnused", RemoveUnused2.transform2),
                 (* ("zone", Zone.transform2), *)
                 ("eliminateDeadBlocks",S.eliminateDeadBlocks),
                 ("orderFunctions",S.orderFunctions),
