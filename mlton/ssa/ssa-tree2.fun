@@ -1920,7 +1920,7 @@ structure Program =
                datatypes: Datatype.t vector,
                globals: Statement.t vector,
                functions: Function.t list,
-               main: FuncEntry.t
+               main: {entry: FuncEntry.t, func: Func.t}
                }
    end
 
@@ -2015,7 +2015,7 @@ structure Program =
                    in
                       ()
                    end)
-               val root = funcEntryNode main
+               val root = funcEntryNode (#entry main)
                val l =
                   Graph.layoutDot
                   (graph, fn {nodeName} =>
@@ -2044,7 +2044,10 @@ structure Program =
             ; Vector.foreach (datatypes, output o Datatype.layout)
             ; output (str "\n\nGlobals:")
             ; Vector.foreach (globals, output o Statement.layout)
-            ; output (seq [str "\n\nMain: ", FuncEntry.layout main])
+            ; output (seq [str "\n\nMain: ",
+                           Func.layout (#func main),
+                           str "@",
+                           FuncEntry.layout (#entry main)])
             ; output (str "\n\nFunctions:")
             ; List.foreach (functions, fn f =>
                             Function.layouts (f, global, output))
@@ -2063,16 +2066,9 @@ structure Program =
 
       fun mainFunction (T {functions, main, ...}) =
          case List.peek (functions, fn f =>
-               Vector.exists (Function.entries f, fn e =>
-                         FuncEntry.equals (main, FunctionEntry.name e))) of
-            NONE => Error.bug "SsaTree.Program.mainFunction: no main function"
+                         Func.equals (#func main, Function.name f)) of
+            NONE => Error.bug "SsaTree2.Program.mainFunction: no main function"
           | SOME f => f
-
-      fun mainFunctionEntry (program as T{main,...}) =
-         case Vector.peek (Function.entries (mainFunction program), fn e =>
-             FuncEntry.equals (main, FunctionEntry.name e)) of
-            NONE     => Error.bug "SsaTree.Program.mainFunctionEntry: no main function entry"
-          | SOME  e  => e
 
       fun layoutStats (program as T {datatypes, globals, functions, main, ...}) =
          let
@@ -2242,8 +2238,7 @@ structure Program =
                         ()
                      end
                end
-            (* FIXME: have a constant time way to get the Func.t *)
-            val _ = visit (Function.name (mainFunction p))
+            val _ = visit (#func main)
             val _ = Vector.foreach (functions, rem o Function.name)
          in
             ()

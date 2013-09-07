@@ -1,4 +1,5 @@
-(* Copyright (C) 1999-2005, 2008 Henry Cejtin, Matthew Fluet, Suresh
+(* Copyright (C) 2013 Matthew Fluet, David Larsen.
+ * Copyright (C) 1999-2005, 2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
@@ -1133,7 +1134,7 @@ fun closureConvert
       (*------------------------------------*)
       (*    main body of closure convert    *)
       (*------------------------------------*)
-      val main = Func.newString "main"
+      val mainFunc = Func.newString "main"
       val mainEntry = FuncEntry.newString "default"
       val {functions, globals} =
          Control.trace (Control.Pass, "convert")
@@ -1144,7 +1145,7 @@ fun closureConvert
                                     body = body,
                                     mayInline = false,
                                     isMain = true,
-                                    name = main,
+                                    name = mainFunc,
                                     entryName = mainEntry,
                                     returns = Vector.new1 Type.unit})
           in Accum.done ac
@@ -1154,7 +1155,7 @@ fun closureConvert
          Ssa.Program.T {datatypes = datatypes,
                         globals = globals,
                         functions = functions,
-                        main = mainEntry}
+                        main = {entry = mainEntry, func = mainFunc}}
       val _ = destroyConvertType ()
       val _ = Value.destroy ()
       val _ = Ssa.Program.clear program
