@@ -39,7 +39,9 @@ structure PolyHash = MePolyHash (S)
 structure Profile = Profile (S)
 structure Redundant = Redundant (S)
 structure RedundantTests = RedundantTests (S)
-structure RemoveUnused = RemoveUnused (S)
+*)
+structure RemoveUnused = MeRemoveUnused (S)
+(*
 structure SimplifyTypes = SimplifyTypes (S)
 structure Useless = Useless (S)
 *)
@@ -50,8 +52,8 @@ type pass = {name: string,
 val ssaPassesDefault =
    (* TODO: Uncomment as these passes are converted into the multi-entry SSA IL. *)
    {name = "duplicateEntries", doit = DuplicateEntries.transform} ::
-   (*
    {name = "removeUnused1", doit = RemoveUnused.transform} ::
+   (*
    {name = "introduceLoops1", doit = IntroduceLoops.transform} ::
    {name = "loopInvariant1", doit = LoopInvariant.transform} ::
    *)
@@ -70,7 +72,9 @@ val ssaPassesDefault =
     *     slots of tuples that are constant useless
     *)
    {name = "useless", doit = Useless.transform} ::
+   *)
    {name = "removeUnused2", doit = RemoveUnused.transform} ::
+   (*
    {name = "simplifyTypes", doit = SimplifyTypes.transform} ::
    *)
    (* polyEqual should run
@@ -92,7 +96,9 @@ val ssaPassesDefault =
     Inline.inlineNonRecursive (p, !Control.inlineNonRec)} ::
    (*
    {name = "localFlatten2", doit = LocalFlatten.transform} ::
+   *)
    {name = "removeUnused3", doit = RemoveUnused.transform} ::
+   (*
    {name = "contify3", doit = Contify.transform} ::
    {name = "introduceLoops3", doit = IntroduceLoops.transform} ::
    {name = "loopInvariant3", doit = LoopInvariant.transform} ::
@@ -106,8 +112,8 @@ val ssaPassesDefault =
    {name = "redundantTests", doit = RedundantTests.transform} ::
    {name = "redundant", doit = Redundant.transform} ::
    {name = "knownCase", doit = KnownCase.transform} ::
-   {name = "removeUnused4", doit = RemoveUnused.transform} ::
    *)
+   {name = "removeUnused4", doit = RemoveUnused.transform} ::
    nil
 
 val ssaPassesMinimal =
@@ -233,7 +239,9 @@ local
                  (*
                  ("redundant", Redundant.transform),
                  ("redundantTests", RedundantTests.transform),
+                 *)
                  ("removeUnused", RemoveUnused.transform),
+                 (*
                  ("simplifyTypes", SimplifyTypes.transform),
                  ("useless", Useless.transform),
                  *)
