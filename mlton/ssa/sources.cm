@@ -93,7 +93,7 @@ restore.fun
 
 ssa-transform.old.sig
 ssa-transform.sig
-ssa2-transform.sig
+ssa2-transform.old.sig
 common-arg.fun
 common-block.fun
 common-subexp.fun
