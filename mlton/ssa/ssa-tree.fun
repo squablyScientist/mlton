@@ -1288,12 +1288,12 @@ structure Function =
                    in
                       ()
                    end)
-               val roots = Vector.toListMap (entries, labelNode o FunctionEntry.start)
+               val roots = Vector.map (entries, labelNode o FunctionEntry.start)
                val graphLayout =
                   Graph.layoutDot
                   (graph, fn {nodeName} => 
                    {title = concat [Func.toString name, " control-flow graph"],
-                    options = [GraphOption.Rank (Min, List.map (roots, fn root => {nodeName = nodeName root}))],
+                    options = [GraphOption.Rank (Min, Vector.toListMap (roots, fn root => {nodeName = nodeName root}))],
                     edgeOptions = edgeOptions,
                     nodeOptions =
                     fn n => let
@@ -1302,8 +1302,7 @@ structure Function =
                             in FontColor Black :: Shape Box :: l
                             end}
                   )
-               (* FIXME: implement layout for dominator forest *)
-               fun treeLayout () =
+               fun forestLayout () =
                   let
                      val {get = nodeOptions, set = setNodeOptions, ...} =
                         Property.getSetOnce (Node.plist, Property.initConst [])
@@ -1312,19 +1311,16 @@ structure Function =
                         (blocks, fn Block.T {label, ...} =>
                          setNodeOptions (labelNode label,
                                          [NodeOption.label (Label.toString label)]))
-                     (*
-                     val treeLayout =
-                        Tree.layoutDot
-                        (Graph.dominatorTree (graph,
-                                              {root = root,
-                                               nodeValue = fn n => n}),
-                         {title = concat [Func.toString name, " dominator tree"],
+                     val forestLayout =
+                        Tree.Forest.layoutDot
+                        (Graph.dominatorForest (graph,
+                                                {roots = roots,
+                                                 nodeValue = fn n => n}),
+                         {title = concat [Func.toString name, " dominator forest"],
                           options = [],
                           nodeOptions = nodeOptions})
-                        *)
                   in
-                     (* treeLayout *)
-                     Error.bug "Function.treeLayout unimplemented"
+                     forestLayout
                   end
                (*
                fun loopForestLayout () =
@@ -1349,7 +1345,7 @@ structure Function =
             in
                {destroy = destroy,
                 graph = graphLayout,
-                tree = treeLayout}
+                forest = forestLayout}
             end
       end
 
@@ -1417,8 +1413,7 @@ structure Function =
                   then ()
                else
                   let
-                     val {destroy, graph, tree} = 
-                        layoutDot (f, global)
+                     val {destroy, graph, forest} = layoutDot (f, global)
                      val name = Func.toString name
                      fun doit (s, g) =
                         let
@@ -1430,7 +1425,7 @@ structure Function =
                         end
                      val _ = doit ("cfg", graph)
                         handle _ => Error.warning "SsaTree.layouts: couldn't layout cfg"
-                     val _ = doit ("dom", tree ())
+                     val _ = doit ("dom", forest ())
                         handle _ => Error.warning "SsaTree.layouts: couldn't layout dom"
                      (*
                      val _ = doit ("lf", loopForest ())

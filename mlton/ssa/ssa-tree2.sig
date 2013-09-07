@@ -269,7 +269,7 @@ signature ME_SSA_TREE2 =
             val layoutDot:
                t * (Var.t -> string option) -> {destroy: unit -> unit,
                                                 graph: Layout.t,
-                                                tree: unit -> Layout.t}
+                                                forest: unit -> Layout.t}
             val name: t -> Func.t
             val new: {blocks: Block.t vector,
                       entries: FunctionEntry.t vector,
