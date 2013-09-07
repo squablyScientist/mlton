@@ -1,4 +1,5 @@
-(* Copyright (C) 2009 Matthew Fluet.
+(* Copyright (C) 2013 Matthew Fluet, David Larsen.
+ * Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -47,9 +48,9 @@ type pass = {name: string,
              doit: Program.t -> Program.t}
 
 val ssaPassesDefault =
-   (* TODO: Uncomment as these passes are converted into the multi-entry SSA
-            IL.
-
+   (* TODO: Uncomment as these passes are converted into the multi-entry SSA IL. *)
+   {name = "duplicateEntries", doit = DuplicateEntries.transform} ::
+   (*
    {name = "removeUnused1", doit = RemoveUnused.transform} ::
    {name = "introduceLoops1", doit = IntroduceLoops.transform} ::
    {name = "loopInvariant1", doit = LoopInvariant.transform} ::
@@ -107,7 +108,6 @@ val ssaPassesDefault =
    {name = "knownCase", doit = KnownCase.transform} ::
    {name = "removeUnused4", doit = RemoveUnused.transform} ::
    *)
-   {name = "duplicateEntries", doit = DuplicateEntries.transform} ::
    nil
 
 val ssaPassesMinimal =
@@ -209,9 +209,8 @@ local
 
    val passGens = 
       inlinePassGen ::
-      (List.map([(* TODO: Uncomment as these passes are converted into the
-                    multi-entry SSA IL.
-
+      (List.map([(* TODO: Uncomment as these passes are converted into the multi-entry SSA IL. *)
+                 (*
                  ("addProfile", Profile.addProfile),
                  ("combineConversions",  CombineConversions.transform),
                  ("commonArg", CommonArg.transform),
