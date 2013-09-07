@@ -229,20 +229,20 @@ local
                  ("loopInvariant", LoopInvariant.transform),
                  *)
                  ("polyEqual", PolyEqual.transform),
-                 ("polyHash", PolyHash.transform)
-                 (*,
+                 ("polyHash", PolyHash.transform),
+                 (*
                  ("redundant", Redundant.transform),
                  ("redundantTests", RedundantTests.transform),
                  ("removeUnused", RemoveUnused.transform),
                  ("simplifyTypes", SimplifyTypes.transform),
                  ("useless", Useless.transform),
+                 *)
                  ("breakCriticalEdges",fn p => 
                   S.breakCriticalEdges (p, {codeMotion = true})),
                  ("eliminateDeadBlocks",S.eliminateDeadBlocks),
                  ("orderFunctions",S.orderFunctions),
                  ("reverseFunctions",S.reverseFunctions),
-                 ("shrink", S.shrink)
-                 *)],
+                 ("shrink", S.shrink)],
                 mkSimplePassGen))
 in
    fun ssaPassesSetCustom s =
