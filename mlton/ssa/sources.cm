@@ -132,7 +132,7 @@ profile2.fun
 redundant-tests.fun
 redundant.fun
 ref-flatten.fun
-remove-unused.fun
+remove-unused.old.fun
 remove-unused2.fun
 simplify-types.fun
 useless.fun
