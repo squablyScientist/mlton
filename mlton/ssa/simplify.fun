@@ -14,8 +14,8 @@ struct
 open S
 
 structure CommonArg = MeCommonArg (S)
+structure CommonBlock = MeCommonBlock (S)
 (*
-structure CommonBlock = CommonBlock (S)
 structure CommonSubexp = CommonSubexp (S)
 *)
 structure CombineConversions = MeCombineConversions (S)
@@ -107,7 +107,9 @@ val ssaPassesDefault =
    {name = "commonArg", doit = CommonArg.transform} ::
    (*
    {name = "commonSubexp", doit = CommonSubexp.transform} ::
+   (*
    {name = "commonBlock", doit = CommonBlock.transform} ::
+   *)
    {name = "redundantTests", doit = RedundantTests.transform} ::
    {name = "redundant", doit = Redundant.transform} ::
    {name = "knownCase", doit = KnownCase.transform} ::
@@ -220,8 +222,8 @@ local
                  *)
                  ("combineConversions",  CombineConversions.transform),
                  ("commonArg", CommonArg.transform),
-                 (*
                  ("commonBlock", CommonBlock.transform),
+                 (*
                  ("commonSubexp", CommonSubexp.transform),
                  *)
                  ("constantPropagation", ConstantPropagation.transform),
