@@ -15,9 +15,7 @@ open S
 
 structure CommonArg = MeCommonArg (S)
 structure CommonBlock = MeCommonBlock (S)
-(*
-structure CommonSubexp = CommonSubexp (S)
-*)
+structure CommonSubexp = MeCommonSubexp (S)
 structure CombineConversions = MeCombineConversions (S)
 structure ConstantPropagation = MeConstantPropagation (S)
 (*
@@ -105,9 +103,7 @@ val ssaPassesDefault =
    {name = "localFlatten3", doit = LocalFlatten.transform} ::
    {name = "combineConversions", doit = CombineConversions.transform} ::
    {name = "commonArg", doit = CommonArg.transform} ::
-   (*
    {name = "commonSubexp", doit = CommonSubexp.transform} ::
-   *)
    {name = "commonBlock", doit = CommonBlock.transform} ::
    {name = "redundantTests", doit = RedundantTests.transform} ::
    (*
@@ -223,9 +219,7 @@ local
                  ("combineConversions",  CombineConversions.transform),
                  ("commonArg", CommonArg.transform),
                  ("commonBlock", CommonBlock.transform),
-                 (*
                  ("commonSubexp", CommonSubexp.transform),
-                 *)
                  ("constantPropagation", ConstantPropagation.transform),
                  (*
                  ("contify", Contify.transform),
