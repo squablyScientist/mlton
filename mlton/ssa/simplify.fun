@@ -17,8 +17,8 @@ open S
 structure CommonArg = CommonArg (S)
 structure CommonBlock = CommonBlock (S)
 structure CommonSubexp = CommonSubexp (S)
-structure CombineConversions = CombineConversions (S)
 *)
+structure CombineConversions = MeCombineConversions (S)
 structure ConstantPropagation = MeConstantPropagation (S)
 (*
 structure Flatten = Flatten (S)
@@ -103,8 +103,8 @@ val ssaPassesDefault =
    {name = "flatten", doit = Flatten.transform} ::
    *)
    {name = "localFlatten3", doit = LocalFlatten.transform} ::
-   (*
    {name = "combineConversions", doit = CombineConversions.transform} ::
+   (*
    {name = "commonArg", doit = CommonArg.transform} ::
    {name = "commonSubexp", doit = CommonSubexp.transform} ::
    {name = "commonBlock", doit = CommonBlock.transform} ::
@@ -217,7 +217,9 @@ local
       (List.map([(* TODO: Uncomment as these passes are converted into the multi-entry SSA IL. *)
                  (*
                  ("addProfile", Profile.addProfile),
+                 *)
                  ("combineConversions",  CombineConversions.transform),
+                 (*
                  ("commonArg", CommonArg.transform),
                  ("commonBlock", CommonBlock.transform),
                  ("commonSubexp", CommonSubexp.transform),

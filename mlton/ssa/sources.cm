@@ -106,6 +106,7 @@ multi.old.sig
 multi.old.fun
 multi.sig
 multi.fun
+combine-conversions.old.fun
 combine-conversions.fun
 constant-propagation.old.fun
 constant-propagation.fun
