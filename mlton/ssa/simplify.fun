@@ -39,8 +39,8 @@ structure PolyHash = MePolyHash (S)
 (*
 structure Profile = Profile (S)
 structure Redundant = Redundant (S)
-structure RedundantTests = RedundantTests (S)
 *)
+structure RedundantTests = MeRedundantTests (S)
 structure RemoveUnused = MeRemoveUnused (S)
 structure SimplifyTypes = MeSimplifyTypes (S)
 (*
@@ -107,10 +107,10 @@ val ssaPassesDefault =
    {name = "commonArg", doit = CommonArg.transform} ::
    (*
    {name = "commonSubexp", doit = CommonSubexp.transform} ::
-   (*
-   {name = "commonBlock", doit = CommonBlock.transform} ::
    *)
+   {name = "commonBlock", doit = CommonBlock.transform} ::
    {name = "redundantTests", doit = RedundantTests.transform} ::
+   (*
    {name = "redundant", doit = Redundant.transform} ::
    {name = "knownCase", doit = KnownCase.transform} ::
    *)
@@ -245,8 +245,8 @@ local
                  ("polyHash", PolyHash.transform),
                  (*
                  ("redundant", Redundant.transform),
-                 ("redundantTests", RedundantTests.transform),
                  *)
+                 ("redundantTests", RedundantTests.transform),
                  ("removeUnused", RemoveUnused.transform),
                  ("simplifyTypes", SimplifyTypes.transform),
                  (*

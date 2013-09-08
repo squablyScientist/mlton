@@ -136,6 +136,7 @@ profile.sig
 profile.fun
 profile2.sig
 profile2.fun
+redundant-tests.old.fun
 redundant-tests.fun
 redundant.fun
 ref-flatten.fun
