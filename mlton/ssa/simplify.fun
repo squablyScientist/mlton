@@ -21,7 +21,6 @@ structure CombineConversions = CombineConversions (S)
 *)
 structure ConstantPropagation = MeConstantPropagation (S)
 (*
-structure Contify = Contify (S)
 structure Flatten = Flatten (S)
 *)
 structure DuplicateEntries = MeDuplicateEntries (S)
@@ -31,8 +30,8 @@ structure IntroduceLoops = MeIntroduceLoops (S)
 structure KnownCase = KnownCase (S)
 structure LocalFlatten = LocalFlatten (S)
 structure LocalRef = LocalRef (S)
-structure LoopInvariant = LoopInvariant (S)
 *)
+structure LoopInvariant = MeLoopInvariant (S)
 structure PolyEqual = MePolyEqual (S)
 structure PolyHash = MePolyHash (S)
 (*
@@ -54,9 +53,7 @@ val ssaPassesDefault =
    {name = "duplicateEntries", doit = DuplicateEntries.transform} ::
    {name = "removeUnused1", doit = RemoveUnused.transform} ::
    {name = "introduceLoops1", doit = IntroduceLoops.transform} ::
-   (*
    {name = "loopInvariant1", doit = LoopInvariant.transform} ::
-   *)
    {name = "inlineLeaf1", doit = fn p => 
     Inline.inlineLeaf (p, !Control.inlineLeafA)} ::
    {name = "inlineLeaf2", doit = fn p => 
@@ -88,8 +85,8 @@ val ssaPassesDefault =
     *)
    {name = "polyHash", doit = PolyHash.transform} ::
    {name = "introduceLoops2", doit = IntroduceLoops.transform} ::
-   (*
    {name = "loopInvariant2", doit = LoopInvariant.transform} ::
+   (*
    {name = "contify2", doit = Contify.transform} ::
    *)
    {name = "inlineNonRecursive", doit = fn p =>
@@ -102,8 +99,8 @@ val ssaPassesDefault =
    {name = "contify3", doit = Contify.transform} ::
    *)
    {name = "introduceLoops3", doit = IntroduceLoops.transform} ::
-   (*
    {name = "loopInvariant3", doit = LoopInvariant.transform} ::
+   (*
    {name = "localRef", doit = LocalRef.transform} ::
    {name = "flatten", doit = Flatten.transform} ::
    {name = "localFlatten3", doit = LocalFlatten.transform} ::
@@ -236,8 +233,8 @@ local
                  ("knownCase", KnownCase.transform),
                  ("localFlatten", LocalFlatten.transform),
                  ("localRef", LocalRef.transform),
-                 ("loopInvariant", LoopInvariant.transform),
                  *)
+                 ("loopInvariant", LoopInvariant.transform),
                  ("polyEqual", PolyEqual.transform),
                  ("polyHash", PolyHash.transform),
                  (*

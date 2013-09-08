@@ -104,6 +104,7 @@ local
    known-case.fun
    local-flatten.fun
    local-ref.fun
+   loop-invariant.old.fun
    loop-invariant.fun
    poly-equal.old.fun
    poly-equal.fun
