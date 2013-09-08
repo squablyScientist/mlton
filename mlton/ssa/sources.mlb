@@ -102,6 +102,7 @@ local
    introduce-loops.old.fun
    introduce-loops.fun
    known-case.fun
+   local-flatten.old.fun
    local-flatten.fun
    local-ref.fun
    loop-invariant.old.fun

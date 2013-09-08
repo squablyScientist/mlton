@@ -28,7 +28,9 @@ structure Inline = MeInline (S)
 structure IntroduceLoops = MeIntroduceLoops (S)
 (*
 structure KnownCase = KnownCase (S)
-structure LocalFlatten = LocalFlatten (S)
+*)
+structure LocalFlatten = MeLocalFlatten (S)
+(*
 structure LocalRef = LocalRef (S)
 *)
 structure LoopInvariant = MeLoopInvariant (S)
@@ -60,8 +62,8 @@ val ssaPassesDefault =
     Inline.inlineLeaf (p, !Control.inlineLeafB)} ::
    (*
    {name = "contify1", doit = Contify.transform} ::
-   {name = "localFlatten1", doit = LocalFlatten.transform} ::
    *)
+   {name = "localFlatten1", doit = LocalFlatten.transform} ::
    {name = "constantPropagation", doit = ConstantPropagation.transform} ::
    (*
    (* useless should run 
@@ -91,9 +93,7 @@ val ssaPassesDefault =
    *)
    {name = "inlineNonRecursive", doit = fn p =>
     Inline.inlineNonRecursive (p, !Control.inlineNonRec)} ::
-   (*
    {name = "localFlatten2", doit = LocalFlatten.transform} ::
-   *)
    {name = "removeUnused3", doit = RemoveUnused.transform} ::
    (*
    {name = "contify3", doit = Contify.transform} ::
@@ -103,7 +103,9 @@ val ssaPassesDefault =
    (*
    {name = "localRef", doit = LocalRef.transform} ::
    {name = "flatten", doit = Flatten.transform} ::
+   *)
    {name = "localFlatten3", doit = LocalFlatten.transform} ::
+   (*
    {name = "combineConversions", doit = CombineConversions.transform} ::
    {name = "commonArg", doit = CommonArg.transform} ::
    {name = "commonSubexp", doit = CommonSubexp.transform} ::
@@ -231,7 +233,9 @@ local
                  ("introduceLoops", IntroduceLoops.transform),
                  (*
                  ("knownCase", KnownCase.transform),
+                 *)
                  ("localFlatten", LocalFlatten.transform),
+                 (*
                  ("localRef", LocalRef.transform),
                  *)
                  ("loopInvariant", LoopInvariant.transform),
