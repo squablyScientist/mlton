@@ -42,8 +42,8 @@ structure Redundant = Redundant (S)
 structure RedundantTests = RedundantTests (S)
 *)
 structure RemoveUnused = MeRemoveUnused (S)
+structure SimplifyTypes = MeSimplifyTypes (S)
 (*
-structure SimplifyTypes = SimplifyTypes (S)
 structure Useless = Useless (S)
 *)
 
@@ -73,9 +73,7 @@ val ssaPassesDefault =
    {name = "useless", doit = Useless.transform} ::
    *)
    {name = "removeUnused2", doit = RemoveUnused.transform} ::
-   (*
    {name = "simplifyTypes", doit = SimplifyTypes.transform} ::
-   *)
    (* polyEqual should run
     *   - after types are simplified so that many equals are turned into eqs
     *   - before inlining so that equality functions can be inlined
@@ -246,8 +244,8 @@ local
                  ("redundantTests", RedundantTests.transform),
                  *)
                  ("removeUnused", RemoveUnused.transform),
-                 (*
                  ("simplifyTypes", SimplifyTypes.transform),
+                 (*
                  ("useless", Useless.transform),
                  *)
                  ("breakCriticalEdges",fn p => 
