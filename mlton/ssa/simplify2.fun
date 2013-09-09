@@ -18,9 +18,7 @@ open S
 (* structure ConstantPropagation = ConstantPropagation (S) *)
 (* structure Contify = Contify (S) *)
 
-(* TODO: Convert to multi-entry, then re-enable.
-structure DeepFlatten = DeepFlatten (S)
-*)
+structure DeepFlatten = MeDeepFlatten (S)
 
 (* structure Flatten = Flatten (S) *)
 (* structure Inline = Inline (S) *)
@@ -53,7 +51,7 @@ type pass = {name: string,
 
 (* TODO: Re-enable passes as they're converted to multi-entry. *)
 val ssa2PassesDefault = 
-   (* {name = "deepFlatten", doit = DeepFlatten.transform2} :: *)
+   {name = "deepFlatten", doit = DeepFlatten.transform2} ::
    {name = "refFlatten", doit = RefFlatten.transform2} ::
    {name = "removeUnused5", doit = RemoveUnused2.transform2} ::
    (* {name = "zone", doit = Zone.transform2} :: *)
@@ -80,7 +78,7 @@ local
    (* TODO: Re-enable passes as they're converted to multi-entry. *)
    val passGens = 
       List.map([(* ("addProfile", Profile2.addProfile), *)
-                (* ("deepFlatten", DeepFlatten.transform2), *)
+                ("deepFlatten", DeepFlatten.transform2),
                 (* ("dropProfile", Profile2.dropProfile), *)
                 ("refFlatten", RefFlatten.transform2),
                 ("removeUnused", RemoveUnused2.transform2),

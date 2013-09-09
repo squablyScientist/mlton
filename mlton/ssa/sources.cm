@@ -114,6 +114,7 @@ combine-conversions.fun
 constant-propagation.old.fun
 constant-propagation.fun
 contify.fun
+deep-flatten.old.fun
 deep-flatten.fun
 duplicate-entries.fun
 flatten.fun
