@@ -47,6 +47,7 @@ type pass = {name: string,
              doit: Program.t -> Program.t}
 
 val ssaPassesDefault =
+   {name = "duplicateEntries", doit = DuplicateEntries.transform} ::
    (* TODO: Uncomment as these passes are converted into the multi-entry SSA
             IL.
 
@@ -107,7 +108,7 @@ val ssaPassesDefault =
    {name = "knownCase", doit = KnownCase.transform} ::
    {name = "removeUnused4", doit = RemoveUnused.transform} ::
    *)
-   {name = "duplicateEntries", doit = DuplicateEntries.transform} ::
+   {name = "duplicateEntries2", doit = DuplicateEntries.transform} ::
    nil
 
 val ssaPassesMinimal =

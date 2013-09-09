@@ -45,7 +45,7 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
        *    goto L_4 (x_2)
        *  L_3():
        *    goto L_4 (x_3)
-       *  L_4(x_1): (* L_4 is L_1 with a new name and arguments. *)
+       *  L_1(x_1): (* L_1 gets the arguments that foo_0 used to have. *)
        *    ...
        *)
       fun duplicate (f: Function.t) : Function.t =
@@ -83,7 +83,7 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                         the new) and put it in the function.  The replacement
                         block should have the arguments of the entry that is
                         being replaced. *)
-                     val oldStartLabel = Label.newNoname ()
+                     val oldStartLabel = start
                      val () = blocks := Vector.map (!blocks,
                         fn block as Block.T {args= _, label, statements, transfer} =>
                            if Label.equals (label, start)
