@@ -668,13 +668,13 @@ structure Function =
       fun dest (T r) = r
       val new = T
 
-      fun clear (T {name, blocks, entries, ...}) =
+      fun clear (T {name, entries, blocks, ...}) =
          (Func.clear name
-          ; Vector.foreach (blocks, Block.clear)
-          ; Vector.foreach (entries, fn FunctionEntry.T {args, ...} =>
-                            Vector.foreach (args, Var.clear o #1)
-                           )
-         )
+          ; Vector.foreach
+            (entries, fn FunctionEntry.T {name, args, ...} =>
+             (FuncEntry.clear name
+              ; Vector.foreach (args, Var.clear o #1)))
+          ; Vector.foreach (blocks, Block.clear))
 
       fun layoutHeader (T {entries, name, raises, returns, ...}): Layout.t =
          let
