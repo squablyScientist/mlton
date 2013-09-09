@@ -16,6 +16,13 @@ open S
 
 fun transform (Program.T {datatypes, globals, functions, main}) =
    let
+      (* Maps old entry points to new entry points. *)
+      val {get = newEntries: FuncEntry.t -> FuncEntry.t list,
+           set = setNewEntries: (FuncEntry.t * FuncEntry.t list) -> unit,
+           destroy = destroyFuncEntryMap: unit -> unit} =
+         Property.destGetSetOnce (FuncEntry.plist,
+                          Property.initConst [])
+
       (*
        * Makes a copy of every entry point.
        *
@@ -59,6 +66,8 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                         pick either the new entry or the old entry. *)
                      val oldFuncEntry = name
                      val newFuncEntry = FuncEntry.newString oldName
+                     val () = setNewEntries (name, [oldFuncEntry, newFuncEntry])
+
                      val oldArgs = args
 
                      (* Alpha-rename the arguments. *)
@@ -121,10 +130,51 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                           raises = raises,
                           returns = returns}
          end
+
+      (* Updates function calls to use the newly duplicated function entries *)
+      fun updateCalls (f: Function.t) =
+         let
+            val {blocks, entries, mayInline, name, raises, returns} =
+               Function.dest f
+            val blocks = Vector.map
+               (blocks,
+                fn block =>
+                  let
+                     val Block.T {args, label, statements, transfer} = block
+                  in
+                     case transfer of
+                        Transfer.Call {args = cargs, entry, func, return} =>
+                           Block.T {args = args,
+                                    label = label,
+                                    statements = statements,
+                                    transfer =
+                              Transfer.Call {args = cargs,
+                                 (* TODO Make this randomly pick from the list,
+                                    so that all of the function entries are
+                                    exercised. *)
+                                 entry = hd (tl (newEntries entry)),
+                                 func = func,
+                                 return = return}}
+                     |  _  => block
+                  end
+               )
+         in
+            Function.new {blocks = blocks,
+                          entries = entries,
+                          mayInline = mayInline,
+                          name = name,
+                          raises = raises,
+                          returns = returns}
+         end
+      val functions = List.map (functions, duplicate)
+      (* Only run updateCalls after all of the function entries have been
+         duplicated. *)
+      val functions = List.map (functions, updateCalls)
+      val () = destroyFuncEntryMap ()
    in
          (Program.T {datatypes = datatypes,
                     globals = globals,
-                    functions = List.map (functions, duplicate),
+                    functions = functions,
                     main = main})
    end
 
