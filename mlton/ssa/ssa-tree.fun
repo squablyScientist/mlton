@@ -978,7 +978,6 @@ structure FunctionEntry =
       datatype t =
         T of {
               args: (Var.t * Type.t) vector,
-              function: Func.t,
               name : FuncEntry.t,
               start: Label.t
               }
@@ -987,7 +986,6 @@ structure FunctionEntry =
          fun make f (T r) = f r
       in
          val args = make #args
-         val function = make #function
          val name = make #name
          val start = make #start
       end
@@ -1469,11 +1467,10 @@ structure Function =
                dest f
             val entries : FunctionEntry.t vector =
                Vector.map (entries,
-                  (fn (FunctionEntry.T{args, name, function, start}) =>
+                  (fn (FunctionEntry.T{args, name, start}) =>
                      FunctionEntry.T{
                         args = Vector.map(args, fn (x, ty) => (bindVar x, ty)),
                         name = name,
-                        function = function,
                         start = start}
                   )
                )
@@ -1504,9 +1501,8 @@ structure Function =
                          transfer = Transfer.replaceLabelVar
                                     (transfer, lookupLabel, lookupVar)})
             val entries = Vector.map (entries,
-               fn FunctionEntry.T {args, name, function, start} =>
+               fn FunctionEntry.T {args, name, start} =>
                   FunctionEntry.T {args = args,
-                                   function = function,
                                    name = name,
                                    start = lookupLabel start}
                )

@@ -1506,9 +1506,8 @@ fun convert (program as S.Program.T {functions, globals, main, ...},
             val _ = extraBlocks := []
             val entries = Vector.map
                 (entries,
-                 fn S.FunctionEntry.T {args, function, name, start} =>
+                 fn S.FunctionEntry.T {args, name, start} =>
                     FunctionEntry.T {args = translateFormals args,
-                                     function = function,
                                      name = name,
                                      start = start}
                 )
@@ -1553,7 +1552,6 @@ fun convert (program as S.Program.T {functions, globals, main, ...},
                     entries = (Vector.new1
                                (S.FunctionEntry.T
                                 {args = Vector.new0 (),
-                                 function = main_name,
                                  name = entry_name,
                                  start = start})),
                     mayInline = false, (* doesn't matter *)

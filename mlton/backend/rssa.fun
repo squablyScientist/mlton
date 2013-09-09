@@ -627,7 +627,6 @@ structure FunctionEntry =
    struct
       datatype t =
          T of {args: (Var.t * Type.t) vector,
-               function: Func.t,
                name: FuncEntry.t,
                start: Label.t}
 
@@ -646,7 +645,6 @@ structure FunctionEntry =
          fun make f (T r) = f r
       in
          val args = make #args
-         val function = make #function
          val name = make #name
          val start = make #start
       end
@@ -1699,12 +1697,10 @@ structure Program =
                                   returns = returns', ...} =
                      funcInfo func
 
-                  (* Make sure the call uses valid 'func' and 'funcEntry' names. *)
+                  (* Make sure the call uses valid 'funcEntry' names. *)
                   val entry = Vector.peek
                      (entries,
-                      fn FunctionEntry.T {function, name, ...} =>
-                        Func.equals (func, function)
-                        andalso
+                      fn FunctionEntry.T {name, ...} =>
                         FuncEntry.equals (funcEntry, name)
                      )
                in

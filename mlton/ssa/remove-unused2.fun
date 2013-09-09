@@ -1488,7 +1488,7 @@ fun transform2 (Program.T {datatypes, globals, functions, main}) =
                           Vector.keepAllMap
                           (entries, fn entry =>
                            let
-                              val FunctionEntry.T {name, args, start, function} = entry
+                              val FunctionEntry.T {name, args, start} = entry
                               val ei = entryInfo name
                            in
                               if EntryInfo.isUsed ei
@@ -1502,8 +1502,7 @@ fun transform2 (Program.T {datatypes, globals, functions, main}) =
                                       in
                                          SOME (FunctionEntry.T {name = name,
                                                                 args = args,
-                                                                start = start,
-                                                                function = function})
+                                                                start = start})
                                       end
                               else NONE
                            end)

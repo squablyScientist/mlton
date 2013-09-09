@@ -706,9 +706,8 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
             val {entries, mayInline, name, raises, returns, ...} =
                Function.dest f
              val entries =
-                Vector.map (entries, fn FunctionEntry.T {args, function, name, start} =>
+                Vector.map (entries, fn FunctionEntry.T {args, name, start} =>
                             FunctionEntry.T {args = simplifyFormals args,
-                                             function = function,
                                              name = name,
                                              start = start})
              val blocks = ref []

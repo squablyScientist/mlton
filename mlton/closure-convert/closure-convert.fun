@@ -108,7 +108,6 @@ structure Accum =
              val funcName = Func.newNoname ()
              val entryName = FuncEntry.newNoname ()
              val entry = FunctionEntry.T{args = Vector.new0 (),
-                                         function = funcName,
                                          name = entryName,
                                          start = start}
              val {blocks, ...} =
@@ -759,7 +758,6 @@ fun closureConvert
             val (start, blocks) =
                Dexp.linearize (body, Ssa.Handler.Caller)
             val entry = FunctionEntry.T {args = args,
-                                         function = name,
                                          name = entryName,
                                          start = start}
             val f =

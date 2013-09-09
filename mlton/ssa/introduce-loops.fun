@@ -67,7 +67,7 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                              Property.initRaise ("IntroduceLoops.entryToLoop", FuncEntry.layout))
                          val (entries, newBlocks) =
                             Vector.mapAndFold
-                            (entries, [], fn (entry as FunctionEntry.T {args, name, function, start}, newBlocks) =>
+                            (entries, [], fn (entry as FunctionEntry.T {args, name, start}, newBlocks) =>
                              if List.contains (selfTailCallEntries, name, FuncEntry.equals)
                                 then let
                                         val newArgs =
@@ -79,7 +79,6 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                                         (FunctionEntry.T
                                          {args = newArgs,
                                           name = name,
-                                          function = function,
                                           start = loopSName},
                                          Block.T
                                          {label = loopSName,

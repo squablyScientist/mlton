@@ -233,7 +233,6 @@ signature ME_SSA_TREE2 =
          sig
             datatype t =
                T of {args: (Var.t * Type.t) vector,
-                     function: Func.t,
                      name: FuncEntry.t,
                      start: Label.t}
          end

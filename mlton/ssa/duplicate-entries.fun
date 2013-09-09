@@ -49,7 +49,7 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
             val blocks = ref blocks
             val (entries, newBlocks) = Vector.fold
                (entries, ([],[]),
-                fn (FunctionEntry.T {args, function, name, start},
+                fn (FunctionEntry.T {args, name, start},
                     (entries, newBlocks)) =>
                   let
                      val oldName = FuncEntry.toString name
@@ -100,11 +100,9 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                                  transfer = Transfer.Goto{args = dropType newNewArgs,
                                                           dst = oldStartLabel}}
                      val old = FunctionEntry.T {args = newOldArgs,
-                                                function = function,
                                                 name = oldFuncEntry,
                                                 start = newOldStartLabel}
                      val new = FunctionEntry.T {args = newNewArgs,
-                                                function = function,
                                                 name = newFuncEntry,
                                                 start = newNewStartLabel}
                   in
