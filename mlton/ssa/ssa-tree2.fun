@@ -2150,7 +2150,12 @@ structure Program =
 
       fun clearTop (p as T {datatypes, functions, ...}) =
          (Vector.foreach (datatypes, Datatype.clear)
-          ; List.foreach (functions, Func.clear o Function.name)
+          ; List.foreach
+            (functions, fn f =>
+             (Func.clear (Function.name f)
+              ; Vector.foreach
+                (Function.entries f, fn e =>
+                 FuncEntry.clear (FunctionEntry.name e))))
           ; clearGlobals p)
 
       fun foreachVar (T {globals, functions, ...}, f) =
