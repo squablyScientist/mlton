@@ -38,9 +38,7 @@ structure Profile2 = Profile2 (S)
 (* structure Redundant = Redundant (S) *)
 (* structure RedundantTests = RedundantTests (S) *)
 
-(* TODO: Convert to multi-entry, then re-enable.
-structure RefFlatten = RefFlatten (S)
-*)
+structure RefFlatten = MeRefFlatten (S)
 structure RemoveUnused2 = MeRemoveUnused2 (S)
 
 (* structure SimplifyTypes = SimplifyTypes (S) *)
@@ -56,7 +54,7 @@ type pass = {name: string,
 (* TODO: Re-enable passes as they're converted to multi-entry. *)
 val ssa2PassesDefault = 
    (* {name = "deepFlatten", doit = DeepFlatten.transform2} :: *)
-   (* {name = "refFlatten", doit = RefFlatten.transform2} :: *)
+   {name = "refFlatten", doit = RefFlatten.transform2} ::
    {name = "removeUnused5", doit = RemoveUnused2.transform2} ::
    (* {name = "zone", doit = Zone.transform2} :: *)
    nil
@@ -84,7 +82,7 @@ local
       List.map([(* ("addProfile", Profile2.addProfile), *)
                 (* ("deepFlatten", DeepFlatten.transform2), *)
                 (* ("dropProfile", Profile2.dropProfile), *)
-                (* ("refFlatten", RefFlatten.transform2), *)
+                ("refFlatten", RefFlatten.transform2),
                 ("removeUnused", RemoveUnused2.transform2),
                 (* ("zone", Zone.transform2), *)
                 ("eliminateDeadBlocks",S.eliminateDeadBlocks),
