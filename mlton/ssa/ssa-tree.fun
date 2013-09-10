@@ -1815,7 +1815,7 @@ structure Program =
             NONE => Error.bug "SsaTree.Program.mainFunction: no main function"
           | SOME f => f
 
-      fun layoutStats (program as T{datatypes, globals, functions, main, ...})=
+      fun layoutStats (program as T {datatypes, globals, functions, ...})=
          let
             val (mainNumVars, mainNumBlocks) =
                let
@@ -1825,7 +1825,7 @@ structure Program =
                   val {blocks, ...} = Function.dest f
                   val numBlocks = Vector.length blocks
                in
-                        (!numVars, numBlocks)
+                  (!numVars, numBlocks)
                end
             val numTypes = ref 0
             val {get = countType, destroy} =

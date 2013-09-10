@@ -1,4 +1,5 @@
-(* Copyright (C) 2009,2011 Matthew Fluet.
+(* Copyright (C) 2013 Matthew Fluet, David Larsen.
+ * Copyright (C) 2009,2011 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -243,12 +244,7 @@ fun checkScopes (program as
       val _ = Vector.foreach (globals, loopStatement)
       val _ = List.foreach (functions, bindFunc o Function.name)
       val _ = List.foreach (functions, loopFunc)
-      (*
-       * XXX: Program.mainFunction takes linear time.  Since we just want the
-       * ID (Func.t), should we just add mainFunc to SSA.Program.T to get back
-       * down to constant time?
-       *)
-      val _ = getFunc (Function.name (Program.mainFunction program))
+      val _ = getFunc (#func main)
       val _ = Program.clearTop program
       val _ = destroyLoopType ()
    in

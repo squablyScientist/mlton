@@ -1,4 +1,5 @@
-(* Copyright (C) 2009,2011 Matthew Fluet.
+(* Copyright (C) 2013 Matthew Fluet, David Larsen.
+ * Copyright (C) 2009,2011 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -16,7 +17,7 @@ datatype z = datatype Exp.t
 datatype z = datatype Transfer.t
 
 fun checkScopes (program as
-                 Program.T {datatypes, globals, functions, main = _}): unit =
+                 Program.T {datatypes, globals, functions, main}): unit =
    let
       datatype 'a status =
          Undefined
@@ -218,12 +219,7 @@ fun checkScopes (program as
                                Vector.foreach (args, loopType)))
       val _ = Vector.foreach (globals, loopStatement)
       val _ = List.foreach (functions, bindFunc o Function.name)
-      (*
-       * XXX: Program.mainFunction takes linear time.  Since we just want the
-       * ID (Func.t), should we just add mainFunc to SSA.Program.T to get back
-       * down to constant time?
-       *)
-      val _ = getFunc (Function.name (Program.mainFunction program))
+      val _ = getFunc (#func main)
       val _ = List.foreach (functions, loopFunc)
       val _ = Program.clearTop program
       val _ = destroyLoopType ()

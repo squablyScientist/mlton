@@ -1969,7 +1969,7 @@ structure Program =
                          Vector.foreach
                          (blocks, fn Block.T {transfer, ...} =>
                           case transfer of
-                             Call {func, return, ...} =>
+                             Call {func, entry, return, ...} =>
                                 let
                                    val to = funcNode func
                                    val {tail, nontail} = get to
@@ -2048,10 +2048,10 @@ structure Program =
       fun mainFunction (T {functions, main, ...}) =
          case List.peek (functions, fn f =>
                          Func.equals (#func main, Function.name f)) of
-            NONE => Error.bug "SsaTree2.Program.mainFunction: no main function"
+            NONE => Error.bug "SsaTree.Program.mainFunction: no main function"
           | SOME f => f
 
-      fun layoutStats (program as T {datatypes, globals, functions, main, ...}) =
+      fun layoutStats (program as T {datatypes, globals, functions, ...}) =
          let
             val (mainNumVars, mainNumBlocks) =
                let
@@ -2061,7 +2061,7 @@ structure Program =
                   val {blocks, ...} = Function.dest f
                   val numBlocks = Vector.length blocks
                in
-                        (!numVars, numBlocks)
+                  (!numVars, numBlocks)
                end
             val numTypes = ref 0
             val {get = countType, destroy} =

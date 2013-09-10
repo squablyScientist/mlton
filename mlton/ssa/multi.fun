@@ -1,4 +1,5 @@
-(* Copyright (C) 1999-2006 Henry Cejtin, Matthew Fluet, Suresh
+(* Copyright (C) 2013 Matthew Fluet, David Laren.
+ * Copyright (C) 1999-2006 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
@@ -131,7 +132,7 @@ structure VarInfo =
                         multiUsed = MultiUsed.new ()}
    end
 
-fun multi (p as Program.T {functions, ...})
+fun multi (p as Program.T {functions, main, ...})
   = let
       val usesThreadsOrConts 
         = Program.hasPrim (p, fn p =>
@@ -182,9 +183,7 @@ fun multi (p as Program.T {functions, ...})
                  setFuncNode (Function.name f, n) ;
                  setNodeFunction (n, f)
                end)
-      val mainFunction = Program.mainFunction p
-      val mainFuncName = Function.name mainFunction
-      val _ = Calls.inc (FuncInfo.calls (funcInfo mainFuncName))
+      val _ = Calls.inc (FuncInfo.calls (funcInfo (#func main)))
       val _ = List.foreach
               (functions, fn f =>
                let
