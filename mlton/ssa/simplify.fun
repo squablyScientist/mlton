@@ -41,9 +41,7 @@ structure Redundant = MeRedundant (S)
 structure RedundantTests = MeRedundantTests (S)
 structure RemoveUnused = MeRemoveUnused (S)
 structure SimplifyTypes = MeSimplifyTypes (S)
-(*
-structure Useless = Useless (S)
-*)
+structure Useless = MeUseless (S)
 
 type pass = {name: string,
              doit: Program.t -> Program.t}
@@ -63,13 +61,11 @@ val ssaPassesDefault =
    *)
    {name = "localFlatten1", doit = LocalFlatten.transform} ::
    {name = "constantPropagation", doit = ConstantPropagation.transform} ::
-   (*
    (* useless should run 
     *   - after constant propagation because constant propagation makes
     *     slots of tuples that are constant useless
     *)
    {name = "useless", doit = Useless.transform} ::
-   *)
    {name = "removeUnused2", doit = RemoveUnused.transform} ::
    {name = "simplifyTypes", doit = SimplifyTypes.transform} ::
    (* polyEqual should run
@@ -241,9 +237,7 @@ local
                  ("redundantTests", RedundantTests.transform),
                  ("removeUnused", RemoveUnused.transform),
                  ("simplifyTypes", SimplifyTypes.transform),
-                 (*
                  ("useless", Useless.transform),
-                 *)
                  ("breakCriticalEdges",fn p => 
                   S.breakCriticalEdges (p, {codeMotion = true})),
                  ("eliminateDeadBlocks",S.eliminateDeadBlocks),

@@ -150,6 +150,7 @@ remove-unused2.old.fun
 remove-unused2.fun
 simplify-types.old.fun
 simplify-types.fun
+useless.old.fun
 useless.fun
 zone.fun
 simplify.old.sig
