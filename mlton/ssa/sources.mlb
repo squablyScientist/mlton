@@ -99,6 +99,7 @@ local
    contify.fun
    deep-flatten.old.fun
    deep-flatten.fun
+   flatten.old.fun
    flatten.fun
    inline.old.sig
    inline.old.fun

@@ -1,5 +1,4 @@
-(* Copyright (C) 2013 Matthew Fluet.
- * Copyright (C) 1999-2006 Henry Cejtin, Matthew Fluet, Suresh
+(* Copyright (C) 1999-2006 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
@@ -21,7 +20,7 @@
  *   - The tuple is reconstructed at each Case target.
  *)
 
-functor MeFlatten (S: ME_SSA_TRANSFORM_STRUCTS): ME_SSA_TRANSFORM =
+functor Flatten (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM = 
 struct
 
 open S
@@ -63,16 +62,13 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
          Property.getSetOnce
          (Con.plist, Property.initRaise ("Flatten.conInfo", Con.layout))
       val conArgs = #args o conInfo
-      val {get = funcInfo: Func.t -> {returns: Rep.t vector option,
+      val {get = funcInfo: Func.t -> {args: Rep.t vector,
+                                      returns: Rep.t vector option,
                                       raises: Rep.t vector option},
            set = setFuncInfo, ...} =
          Property.getSetOnce
          (Func.plist, Property.initRaise ("Flatten.funcInfo", Func.layout))
-      val {get = entryInfo: FuncEntry.t -> {args: Rep.t vector},
-           set = setEntryInfo, ...} =
-         Property.getSetOnce
-         (FuncEntry.plist, Property.initRaise ("Flatten.entryInfo", FuncEntry.layout))
-      val entryArgs = #args o entryInfo
+      val funcArgs = #args o funcInfo
       val {get = labelInfo: Label.t -> {args: Rep.t vector},
            set = setLabelInfo, ...} =
          Property.getSetOnce
@@ -111,13 +107,11 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
       val _ = 
          List.foreach
          (functions, fn f =>
-          let val {entries, name, raises, returns, ...} = Function.dest f
+          let val {args, name, raises, returns, ...} = Function.dest f
           in 
-            setFuncInfo (name, {returns = Option.map (returns, Rep.fromTypes),
+            setFuncInfo (name, {args = fromFormals args,
+                                returns = Option.map (returns, Rep.fromTypes),
                                 raises = Option.map (raises, Rep.fromTypes)})
-            ; Vector.foreach
-              (entries, fn FunctionEntry.T {args, name, ...} =>
-               setEntryInfo (name, {args = fromFormals args}))
           end)
 
       fun doitStatement (Statement.T {exp, var, ...}) =
@@ -153,14 +147,13 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                       (case raises of
                           NONE => Error.bug "Flatten.flatten: raise mismatch"
                         | SOME rs => coerces (xs, rs))
-                 | Call {func, entry, args, return} =>
+                 | Call {func, args, return} =>
                       let
-                        val {returns = funcReturns,
+                        val {args = funcArgs, 
+                             returns = funcReturns,
                              raises = funcRaises} =
                           funcInfo func
-                        val {args = entryArgs} =
-                           entryInfo entry
-                        val _ = coerces (args, entryArgs)
+                        val _ = coerces (args, funcArgs)
                         fun unifyReturns () =
                            case (funcReturns, returns) of
                               (SOME rs, SOME rs') => Rep.unifys (rs, rs')
@@ -198,25 +191,15 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
           List.foreach
           (functions, fn f => 
            let 
-              val {entries, name, ...} = Function.dest f
-              val {raises, returns} = funcInfo name
+              val name = Function.name f
+              val {args, raises, returns} = funcInfo name
               open Layout
            in 
               display
               (seq [Func.layout name,
                     str " ",
                     record
-                    [("entries",
-                      Vector.layout
-                      (fn FunctionEntry.T {name, ...} =>
-                       let
-                          val {args} = entryInfo name
-                       in
-                          record
-                          [("entry", FuncEntry.layout name),
-                           ("args", Vector.layout Rep.layout args)]
-                       end)
-                      entries),
+                    [("args", Vector.layout Rep.layout args),
                      ("returns", Option.layout (Vector.layout Rep.layout) returns),
                      ("raises", Option.layout (Vector.layout Rep.layout) raises)]])
            end))
@@ -259,9 +242,9 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
       val globals = Vector.map (globals, doitStatement)
       fun doitFunction f =
          let
-            val {entries, mayInline, name, raises, returns, ...} =
+            val {args, mayInline, name, raises, returns, start, ...} =
                Function.dest f
-            val {returns = returnsReps, raises = raisesReps} =
+            val {args = argsReps, returns = returnsReps, raises = raisesReps} = 
               funcInfo name
 
             val newBlocks = ref []
@@ -397,10 +380,9 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                end 
             fun doitTransfer transfer =
                case transfer of
-                  Call {func, entry, args, return} =>
+                  Call {func, args, return} =>
                      Call {func = func, 
-                           entry = entry,
-                           args = flattens (args, entryArgs entry),
+                           args = flattens (args, funcArgs func),
                            return = return}
                 | Case {test, cases = Cases.Con cases, default} =>
                      doitCaseCon {test = test, 
@@ -426,26 +408,16 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                            transfer = transfer}
                end
 
-            val entries =
-               Vector.map
-               (entries, fn FunctionEntry.T {name, args, start} =>
-                let
-                   val {args = argsReps, ...} = entryInfo name
-                   val (args, stmts) = doitArgs (args, argsReps)
-                   val start' = Label.newNoname ()
-                   val _ = List.push
-                           (newBlocks,
-                            Block.T {label = start',
-                                     args = Vector.new0 (),
-                                     statements = stmts,
-                                     transfer = Goto {dst = start,
-                                                      args = Vector.new0 ()}})
-                   val start = start'
-                in
-                   FunctionEntry.T {name = name,
-                                    args = args,
-                                    start = start}
-                end)
+            val (args, stmts) = doitArgs (args, argsReps)
+            val start' = Label.newNoname ()
+            val _ = List.push
+                    (newBlocks,
+                     Block.T {label = start',
+                              args = Vector.new0 (),
+                              statements = stmts,
+                              transfer = Goto {dst = start, 
+                                               args = Vector.new0 ()}})
+            val start = start'
             val _ = Function.dfs 
                     (f, fn b => let val _ = List.push (newBlocks, doitBlock b)
                                 in fn () => ()
@@ -460,12 +432,13 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                (raises, fn ts =>
                 flattenTypes (ts, valOf raisesReps))
          in
-            Function.new {blocks = blocks,
-                          entries = entries,
+            Function.new {args = args,
+                          blocks = blocks,
                           mayInline = mayInline,
                           name = name,
                           raises = raises,
-                          returns = returns}
+                          returns = returns,
+                          start = start}
          end
 
       val shrink = shrinkFunction {globals = globals}

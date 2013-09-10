@@ -18,9 +18,7 @@ structure CommonBlock = MeCommonBlock (S)
 structure CommonSubexp = MeCommonSubexp (S)
 structure CombineConversions = MeCombineConversions (S)
 structure ConstantPropagation = MeConstantPropagation (S)
-(*
-structure Flatten = Flatten (S)
-*)
+structure Flatten = MeFlatten (S)
 structure DuplicateEntries = MeDuplicateEntries (S)
 structure Inline = MeInline (S)
 structure IntroduceLoops = MeIntroduceLoops (S)
@@ -94,8 +92,8 @@ val ssaPassesDefault =
    {name = "loopInvariant3", doit = LoopInvariant.transform} ::
    (*
    {name = "localRef", doit = LocalRef.transform} ::
-   {name = "flatten", doit = Flatten.transform} ::
    *)
+   {name = "flatten", doit = Flatten.transform} ::
    {name = "localFlatten3", doit = LocalFlatten.transform} ::
    {name = "combineConversions", doit = CombineConversions.transform} ::
    {name = "commonArg", doit = CommonArg.transform} ::
@@ -220,8 +218,8 @@ local
                  (*
                  ("contify", Contify.transform),
                  ("dropProfile", Profile.dropProfile),
-                 ("flatten", Flatten.transform),
                  *)
+                 ("flatten", Flatten.transform),
                  ("introduceLoops", IntroduceLoops.transform),
                  (*
                  ("knownCase", KnownCase.transform),
