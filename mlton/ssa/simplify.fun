@@ -18,6 +18,7 @@ structure CommonBlock = MeCommonBlock (S)
 structure CommonSubexp = MeCommonSubexp (S)
 structure CombineConversions = MeCombineConversions (S)
 structure ConstantPropagation = MeConstantPropagation (S)
+structure Contify = MeContify (S)
 structure Flatten = MeFlatten (S)
 structure DuplicateEntries = MeDuplicateEntries (S)
 structure Inline = MeInline (S)
@@ -54,9 +55,7 @@ val ssaPassesDefault =
     Inline.inlineLeaf (p, !Control.inlineLeafA)} ::
    {name = "inlineLeaf2", doit = fn p => 
     Inline.inlineLeaf (p, !Control.inlineLeafB)} ::
-   (*
    {name = "contify1", doit = Contify.transform} ::
-   *)
    {name = "localFlatten1", doit = LocalFlatten.transform} ::
    {name = "constantPropagation", doit = ConstantPropagation.transform} ::
    (* useless should run 
@@ -78,16 +77,12 @@ val ssaPassesDefault =
    {name = "polyHash", doit = PolyHash.transform} ::
    {name = "introduceLoops2", doit = IntroduceLoops.transform} ::
    {name = "loopInvariant2", doit = LoopInvariant.transform} ::
-   (*
    {name = "contify2", doit = Contify.transform} ::
-   *)
    {name = "inlineNonRecursive", doit = fn p =>
     Inline.inlineNonRecursive (p, !Control.inlineNonRec)} ::
    {name = "localFlatten2", doit = LocalFlatten.transform} ::
    {name = "removeUnused3", doit = RemoveUnused.transform} ::
-   (*
    {name = "contify3", doit = Contify.transform} ::
-   *)
    {name = "introduceLoops3", doit = IntroduceLoops.transform} ::
    {name = "loopInvariant3", doit = LoopInvariant.transform} ::
    (*
@@ -215,8 +210,8 @@ local
                  ("commonBlock", CommonBlock.transform),
                  ("commonSubexp", CommonSubexp.transform),
                  ("constantPropagation", ConstantPropagation.transform),
-                 (*
                  ("contify", Contify.transform),
+                 (*
                  ("dropProfile", Profile.dropProfile),
                  *)
                  ("flatten", Flatten.transform),

@@ -113,6 +113,7 @@ combine-conversions.old.fun
 combine-conversions.fun
 constant-propagation.old.fun
 constant-propagation.fun
+contify.old.fun
 contify.fun
 deep-flatten.old.fun
 deep-flatten.fun
