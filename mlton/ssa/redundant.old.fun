@@ -1,5 +1,4 @@
-(* Copyright (C) 2013 Matthew Fluet.
- * Copyright (C) 2009,2012 Matthew Fluet.
+(* Copyright (C) 2009,2012 Matthew Fluet.
  * Copyright (C) 1999-2006 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -8,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor MeRedundant (S: ME_SSA_TRANSFORM_STRUCTS): ME_SSA_TRANSFORM =
+functor Redundant (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM = 
 struct
 
 open S
@@ -263,18 +262,14 @@ structure Eqrel:>
 
 fun transform (Program.T {datatypes, globals, functions, main}) =
    let
-      val {get = funcInfo: Func.t -> {return: Eqrel.t option},
+      val {get = funcInfo: Func.t -> {arg: Eqrel.t, return: Eqrel.t option},
            set = setFuncInfo, ...} =
          Property.getSetOnce
-         (Func.plist, Property.initRaise ("Redundant.funcInfo", Func.layout))
-      val {get = entryInfo: FuncEntry.t -> Eqrel.t,
-           set = setEntryInfo, ...} =
-         Property.getSetOnce
-         (FuncEntry.plist, Property.initRaise ("Redundant.entryInfo", FuncEntry.layout))
+         (Func.plist, Property.initRaise ("Redundant.info", Func.layout))
       val {get = labelInfo: Label.t -> Eqrel.t,
            set = setLabelInfo, ...} =
          Property.getSetOnce
-         (Label.plist, Property.initRaise ("Redundant.labelInfo", Label.layout))
+         (Label.plist, Property.initRaise ("Redundant.info", Label.layout))
       val {get = varInfo : Var.t -> Element.t,
            set = setVarInfo, ...} =
          Property.getSetOnce
@@ -298,12 +293,10 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                List.foreach
                (functions, fn f =>
                 let
-                   val {name, returns, entries, blocks, ...} = Function.dest f
+                   val {name, args, returns, blocks, ...} = Function.dest f
                    val _ =
-                      setFuncInfo (name, {return = Option.map (returns, Eqrel.fromTypes)})
-                   val _ =
-                      Vector.foreach (entries, fn FunctionEntry.T {name, args, ...} =>
-                                      setEntryInfo (name, makeFormalsRel args))
+                      setFuncInfo (name, {arg = makeFormalsRel args,
+                                          return = Option.map (returns, Eqrel.fromTypes)})
                    val _ =
                       Vector.foreach (blocks, fn Block.T {label, args, ...} =>
                                       setLabelInfo (label, makeFormalsRel args))
@@ -321,10 +314,9 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                    Vector.foreach
                    (blocks, fn Block.T {transfer, ...} =>
                     case transfer of
-                       Call {func, entry, args, return = ret, ...} =>
+                       Call {func, args, return = ret, ...} =>
                           let
-                             val arg' = entryInfo entry
-                             val {return = return'} = funcInfo func
+                             val {arg = arg', return = return'} = funcInfo func
                              val _ = Eqrel.refine {coarse = varEquiv args,
                                                    fine = arg'}
                           in
@@ -364,33 +356,24 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
           (functions, fn f =>
            let
               open Layout
-              val {name, entries, blocks, ...} = Function.dest f
-              val {return} = funcInfo name
+              val {name, blocks, ...} = Function.dest f
+              val {arg, return} = funcInfo name
               val () =
                  display (seq [Func.layout name,
+                               str " ",
+                               Eqrel.layout arg,
                                str " : ",
                                Option.layout Eqrel.layout return])
               val () =
                  Vector.foreach
-                 (entries, fn FunctionEntry.T {name, ...} =>
-                  let
-                     val args = entryInfo name
-                  in
-                     display (seq [str "\t",
-                                   FuncEntry.layout name,
-                                   str " ",
-                                   Eqrel.layout args])
-                  end)
-              val () =
-                 Vector.foreach
                  (blocks, fn Block.T {label, ...} =>
                   let
-                     val args = labelInfo label
+                     val arg = labelInfo label
                   in
                      display (seq [str "\t",
                                    Label.layout label,
                                    str " ",
-                                   Eqrel.layout args])
+                                   Eqrel.layout arg])
                   end)
            in
               ()
@@ -443,16 +426,13 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                              case r of
                                 Useful => SOME x
                               | _ => NONE)
-      val {get = funcReds : Func.t -> {returnsRed: red vector option,
+      val {get = funcReds : Func.t -> {argsRed: red vector,
+                                       args: (Var.t * Type.t) vector,
+                                       returnsRed: red vector option,
                                        returns: Type.t vector option},
            set = setFuncReds, ...} =
          Property.getSetOnce (Func.plist,
                               Property.initRaise ("funcReds", Func.layout))
-      val {get = entryReds: FuncEntry.t -> {argsRed: red vector,
-                                            args: (Var.t * Type.t) vector},
-           set = setEntryReds, ...} =
-         Property.getSetOnce (FuncEntry.plist,
-                              Property.initRaise ("entryReds", FuncEntry.layout))
       val {get = labelReds: Label.t -> {argsRed: red vector,
                                         args: (Var.t * Type.t) vector},
            set = setLabelReds, ...} =
@@ -462,8 +442,8 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
          List.foreach
          (functions, fn f =>
           let
-             val {name, entries, blocks, returns, ...} = Function.dest f
-             val {return} = funcInfo name
+             val {name, args, blocks, returns, ...} = Function.dest f
+             val {arg, return} = funcInfo name
              val (returnsRed, returns) =
                 (case (returns, return) of
                     (SOME r, SOME r') =>
@@ -474,17 +454,12 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                           (SOME returnsRed, SOME returns)
                        end
                   | _ => (NONE, NONE))
+             val (argsRed, args) = redundantFormals (args, arg)
           in
-             setFuncReds (name, {returns = returns,
+             setFuncReds (name, {args = args,
+                                 argsRed = argsRed,
+                                 returns = returns,
                                  returnsRed = returnsRed}) ;
-             Vector.foreach
-             (entries, fn FunctionEntry.T {name, args, ...} =>
-              let
-                 val (argsRed, args) = redundantFormals (args, entryInfo name)
-              in
-                 setEntryReds (name, {args = args,
-                                      argsRed = argsRed})
-              end) ;
              Vector.foreach
              (blocks, fn Block.T {label, args, ...} =>
               let
@@ -503,18 +478,8 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
          List.revMap
          (functions, fn f =>
           let
-             val {blocks, entries, mayInline, name, raises, ...} = Function.dest f
-             val entries =
-                Vector.map
-                (entries, fn FunctionEntry.T {name, start, ...} =>
-                 let
-                    val {args, ...} = entryReds name
-                 in
-                    FunctionEntry.T {args = args,
-                                     name = name,
-                                     start = start}
-                 end)
-             val {returns, returnsRed, ...} = funcReds name
+             val {blocks, mayInline, name, raises, start, ...} = Function.dest f
+             val {args, returns, returnsRed, ...} = funcReds name
              val blocks =
                 Vector.map
                 (blocks, fn Block.T {label, statements, transfer, ...} =>
@@ -535,11 +500,10 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                                     success = success,
                                     ty = ty}
                         | Bug => Bug
-                        | Call {func, entry, args, return} =>
+                        | Call {func, args, return} =>
                              Call {func = func, 
-                                   entry = entry,
                                    args = loopVars (keepUseful 
-                                                    (#argsRed (entryReds entry),
+                                                    (#argsRed (funcReds func),
                                                      args)),
                                    return = return}
                         | Case {test, cases, default} =>
@@ -565,12 +529,13 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                              statements = statements,
                              transfer = transfer}
                  end)
-             val f = Function.new {blocks = blocks,
-                                   entries = entries,
+             val f = Function.new {args = args,
+                                   blocks = blocks,
                                    mayInline = mayInline,
                                    name = name,
                                    raises = raises,
-                                   returns = returns}
+                                   returns = returns,
+                                   start = start}
              val _ = Function.clear f
           in
              f
