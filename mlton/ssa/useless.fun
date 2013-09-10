@@ -561,7 +561,7 @@ fun transform (program: Program.t): Program.t =
              layout)
             primApp
       end
-      val {value, func, funcEntry = entry, label, ...} =
+      val {value, func, entry, label, ...} =
          analyze {
                   coerce = Value.coerce,
                   conApp = conApp,
@@ -648,7 +648,7 @@ fun transform (program: Program.t): Program.t =
                                  Vector.layout
                                  (fn FunctionEntry.T {name, ...} =>
                                   let
-                                     val {args, ...} = entry name
+                                     val args = entry name
                                   in
                                      record [("entry", FuncEntry.layout name),
                                              ("args", Vector.layout Value.layout args)]
@@ -893,7 +893,7 @@ fun transform (program: Program.t): Program.t =
           | Call {func = f, entry = e, args, return} =>
                let
                   val {returns = freturns, ...} = func f
-                  val {args = eargs, ...} = entry e
+                  val eargs = entry e
                   val (blocks, return) =
                      case return of
                         Return.Dead => ([], return)

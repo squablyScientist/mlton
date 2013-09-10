@@ -201,6 +201,7 @@ signature ME_SSA_TREE =
                      }
 
             val name: t -> FuncEntry.t
+            val start: t -> Label.t
          end
 
       structure Function:
