@@ -32,15 +32,16 @@ fun checkScopes (program as
             fun bind (x, v) =
                case get x of
                   Undefined => set (x, InScope v)
-                | _ => Error.bug (concat ["Ssa2.TypeCheck2.checkScopes: duplicate definition of ",
-                                          Layout.toString (layout x)])
+                | _ => Error.bug (concat
+                                  ["Ssa2.TypeCheck2.checkScopes: duplicate definition of ",
+                                   Layout.toString (layout x)])
             fun reference x =
                case get x of
                   InScope v => v
-                | _ => Error.bug (concat ["Ssa2.TypeCheck2.checkScopes: reference to ",
-                                          Layout.toString (layout x),
-                                          " not in scope"])
-
+                | _ => Error.bug (concat
+                                  ["Ssa2.TypeCheck2.checkScopes: reference to ",
+                                   Layout.toString (layout x),
+                                   " not in scope"])
             fun unbind x = set (x, Defined)
          in (bind, ignore o reference, reference, unbind)
          end
@@ -53,8 +54,23 @@ fun checkScopes (program as
       val (bindCon, getCon, _) = make (Con.layout, Con.plist)
       val (bindVar, getVar, getVar', unbindVar) = make' (Var.layout, Var.plist)
       fun getVars xs = Vector.foreach (xs, getVar)
-      val (bindFunc, getFunc, _) = make (Func.layout, Func.plist)
       val (bindLabel, getLabel, unbindLabel) = make (Label.layout, Label.plist)
+      val (bindEntry, _, getEntry', _) = make' (FuncEntry.layout, FuncEntry.plist)
+      val (bindFunc, getFunc, _) = make (Func.layout, Func.plist)
+
+      fun getFuncWithEntry {func, entry} =
+         let
+            val _ = getFunc func
+            val func' = getEntry' entry
+         in
+            if Func.equals (func, func')
+               then ()
+            else Error.bug (concat
+                            ["Ssa2.TypeCheck2.checkScopes: reference to ",
+                             Layout.toString (FuncEntry.layout entry),
+                             " not in scope of ",
+                             Layout.toString (Func.layout func)])
+         end
 
       fun loopObjectCon oc =
          let
@@ -130,7 +146,9 @@ fun checkScopes (program as
       val loopTransfer =
          fn Arith {args, ty, ...} => (getVars args; loopType ty)
           | Bug => ()
-          | Call {func, args, ...} => (getFunc func; getVars args)
+          | Call {func, entry, args, ...} =>
+               (getFuncWithEntry {func = func, entry = entry}
+                ; getVars args)
           | Case {test, cases, default, ...} =>
                let
                   fun doit (cases: ('a * 'b) vector,
@@ -203,29 +221,44 @@ fun checkScopes (program as
                in
                   ()
                end
-            val () = Vector.foreach (entries,
-               fn FunctionEntry.T{args, ...}
-                  => Vector.foreach (args, bindVar)
-               )
+            (* For each dominator tree in the dominator forest that is
+             * the 'start' block of a unique entry, that entry's
+             * argument variables are in scope for the tree.
+             *)
+            fun doitTree (tree as Tree.T (block, _)): unit =
+               let
+                  val Block.T {label, ...} = block
+                  val entryArgs =
+                     let
+                        val predEntries =
+                           Vector.keepAll
+                           (entries, fn entry =>
+                            Label.equals (label, FunctionEntry.start entry))
+                     in
+                        if Vector.length predEntries = 1
+                           then FunctionEntry.args (Vector.sub (predEntries, 0))
+                        else Vector.new0 ()
+                     end
+                  val _ = Vector.foreach (entryArgs, bindVar)
+                  val _ = loop tree
+                  val _ = Vector.foreach (entryArgs, unbindVar o #1)
+               in
+                  ()
+               end
             val _ = Vector.foreach (blocks, bindLabel o Block.label)
             (* Check that 'start' and all transfer labels are in scope.
              * In the case that something is not in scope,
              * "getLabel" gives a more informative error message
              * than the CFG/dominatorTree construction failure.
              *)
-            val () = Vector.foreach (entries,
-               fn FunctionEntry.T{start, ...} => getLabel start
-               )
+            val _ = Vector.foreach
+                    (entries, getLabel o FunctionEntry.start)
             val _ = Vector.foreach
                     (blocks, fn Block.T {transfer, ...} =>
                      Transfer.foreachLabel (transfer, getLabel))
-            (* Decend the dominator tree for each entry point. *)
-            val _ = Vector.foreach (Function.dominatorForest f, loop)
+            (* Decend the dominator forest. *)
+            val _ = Vector.foreach (Function.dominatorForest f, doitTree)
             val _ = Vector.foreach (blocks, unbindLabel o Block.label)
-            val () = Vector.foreach (entries,
-               fn FunctionEntry.T{args, ...}
-                  => Vector.foreach (args, unbindVar o #1)
-               )
             val _ = Option.app (returns, loopTypes)
             val _ = Option.app (raises, loopTypes)
             val _ = Function.clear f
@@ -242,9 +275,19 @@ fun checkScopes (program as
                Vector.foreach (cons, fn {args, ...} =>
                                Prod.foreach (args, loopType)))
       val _ = Vector.foreach (globals, loopStatement)
-      val _ = List.foreach (functions, bindFunc o Function.name)
+      val _ = List.foreach
+              (functions, fn function =>
+               let
+                  val {entries, name, ...} = Function.dest function
+                  val _ =
+                     Vector.foreach
+                     (entries, fn entry =>
+                      bindEntry (FunctionEntry.name entry, name))
+               in
+                  bindFunc name
+               end)
       val _ = List.foreach (functions, loopFunc)
-      val _ = getFunc (#func main)
+      val _ = getFuncWithEntry main
       val _ = Program.clearTop program
       val _ = destroyLoopType ()
    in

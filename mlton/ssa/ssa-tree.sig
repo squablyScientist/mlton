@@ -200,6 +200,7 @@ signature ME_SSA_TREE =
                      start: Label.t
                      }
 
+            val args: t -> (Var.t * Type.t) vector
             val name: t -> FuncEntry.t
             val start: t -> Label.t
          end

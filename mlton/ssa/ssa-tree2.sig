@@ -236,6 +236,8 @@ signature ME_SSA_TREE2 =
                      name: FuncEntry.t,
                      start: Label.t}
 
+            val args: t -> (Var.t * Type.t) vector
+            val name: t -> FuncEntry.t
             val start: t -> Label.t
          end
 
