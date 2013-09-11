@@ -29,9 +29,7 @@ structure LocalRef = MeLocalRef (S)
 structure LoopInvariant = MeLoopInvariant (S)
 structure PolyEqual = MePolyEqual (S)
 structure PolyHash = MePolyHash (S)
-(*
-structure Profile = Profile (S)
-*)
+structure Profile = MeProfile (S)
 structure Redundant = MeRedundant (S)
 structure RedundantTests = MeRedundantTests (S)
 structure RemoveUnused = MeRemoveUnused (S)
@@ -192,19 +190,14 @@ local
 
    val passGens = 
       inlinePassGen ::
-      (List.map([(* TODO: Uncomment as these passes are converted into the multi-entry SSA IL. *)
-                 (*
-                 ("addProfile", Profile.addProfile),
-                 *)
+      (List.map([("addProfile", Profile.addProfile),
                  ("combineConversions",  CombineConversions.transform),
                  ("commonArg", CommonArg.transform),
                  ("commonBlock", CommonBlock.transform),
                  ("commonSubexp", CommonSubexp.transform),
                  ("constantPropagation", ConstantPropagation.transform),
                  ("contify", Contify.transform),
-                 (*
                  ("dropProfile", Profile.dropProfile),
-                 *)
                  ("flatten", Flatten.transform),
                  ("introduceLoops", IntroduceLoops.transform),
                  ("knownCase", KnownCase.transform),
@@ -314,12 +307,9 @@ val simplify = fn p => let
                          val p =
                             if !Control.profile <> Control.ProfileNone
                                andalso !Control.profileIL = Control.ProfileSSA
-                               then
-                                    (* FIXME: Re-introduce profiling *)
-                                    (*pass ({name = "addProfile1",
+                               then pass ({name = "addProfile1",
                                            doit = Profile.addProfile,
-                                           midfix = ""}, p)*)
-                                    Error.bug "SSA Profiling unimplemented"
+                                           midfix = ""}, p)
                             else p
                          val p = maybePass ({name = "orderFunctions1",
                                              doit = S.orderFunctions,

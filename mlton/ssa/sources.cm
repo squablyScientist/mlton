@@ -138,9 +138,13 @@ poly-equal.old.fun
 poly-equal.fun
 poly-hash.old.fun
 poly-hash.fun
+profile.old.sig
 profile.sig
+profile.oldfun
 profile.fun
+profile2.old.sig
 profile2.sig
+profile2.oldfun
 profile2.fun
 redundant-tests.old.fun
 redundant-tests.fun

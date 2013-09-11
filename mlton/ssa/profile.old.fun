@@ -1,21 +1,19 @@
-(* Copyright (C) 2013 Matthew Fluet.
- * Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
+(* Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  *
  * MLton is released under a BSD-style license.
  * See the file MLton-LICENSE for details.
  *)
 
-functor MeProfile2 (S: ME_PROFILE2_STRUCTS): ME_PROFILE2 =
+functor Profile (S: PROFILE_STRUCTS): PROFILE = 
 struct
 
 open S
 
-fun addProfileFunction (f: Function.t)  =
+fun addProfileFunction (f: Function.t) =
    let
-      val {blocks, entries, mayInline, name, raises, returns} =
+      val {args, blocks, mayInline, name, raises, returns, start} =
          Function.dest f
-      val starts = Vector.map (entries, FunctionEntry.start)
       val extraBlocks = ref []
       val siF =
          SourceInfo.function
@@ -51,7 +49,7 @@ fun addProfileFunction (f: Function.t)  =
                          fn () => Vector.new2 (leaveL (), leaveF ()))
                      end
              val enterStmts =
-                if Vector.contains (starts, label, Label.equals)
+                if Label.equals (label, start)
                    then enterFL ()
                 else enterL ()
              fun doitLF () = (leaveLF (), transfer)
@@ -77,7 +75,7 @@ fun addProfileFunction (f: Function.t)  =
                       end
              val (leaveStmts, transfer) =
                 case transfer of
-                   Transfer.Call {func, entry, args, return} =>
+                   Transfer.Call {args, func, return} => 
                       (case return of
                           Return.Dead => doit ()
                         | Return.NonTail {cont, handler} => 
@@ -91,9 +89,8 @@ fun addProfileFunction (f: Function.t)  =
                                                           handler = handler}
                                     in
                                        (leaveL (),
-                                        Transfer.Call {func = func,
-                                                       entry = entry,
-                                                       args = args,
+                                        Transfer.Call {args = args,
+                                                       func = func,
                                                        return = return})
                                     end
                                | Handler.Handle _ => doitL ())
@@ -112,12 +109,13 @@ fun addProfileFunction (f: Function.t)  =
           end)
       val blocks = Vector.concat [Vector.fromList (!extraBlocks), blocks]
    in
-      Function.new {blocks = blocks,
-                    entries = entries,
+      Function.new {args = args,
+                    blocks = blocks,
                     mayInline = mayInline,
                     name = name,
                     raises = raises,
-                    returns = returns}
+                    returns = returns,
+                    start = start}
    end
 
 fun addProfile (Program.T {datatypes, functions, globals, main}) =
@@ -128,7 +126,7 @@ fun addProfile (Program.T {datatypes, functions, globals, main}) =
 
 fun dropProfileFunction f =
    let
-      val {blocks, entries, mayInline, name, raises, returns} =
+      val {args, blocks, mayInline, name, raises, returns, start} =
          Function.dest f
       val blocks =
          Vector.map
@@ -137,16 +135,17 @@ fun dropProfileFunction f =
                    label = label,
                    statements = Vector.keepAll
                                 (statements, 
-                                 fn Statement.Profile _ => false
+                                 fn Statement.T {exp = Exp.Profile _, ...} => false
                                   | _ => true),
                    transfer = transfer})
    in
-      Function.new {blocks = blocks,
-                    entries = entries,
+      Function.new {args = args,
+                    blocks = blocks,
                     mayInline = mayInline,
                     name = name,
                     raises = raises,
-                    returns = returns}
+                    returns = returns,
+                    start = start}
    end
 
 fun dropProfile (Program.T {datatypes, globals, functions, main}) =

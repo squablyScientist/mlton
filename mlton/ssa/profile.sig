@@ -1,4 +1,5 @@
-(* Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
+(* Copyright (C) 2013 Matthew Fluet.
+ * Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  *
  * MLton is released under a BSD-style license.
@@ -6,14 +7,14 @@
  *)
 
 
-signature PROFILE_STRUCTS = 
+signature ME_PROFILE_STRUCTS =
    sig
-      include SHRINK
+      include ME_SHRINK
    end
 
-signature PROFILE = 
+signature ME_PROFILE =
    sig
-      include PROFILE_STRUCTS
+      include ME_PROFILE_STRUCTS
 
       val addProfile: Program.t -> Program.t
       val dropProfile: Program.t -> Program.t
