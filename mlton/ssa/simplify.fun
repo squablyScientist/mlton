@@ -25,9 +25,7 @@ structure Inline = MeInline (S)
 structure IntroduceLoops = MeIntroduceLoops (S)
 structure KnownCase = MeKnownCase (S)
 structure LocalFlatten = MeLocalFlatten (S)
-(*
-structure LocalRef = LocalRef (S)
-*)
+structure LocalRef = MeLocalRef (S)
 structure LoopInvariant = MeLoopInvariant (S)
 structure PolyEqual = MePolyEqual (S)
 structure PolyHash = MePolyHash (S)
@@ -44,7 +42,6 @@ type pass = {name: string,
              doit: Program.t -> Program.t}
 
 val ssaPassesDefault =
-   (* TODO: Uncomment as these passes are converted into the multi-entry SSA IL. *)
    {name = "duplicateEntries", doit = DuplicateEntries.transform} ::
    {name = "removeUnused1", doit = RemoveUnused.transform} ::
    {name = "introduceLoops1", doit = IntroduceLoops.transform} ::
@@ -83,9 +80,7 @@ val ssaPassesDefault =
    {name = "contify3", doit = Contify.transform} ::
    {name = "introduceLoops3", doit = IntroduceLoops.transform} ::
    {name = "loopInvariant3", doit = LoopInvariant.transform} ::
-   (*
    {name = "localRef", doit = LocalRef.transform} ::
-   *)
    {name = "flatten", doit = Flatten.transform} ::
    {name = "localFlatten3", doit = LocalFlatten.transform} ::
    {name = "combineConversions", doit = CombineConversions.transform} ::
@@ -214,9 +209,7 @@ local
                  ("introduceLoops", IntroduceLoops.transform),
                  ("knownCase", KnownCase.transform),
                  ("localFlatten", LocalFlatten.transform),
-                 (*
                  ("localRef", LocalRef.transform),
-                 *)
                  ("loopInvariant", LoopInvariant.transform),
                  ("polyEqual", PolyEqual.transform),
                  ("polyHash", PolyHash.transform),

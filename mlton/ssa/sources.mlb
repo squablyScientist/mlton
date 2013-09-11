@@ -112,6 +112,7 @@ local
    known-case.fun
    local-flatten.old.fun
    local-flatten.fun
+   local-ref.old.fun
    local-ref.fun
    loop-invariant.old.fun
    loop-invariant.fun
