@@ -23,9 +23,7 @@ structure Flatten = MeFlatten (S)
 structure DuplicateEntries = MeDuplicateEntries (S)
 structure Inline = MeInline (S)
 structure IntroduceLoops = MeIntroduceLoops (S)
-(*
-structure KnownCase = KnownCase (S)
-*)
+structure KnownCase = MeKnownCase (S)
 structure LocalFlatten = MeLocalFlatten (S)
 (*
 structure LocalRef = LocalRef (S)
@@ -96,9 +94,7 @@ val ssaPassesDefault =
    {name = "commonBlock", doit = CommonBlock.transform} ::
    {name = "redundantTests", doit = RedundantTests.transform} ::
    {name = "redundant", doit = Redundant.transform} ::
-   (*
    {name = "knownCase", doit = KnownCase.transform} ::
-   *)
    {name = "removeUnused4", doit = RemoveUnused.transform} ::
    nil
 
@@ -216,9 +212,7 @@ local
                  *)
                  ("flatten", Flatten.transform),
                  ("introduceLoops", IntroduceLoops.transform),
-                 (*
                  ("knownCase", KnownCase.transform),
-                 *)
                  ("localFlatten", LocalFlatten.transform),
                  (*
                  ("localRef", LocalRef.transform),

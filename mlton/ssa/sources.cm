@@ -126,6 +126,7 @@ inline.sig
 inline.fun
 introduce-loops.old.fun
 introduce-loops.fun
+known-case.old.fun
 known-case.fun
 local-flatten.old.fun
 local-flatten.fun

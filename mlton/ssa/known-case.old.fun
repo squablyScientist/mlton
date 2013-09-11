@@ -1,5 +1,4 @@
-(* Copyright (C) 2013 Matthew Fluet.
- * Copyright (C) 2009 Matthew Fluet.
+(* Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 1999-2006 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -8,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor MeKnownCase (S: ME_SSA_TRANSFORM_STRUCTS): ME_SSA_TRANSFORM =
+functor KnownCase (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM =
 struct
 
 open S
@@ -399,7 +398,7 @@ fun transform (Program.T {globals, datatypes, functions, main})
         = List.revMap
           (functions, fn f =>
            let
-             val {blocks, entries, mayInline, name, raises, returns} =
+             val {args, blocks, mayInline, name, raises, returns, start} =
                 Function.dest f
              val _ = Vector.foreach
                      (blocks, fn block as Block.T {label, ...} =>
@@ -986,7 +985,7 @@ val doMany
                   Block.layout)
                  rewriteBlock
 
-             fun doitForest trees
+             fun doitTree tree
                = let
                    fun loop (Tree.T (block, children))
                      = let
@@ -997,26 +996,20 @@ val doMany
                          Vector.foreach (children, loop) ;
                          post ()
                        end
-                   val _ = Vector.foreach (trees, loop)
+                   val _ = loop tree
                  in
                    Vector.fromListRev (!newBlocks)
                  end
-             (* Although it is not the case that all arguments of all
-              * entries are in scope for all trees in the dominator
-              * forest (see comments in type-check.fun), in a
-              * well-scoped program, binding all arguments of all
-              * entries before visiting the trees of the dominator
-              * forest is valid.
-              *)
-             val _ = Vector.foreach (entries, bindVarArgs o FunctionEntry.args)
-             val blocks = doitForest (Function.dominatorForest f)
+             val _ = bindVarArgs args
+             val blocks = doitTree (Function.dominatorTree f)
 
-             val f = Function.new {blocks = blocks,
-                                   entries = entries,
+             val f = Function.new {args = args,
+                                   blocks = blocks,
                                    mayInline = mayInline,
                                    name = name,
                                    raises = raises,
-                                   returns = returns}
+                                   returns = returns,
+                                   start = start}
              val _ = Control.diagnostics
                      (fn display =>
                       display (Function.layout f))
