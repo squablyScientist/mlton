@@ -1,4 +1,5 @@
-(* Copyright (C) 2009 Matthew Fluet.
+(* Copyright (C) 2013 Matthew Fluet.
+ * Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 1999-2005, 2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -50,7 +51,7 @@
  * where all uses of t are replaced by u array.
  *)
 
-functor SimplifyTypes (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM = 
+functor MeSimplifyTypes (S: ME_SSA_TRANSFORM_STRUCTS): ME_SSA_TRANSFORM =
 struct
 
 open S
@@ -579,9 +580,9 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                                        success = success,
                                        ty = ty})
           | Bug => (Vector.new0 (), t)
-          | Call {func, args, return} =>
+          | Call {entry, func, args, return} =>
                (Vector.new0 (),
-                Call {func = func, return = return,
+                Call {entry = entry, func = func, return = return,
                       args = removeUselessVars args})
           | Case {test, cases = Cases.Con cases, default} =>
                let
@@ -702,9 +703,13 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
          end
       fun simplifyFunction f =
          let
-            val {args, mayInline, name, raises, returns, start, ...} =
+            val {entries, mayInline, name, raises, returns, ...} =
                Function.dest f
-             val args = simplifyFormals args
+             val entries =
+                Vector.map (entries, fn FunctionEntry.T {args, name, start} =>
+                            FunctionEntry.T {args = simplifyFormals args,
+                                             name = name,
+                                             start = start})
              val blocks = ref []
              val _ =
                 Function.dfs (f, fn block =>
@@ -713,13 +718,12 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
              val returns = Option.map (returns, keepSimplifyTypes)
              val raises = Option.map (raises, keepSimplifyTypes)
          in
-            Function.new {args = args,
-                          blocks = Vector.fromList (!blocks),
+            Function.new {blocks = Vector.fromList (!blocks),
+                          entries = entries,
                           mayInline = mayInline,
                           name = name,
                           raises = raises,
-                          returns = returns,
-                          start = start}
+                          returns = returns}
          end
       val globals =
          Vector.concat

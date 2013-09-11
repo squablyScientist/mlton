@@ -1,4 +1,5 @@
-(* Copyright (C) 1999-2005 Henry Cejtin, Matthew Fluet, Suresh
+(* Copyright (C) 2013 Matthew Fluet.
+ * Copyright (C) 1999-2005 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
@@ -6,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor LocalRef (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM = 
+functor MeLocalRef (S: ME_SSA_TRANSFORM_STRUCTS): ME_SSA_TRANSFORM =
 struct
 
 open S
@@ -137,7 +138,7 @@ structure LabelInfo =
                        visited = ref false}
   end
 
-structure Multi = Multi (S)
+structure Multi = MeMulti (S)
 
 fun transform (program: Program.t): Program.t =
    let
@@ -263,7 +264,7 @@ fun transform (program: Program.t): Program.t =
           (Label.plist, Property.initRaise ("localRef.labelInfo", Label.layout))
       fun rewrite (f: Function.t, refs): Function.t =
          let
-            val {args, blocks, mayInline, name, raises, returns, start} =
+            val {blocks, entries, mayInline, name, raises, returns} =
                Function.dest f
             (* Diagnostics *)
             val _ =
@@ -353,13 +354,12 @@ fun transform (program: Program.t): Program.t =
                              transfer = transfer}
                  end
             val blocks = Vector.map (blocks, rewriteBlock)
-            val f = Function.new {args = args,
-                                  blocks = blocks,
+            val f = Function.new {blocks = blocks,
+                                  entries = entries,
                                   mayInline = mayInline,
                                   name = name,
                                   raises = raises,
-                                  returns = returns,
-                                  start = start}
+                                  returns = returns}
             val f = restore f
             val f = shrink f
          in
@@ -377,26 +377,36 @@ fun transform (program: Program.t): Program.t =
                    then f
                 else
                    let
-                      val {args, blocks, mayInline, name, raises, returns,
-                           start} = Function.dest f
+                      val {blocks, entries, mayInline, name, raises, returns} =
+                         Function.dest f
                       val locals = Vector.fromListRev locals
-                      val localsLabel = Label.newNoname ()
-                      val localsBlock =
-                         Block.T {label = localsLabel,
-                                  args = Vector.new0 (),
-                                  statements = locals,
-                                  transfer = Goto {dst = start,
-                                                   args = Vector.new0 ()}}
+                      val (entries, localsBlocks) =
+                         (Vector.unzip o Vector.map)
+                         (entries, fn FunctionEntry.T {name, args, start} =>
+                          let
+                             val localsLabel = Label.newNoname ()
+                             val entry =
+                                FunctionEntry.T {name = name,
+                                                 args = args,
+                                                 start = localsLabel}
+                             val localsBlock =
+                                Block.T {label = localsLabel,
+                                         args = Vector.new0 (),
+                                         statements = locals,
+                                         transfer = Goto {dst = start,
+                                                          args = Vector.new0 ()}}
+                          in
+                             (entry, localsBlock)
+                          end)
                       val blocks =
-                         Vector.concat [Vector.new1 localsBlock, blocks]
+                         Vector.concat [localsBlocks, blocks]
                    in
-                      Function.new {args = args,
-                                    blocks = blocks,
+                      Function.new {blocks = blocks,
+                                    entries = entries,
                                     mayInline = mayInline,
                                     name = name,
                                     raises = raises,
-                                    returns = returns,
-                                    start = localsLabel}
+                                    returns = returns}
                    end
              (* Find all localizable refs. *)
              val refs = ref []

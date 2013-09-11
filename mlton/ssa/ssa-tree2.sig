@@ -1,4 +1,5 @@
-(* Copyright (C) 2009 Matthew Fluet.
+(* Copyright (C) 2013 Matthew Fluet, David Larsen.
+ * Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -232,9 +233,12 @@ signature ME_SSA_TREE2 =
          sig
             datatype t =
                T of {args: (Var.t * Type.t) vector,
-                     function: Func.t,
                      name: FuncEntry.t,
                      start: Label.t}
+
+            val args: t -> (Var.t * Type.t) vector
+            val name: t -> FuncEntry.t
+            val start: t -> Label.t
          end
 
       structure Function:
@@ -268,7 +272,7 @@ signature ME_SSA_TREE2 =
             val layoutDot:
                t * (Var.t -> string option) -> {destroy: unit -> unit,
                                                 graph: Layout.t,
-                                                tree: unit -> Layout.t}
+                                                forest: unit -> Layout.t}
             val name: t -> Func.t
             val new: {blocks: Block.t vector,
                       entries: FunctionEntry.t vector,
@@ -285,7 +289,7 @@ signature ME_SSA_TREE2 =
                T of {datatypes: Datatype.t vector,
                      functions: Function.t list,
                      globals: Statement.t vector,
-                     main: FuncEntry.t (* Must be nullary. *)}
+                     main: {entry: FuncEntry.t, func: Func.t} (* Must be nullary. *)}
 
             val clear: t -> unit
             val clearTop: t -> unit
@@ -300,7 +304,5 @@ signature ME_SSA_TREE2 =
             val hasPrim: t * (Type.t Prim.t -> bool) -> bool
             val layouts: t * (Layout.t -> unit) -> unit
             val layoutStats: t -> Layout.t
-            val mainFunction: t -> Function.t
-            val mainFunctionEntry: t -> FunctionEntry.t
          end
    end

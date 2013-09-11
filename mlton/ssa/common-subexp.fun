@@ -1,4 +1,5 @@
-(* Copyright (C) 2009,2011 Matthew Fluet.
+(* Copyright (C) 2013 Matthew Fluet.
+ * Copyright (C) 2009,2011 Matthew Fluet.
  * Copyright (C) 1999-2006 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -7,7 +8,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor CommonSubexp (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM = 
+functor MeCommonSubexp (S: ME_SSA_TRANSFORM_STRUCTS): ME_SSA_TRANSFORM =
 struct
 
 open S
@@ -123,7 +124,7 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
              ()
           end)
 
-      fun doitTree tree =
+      fun doitForest forest =
          let
             val blocks = ref []
             fun loop (Tree.T (Block.T {args, label,
@@ -324,7 +325,7 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
                in
                  display (seq [str "starting loop"])
                end)
-            val _ = loop tree
+            val _ = Vector.foreach (forest, fn tree => loop tree)
             val _ =
               Control.diagnostics
               (fn display =>
@@ -340,7 +341,7 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
          List.revMap
          (functions, fn f =>
           let
-             val {args, blocks, mayInline, name, raises, returns, start} =
+             val {blocks, entries, mayInline, name, raises, returns} =
                 Function.dest f
              val _ =
                 Vector.foreach
@@ -353,15 +354,14 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
                 (blocks, fn Block.T {transfer, ...} =>
                  Transfer.foreachLabel (transfer, fn label' =>
                                         Int.inc (#inDeg (labelInfo label'))))
-             val blocks = doitTree (Function.dominatorTree f)
+             val blocks = doitForest (Function.dominatorForest f)
           in
-             shrink (Function.new {args = args,
-                                   blocks = blocks,
+             shrink (Function.new {blocks = blocks,
+                                   entries = entries,
                                    mayInline = mayInline,
                                    name = name,
                                    raises = raises,
-                                   returns = returns,
-                                   start = start})
+                                   returns = returns})
           end)
       val program =
          Program.T {datatypes = datatypes,

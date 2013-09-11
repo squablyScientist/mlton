@@ -1,4 +1,5 @@
-(* Copyright (C) 2009 Matthew Fluet.
+(* Copyright (C) 2013 Matthew Fluet.
+ * Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -7,7 +8,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor Useless (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM = 
+functor MeUseless (S: ME_SSA_TRANSFORM_STRUCTS): ME_SSA_TRANSFORM =
 struct
 
 open S
@@ -560,7 +561,7 @@ fun transform (program: Program.t): Program.t =
              layout)
             primApp
       end
-      val {value, func, label, ...} =
+      val {value, func, entry, label, ...} =
          analyze {
                   coerce = Value.coerce,
                   conApp = conApp,
@@ -637,13 +638,22 @@ fun transform (program: Program.t): Program.t =
                 List.foreach
                 (functions, fn f =>
                  let
-                    val {name, ...} = Function.dest f
+                    val {name, entries, ...} = Function.dest f
                     val _ = display (seq [str "Useless info for ",
                                           Func.layout name])
-                    val {args, returns, raises} = func name
+                    val {returns, raises, ...} = func name
                     val _ =
                        display
-                       (record [("args", Vector.layout Value.layout args),
+                       (record [("entries",
+                                 Vector.layout
+                                 (fn FunctionEntry.T {name, ...} =>
+                                  let
+                                     val args = entry name
+                                  in
+                                     record [("entry", FuncEntry.layout name),
+                                             ("args", Vector.layout Value.layout args)]
+                                  end)
+                                 entries),
                                 ("returns",
                                  Option.layout (Vector.layout Value.layout)
                                  returns),
@@ -880,9 +890,10 @@ fun transform (program: Program.t): Program.t =
                        end
                end
           | Bug => ([], Bug)
-          | Call {func = f, args, return} =>
+          | Call {func = f, entry = e, args, return} =>
                let
-                  val {args = fargs, returns = freturns, ...} = func f
+                  val {returns = freturns, ...} = func f
+                  val eargs = entry e
                   val (blocks, return) =
                      case return of
                         Return.Dead => ([], return)
@@ -923,7 +934,8 @@ fun transform (program: Program.t): Program.t =
                                   end)
                in (blocks,
                    Call {func = f, 
-                         args = keepUseful (args, fargs), 
+                         entry = e,
+                         args = keepUseful (args, eargs),
                          return = return})
                end
           | Case {test, cases, default} => 
@@ -1003,9 +1015,14 @@ fun transform (program: Program.t): Program.t =
          doitBlock
       fun doitFunction f =
          let
-            val {args, blocks, mayInline, name, start, ...} = Function.dest f
+            val {blocks, entries, mayInline, name, ...} = Function.dest f
+            val entries =
+               Vector.map
+               (entries, fn FunctionEntry.T {args, name, start} =>
+                FunctionEntry.T {args = keepUsefulArgs args,
+                                 name = name,
+                                 start = start})
             val {returns = returnvs, raises = raisevs, ...} = func name
-            val args = keepUsefulArgs args
             val (blocks, blocks') =
                Vector.mapAndFold
                (blocks, [], fn (block, blocks') =>
@@ -1017,13 +1034,12 @@ fun transform (program: Program.t): Program.t =
             val returns = Option.map (returnvs, Value.newTypes)
             val raises = Option.map (raisevs, Value.newTypes)
          in
-            Function.new {args = args,
-                          blocks = blocks,
+            Function.new {blocks = blocks,
+                          entries = entries,
                           mayInline = mayInline,
                           name = name,
                           raises = raises,
-                          returns = returns,
-                          start = start}
+                          returns = returns}
          end
       val datatypes =
          Vector.map

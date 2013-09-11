@@ -4,15 +4,14 @@
  * See the file MLton-LICENSE for details.
  *)
 
-
-signature SSA2_TRANSFORM_STRUCTS = 
+signature ME_SSA2_TRANSFORM_STRUCTS =
    sig
-      include SHRINK2
+      include ME_SHRINK2
    end
 
-signature SSA2_TRANSFORM = 
+signature ME_SSA2_TRANSFORM =
    sig
-      include SSA2_TRANSFORM_STRUCTS
+      include ME_SSA2_TRANSFORM_STRUCTS
 
       val transform2: Program.t -> Program.t
    end

@@ -1,10 +1,11 @@
-(* Copyright (C) 2009 Wesley W. Tersptra.
+(* Copyright (C) 2013 Matthew Fluet.
+ * Copyright (C) 2009 Wesley W. Tersptra.
  *
  * MLton is released under a BSD-style license.
  * See the file MLton-LICENSE for details.
  *)
 
-functor CombineConversions (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM =
+functor MeCombineConversions (S: ME_SSA_TRANSFORM_STRUCTS): ME_SSA_TRANSFORM =
 struct
 
 open S
@@ -121,7 +122,7 @@ fun transform program =
              val () = Function.dfs (f, markBlock)
 
              (* Map the statements using the marks *)
-             val {args, blocks, mayInline, name, raises, returns, start} =
+             val {blocks, entries, mayInline, name, raises, returns} =
                 Function.dest f
 
              fun mapBlock block =
@@ -135,13 +136,12 @@ fun transform program =
                 end
 
              val f =
-                Function.new {args = args,
-                              blocks = Vector.map (blocks, mapBlock),
+                Function.new {blocks = Vector.map (blocks, mapBlock),
+                              entries = entries,
                               mayInline = mayInline,
                               name = name,
                               raises = raises,
-                              returns = returns,
-                              start = start}
+                              returns = returns}
 
              val f = shrink f
           in

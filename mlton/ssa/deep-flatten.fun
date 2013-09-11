@@ -1,4 +1,5 @@
-(* Copyright (C) 2009 Matthew Fluet.
+(* Copyright (C) 2013 Matthew Fluet.
+ * Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 2004-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  *
@@ -6,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor DeepFlatten (S: SSA2_TRANSFORM_STRUCTS): SSA2_TRANSFORM = 
+functor MeDeepFlatten (S: ME_SSA2_TRANSFORM_STRUCTS): ME_SSA2_TRANSFORM =
 struct
 
 open S
@@ -755,8 +756,9 @@ fun transform2 (program as Program.T {datatypes, functions, globals, main}) =
          List.foreach
          (functions, fn f =>
           let
-             val {args, blocks, ...} = Function.dest f
-             val () = dontFlattenFormals args
+             val {blocks, entries, ...} = Function.dest f
+             val () = Vector.foreach (entries, fn FunctionEntry.T {args, ...} =>
+                                      dontFlattenFormals args)
              val () = Vector.foreach (blocks, fn Block.T {args, ...} =>
                                       dontFlattenFormals args)
           in
@@ -1037,9 +1039,14 @@ fun transform2 (program as Program.T {datatypes, functions, globals, main}) =
                   transfer = transformTransfer transfer}
       fun transformFunction (f: Function.t): Function.t =
           let
-             val {args, mayInline, name, start, ...} = Function.dest f
+             val {entries, mayInline, name, ...} = Function.dest f
              val {raises, returns, ...} = func name
-             val args = transformFormals args
+             val entries =
+                Vector.map
+                (entries, fn FunctionEntry.T {args, name, start} =>
+                 FunctionEntry.T {args = transformFormals args,
+                                  name = name,
+                                  start = start})
              val raises = Option.map (raises, valuesTypes)
              val returns = Option.map (returns, valuesTypes)
              val blocks = ref []
@@ -1048,13 +1055,12 @@ fun transform2 (program as Program.T {datatypes, functions, globals, main}) =
                               (List.push (blocks, transformBlock b)
                                ; fn () => ()))
           in
-             Function.new {args = args,
-                           blocks = Vector.fromList (!blocks),
+             Function.new {blocks = Vector.fromList (!blocks),
+                           entries = entries,
                            mayInline = mayInline,
                            name = name,
                            raises = raises,
-                           returns = returns,
-                           start = start}
+                           returns = returns}
           end
       val globals = transformStatements globals
       val functions = List.revMap (functions, transformFunction)

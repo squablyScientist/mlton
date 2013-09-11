@@ -7,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor CommonArg (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM = 
+functor MeCommonArg (S: ME_SSA_TRANSFORM_STRUCTS): ME_SSA_TRANSFORM =
 struct
 
 open S
@@ -187,7 +187,7 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
          List.revMap
          (functions, fn f =>
           let
-             val {args, blocks, mayInline, name, start, raises, returns} =
+             val {blocks, entries, mayInline, name, raises, returns} =
                 Function.dest f
              val blocks = 
                 Vector.map
@@ -225,11 +225,10 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                              transfer = transfer}
                  end)
           in
-             shrink (Function.new {args = args,
-                                   blocks = blocks,
+             shrink (Function.new {blocks = blocks,
+                                   entries = entries,
                                    mayInline = mayInline,
                                    name = name,
-                                   start = start,
                                    raises = raises,
                                    returns = returns})
           end)

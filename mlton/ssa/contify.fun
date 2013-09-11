@@ -12,7 +12,7 @@
  * Contification Using Dominators, by Fluet and Weeks.  ICFP 2001.
  *)
 
-functor Contify (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM = 
+functor MeContify (S: ME_SSA_TRANSFORM_STRUCTS): ME_SSA_TRANSFORM =
 struct
 
 open S
@@ -88,8 +88,7 @@ structure FuncData =
                        A: Areturn.t ref,
                        prefixes: Func.t list ref,
                        finished: bool ref,
-                       replace: {label: Label.t,
-                                 blocks: Block.t list} option ref,
+                       replace: {blocks: Block.t list} option ref,
                        contified: Block.t list list ref}
 
     fun new () = T {node = ref NONE,
@@ -281,7 +280,7 @@ structure InitReachCallersCallees =
           val dfs_param
             = DfsParam.finishNode
               (fn n => FuncData.reach' (getFuncData (getNodeInfo n)) := true)
-          val fm_node = getFuncNode fm
+          val fm_node = getFuncNode (#func fm)
         in
           Graph.dfsNodes (G, [fm_node], dfs_param);
           reset (fn _ => true)
@@ -333,7 +332,7 @@ structure AnalyzeDom =
           val Root = DirectedGraph.newNode G
 
           fun buildGraph () = let
-          val fm_node = getFuncNode fm
+          val fm_node = getFuncNode (#func fm)
           (* {(Root, fm)} *)
           val _ = addEdge {from = Root, to = fm_node}
           (* { (Root, f) | fm calls f } *)
@@ -499,6 +498,12 @@ structure Transform =
       = let
           datatype z = datatype Areturn.t
 
+          val {get = entryToLabel : FuncEntry.t -> Label.t,
+               set = setEntryToLabel, ...}
+            = Property.getSetOnce
+              (FuncEntry.plist,
+               Property.initRaise ("entryToLabel", FuncEntry.layout))
+
           (* For functions turned into continuations,
            *  record their args, blocks, and new name.
            *)
@@ -508,9 +513,8 @@ structure Transform =
                fn func
                 => let
                      val {name = f, 
-                          args = f_args, 
+                          entries = f_entries,
                           blocks = f_blocks, 
-                          start = f_start,
                           ...} = Function.dest func
                      val FuncData.T {A, replace, ...} = getFuncData f
 
@@ -526,24 +530,37 @@ structure Transform =
 
                      fun contify prefixes
                        = let
-                           val f_label = Label.newString (Func.originalName f)
-                           val _ = Control.diagnostics
-                                   (fn display 
-                                     => let open Layout
-                                        in display (seq [Func.layout f,
-                                                         str " -> ",
-                                                         Label.layout f_label])
-                                        end)
-                           val f_blocks 
-                             = (Block.T {label = f_label,
-                                         args = f_args,
-                                         statements = Vector.new0 (),
-                                         transfer = Goto {dst = f_start,
-                                                          args = Vector.new0 ()}})::
-                               (Vector.toList f_blocks)
-                         in 
-                           replace := SOME {label = f_label,
-                                            blocks = f_blocks} ;
+                           val f_name = Func.originalName f
+                           val e_blocks =
+                              Vector.map
+                              (f_entries,
+                               fn FunctionEntry.T {name = e, args = e_args, start = e_start} =>
+                               let
+                                  val e_name = FuncEntry.originalName e
+                                  val fe_label = Label.newString (f_name ^ "$" ^ e_name)
+                                  val _ = Control.diagnostics
+                                          (fn display
+                                           => let open Layout
+                                              in display (seq [Func.layout f,
+                                                               str "@",
+                                                               FuncEntry.layout e,
+                                                               str " -> ",
+                                                               Label.layout fe_label])
+                                              end)
+                                  val _ = setEntryToLabel (e, fe_label)
+                               in
+                                  Block.T {label = fe_label,
+                                           args = e_args,
+                                           statements = Vector.new0 (),
+                                           transfer = Goto {dst = e_start,
+                                                            args = Vector.new0 ()}}
+                               end)
+                           val blocks =
+                              List.append
+                              (Vector.toList e_blocks,
+                               Vector.toList f_blocks)
+                         in
+                           replace := SOME {blocks = blocks} ;
                            List.push(prefixes, f)
                          end
                    in
@@ -648,16 +665,17 @@ structure Transform =
              let
                 val transfer
                   = case transfer
-                      of Call {func, args, return}
+                      of Call {func, entry, args, return}
                        => ((case return of
                                Return.NonTail r => addContPrefixes (f, r, c)
                              | _ => ());
                            case FuncData.replace (getFuncData func) of
                               NONE => Call {func = func,
+                                            entry = entry,
                                             args = args,
                                             return = Return.compose (c, return)}
-                            | SOME {label, ...} =>
-                                 Goto {dst = label, args = args})
+                            | SOME _ =>
+                                 Goto {dst = entryToLabel entry, args = args})
                        | Return xs
                        => (case c
                              of Return.NonTail {cont, ...}
@@ -682,13 +700,12 @@ structure Transform =
             = List.fold
               (functions, [], fn (func, ac) =>
                let
-                  val {args = f_args, 
-                       blocks = f_blocks,
+                  val {blocks = f_blocks,
+                       entries = f_entries,
                        mayInline = f_mayInline,
                        name = f, 
                        raises = f_raises,
-                       returns = f_returns,
-                       start = f_start} = Function.dest func
+                       returns = f_returns} = Function.dest func
                in
                   case FuncData.A (getFuncData f)
                      of Unknown
@@ -704,13 +721,12 @@ structure Transform =
                               val f_blocks
                                  = Vector.fromList (List.concat f_blocks)
                            in 
-                              shrink (Function.new {args = f_args,
-                                                    blocks = f_blocks,
+                              shrink (Function.new {blocks = f_blocks,
+                                                    entries = f_entries,
                                                     mayInline = f_mayInline,
                                                     name = f,
                                                     raises = f_raises,
-                                                    returns = f_returns,
-                                                    start = f_start})
+                                                    returns = f_returns})
                               :: ac
                            end
                       | _ => ac

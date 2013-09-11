@@ -1,4 +1,5 @@
-(* Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
+(* Copyright (C) 2013 Matthew Fluet, David Larsen.
+ * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
@@ -16,11 +17,7 @@ open S
 (* structure CommonSubexp = CommonSubexp (S) *)
 (* structure ConstantPropagation = ConstantPropagation (S) *)
 (* structure Contify = Contify (S) *)
-
-(* TODO: Convert to multi-entry, then re-enable.
-structure DeepFlatten = DeepFlatten (S)
-*)
-
+structure DeepFlatten = MeDeepFlatten (S)
 (* structure Flatten = Flatten (S) *)
 (* structure Inline = Inline (S) *)
 (* structure IntroduceLoops = IntroduceLoops (S) *)
@@ -29,19 +26,11 @@ structure DeepFlatten = DeepFlatten (S)
 (* structure LocalRef = LocalRef (S) *)
 (* structure LoopInvariant = LoopInvariant (S) *)
 (* structure PolyEqual = PolyEqual (S) *)
-
-(* TODO: Convert to multi-entry, then re-enable.
-structure Profile2 = Profile2 (S)
-*)
-
+structure Profile2 = MeProfile2 (S)
 (* structure Redundant = Redundant (S) *)
 (* structure RedundantTests = RedundantTests (S) *)
-
-(* TODO: Convert to multi-entry, then re-enable.
-structure RefFlatten = RefFlatten (S)
-structure RemoveUnused2 = RemoveUnused2 (S)
-*)
-
+structure RefFlatten = MeRefFlatten (S)
+structure RemoveUnused2 = MeRemoveUnused2 (S)
 (* structure SimplifyTypes = SimplifyTypes (S) *)
 (* structure Useless = Useless (S) *)
 
@@ -54,9 +43,9 @@ type pass = {name: string,
 
 (* TODO: Re-enable passes as they're converted to multi-entry. *)
 val ssa2PassesDefault = 
-   (* {name = "deepFlatten", doit = DeepFlatten.transform2} :: *)
-   (* {name = "refFlatten", doit = RefFlatten.transform2} :: *)
-   (* {name = "removeUnused5", doit = RemoveUnused2.transform2} :: *)
+   {name = "deepFlatten", doit = DeepFlatten.transform2} ::
+   {name = "refFlatten", doit = RefFlatten.transform2} ::
+   {name = "removeUnused5", doit = RemoveUnused2.transform2} ::
    (* {name = "zone", doit = Zone.transform2} :: *)
    nil
 
@@ -80,11 +69,11 @@ local
 
    (* TODO: Re-enable passes as they're converted to multi-entry. *)
    val passGens = 
-      List.map([(* ("addProfile", Profile2.addProfile), *)
-                (* ("deepFlatten", DeepFlatten.transform2), *)
-                (* ("dropProfile", Profile2.dropProfile), *)
-                (* ("refFlatten", RefFlatten.transform2), *)
-                (* ("removeUnused", RemoveUnused2.transform2),  *)
+      List.map([("addProfile", Profile2.addProfile),
+                ("deepFlatten", DeepFlatten.transform2),
+                ("dropProfile", Profile2.dropProfile),
+                ("refFlatten", RefFlatten.transform2),
+                ("removeUnused", RemoveUnused2.transform2),
                 (* ("zone", Zone.transform2), *)
                 ("eliminateDeadBlocks",S.eliminateDeadBlocks),
                 ("orderFunctions",S.orderFunctions),
@@ -180,12 +169,9 @@ val simplify = fn p => let
                          val p =
                             if !Control.profile <> Control.ProfileNone
                                andalso !Control.profileIL = Control.ProfileSSA2
-                               then
-                                    (* FIXME: Re-introduce profiling *)
-                                    (*pass ({name = "addProfile2",
+                               then pass ({name = "addProfile2",
                                            doit = Profile2.addProfile,
-                                           midfix = ""}, p)*)
-                                    Error.bug "SSA2 Profiling unimplemented"
+                                           midfix = ""}, p)
                             else p
                          val p = maybePass ({name = "orderFunctions2",
                                              doit = S.orderFunctions,

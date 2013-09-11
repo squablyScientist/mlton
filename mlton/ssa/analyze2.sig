@@ -1,4 +1,5 @@
-(* Copyright (C) 2009 Matthew Fluet.
+(* Copyright (C) 2013 Matthew Fluet, David Larsen.
+ * Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -46,10 +47,9 @@ signature ME_ANALYZE2 =
                    offset: int,
                    value: 'a} -> unit,
           useFromTypeOnBinds: bool}
-         -> {func: Func.t -> {entries: FuncEntry.t vector,
-                              raises: 'a vector option,
+         -> {func: Func.t -> {raises: 'a vector option,
                               returns: 'a vector option},
-             funcEntry: FuncEntry.t -> {args: 'a vector},
+             entry: FuncEntry.t -> 'a vector,
              label: Label.t -> 'a vector,
              value: Var.t -> 'a}
    end

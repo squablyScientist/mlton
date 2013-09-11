@@ -1,4 +1,4 @@
-(* Copyright (C) 2013 David Larsen.
+(* Copyright (C) 2013 Matthew Fluet, David Larsen.
  * Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
@@ -271,7 +271,7 @@ fun restoreFunction {globals: Statement.t vector}
         (* also computes preds, defs, and uses *)
         val dtindex = ref 0
         fun doitTree (Tree.T (Block.T {label, args, statements, transfer},
-                              children)) : unit
+                              children))
           = let
               val li = labelInfo label
 
@@ -363,47 +363,51 @@ fun restoreFunction {globals: Statement.t vector}
               ()
             end
 
-        (* Build the dominator forest for the function as given to us. *)
-        val df = Function.dominatorForest f
-
-        (* For each entry, build a new block that jumps to the old entry
-         * point.  Add this to the root of the dominator tree for that
-         * particular entry point (since there should be one tree per entry
-         * point). *)
-        val entryBlocks = Vector.map
-            (entries,
-            fn entry as FunctionEntry.T{args, start, ...} =>
-               let
-                  val entryBlock =
-                     Block.T {label = Label.newNoname (),
-                              args = args,
-                              statements = Vector.new0 (),
-                              transfer = Goto {dst = start,
-                                               args = Vector.new0 ()}}
-
-                  (* Grab the dominator tree for this entry point *)
-                  val dt_index = Vector.index
-                     (df,
-                     fn Tree.T(Block.T{label, ...}, _) =>
-                        Label.equals (start, label)
-                     )
-               in
-                  case dt_index of
-                     SOME i =>
-                        let
-                           (* Add the new entry block to the top of the
-                            * dominator tree and process it. *)
-                           val dt = Vector.sub (df, i)
-                           val () = doitTree (Tree.T (entryBlock, Vector.new1 dt))
-                        in
-                           {newEntryBlock = entryBlock, functionEntry = entry}
-                        end
-                  |  NONE  => Error.bug ("Restore.restoreFunction: dominator" ^
-                                         " forest missing a tree with " ^
-                                         (Label.toString start) ^
-                                         " at the root")
-               end
-            )
+        (* compute augmented dominator forest
+         *
+         * The augmented dominator forest is like
+         * Function.dominatorForest, except that it introduces new
+         * (dummy) blocks to stand for entries.  For each dominator
+         * tree in the original dominator forest that has as its root
+         * the 'start' block of a unique entry, that entry's new
+         * (dummy) block becomes the new root of the dominator tree.
+         * Each entry that does not have a unique start block becomes
+         * a new singleton tree in the augmented dominator forest.
+         *)
+        val entryBlocks =
+           Vector.map
+           (entries, fn entry as FunctionEntry.T {args, start, ...} =>
+            let
+               val entryBlock =
+                  Block.T {label = Label.newNoname (),
+                           args = args,
+                           statements = Vector.new0 (),
+                           transfer = Goto {dst = start,
+                                            args = Vector.new0 ()}}
+            in
+               {entryBlock = entryBlock, entry = entry}
+            end)
+        val df =
+           (Vector.fromList o Vector.fold)
+           (Function.dominatorForest f, [], fn (dt, df) =>
+            let
+               val Tree.T (block, _) = dt
+               val Block.T {label, ...} = block
+               val predEntryBlocks =
+                  Vector.keepAllMap
+                  (entryBlocks, fn {entry, entryBlock} =>
+                   if Label.equals (label, FunctionEntry.start entry)
+                      then SOME entryBlock
+                   else NONE)
+            in
+               if Vector.length predEntryBlocks = 1
+                  then (Tree.T (Vector.sub (predEntryBlocks, 0), Vector.new1 dt))::df
+                else List.append (Vector.toListMap
+                                  (predEntryBlocks, fn block =>
+                                   Tree.T (block, Vector.new0 ())),
+                                  dt::df)
+            end)
+        val _ = Vector.foreach (df, doitTree)
 
         (* compute liveness *)
         val _
@@ -496,7 +500,7 @@ fun restoreFunction {globals: Statement.t vector}
               phiArgs := Vector.fromList (!phi) ;
               phi := []
             end
-        val _ = Vector.foreach (entryBlocks, visitBlock o #newEntryBlock)
+        val _ = Vector.foreach (entryBlocks, visitBlock o #entryBlock)
         val _ = Vector.foreach (blocks, visitBlock)
 
         (* Diagnostics *)
@@ -646,36 +650,34 @@ fun restoreFunction {globals: Statement.t vector}
             end
         fun rewrite ()
           = let
-              val insertedEntries = Vector.map
-                  (entryBlocks,
-                  fn {newEntryBlock = entryBlock, functionEntry = entry} =>
-                     let
-                        val FunctionEntry.T {function, name, ...} = entry
-                        val (Block.T {label, args, statements, transfer}, post)
-                           = visitBlock' entryBlock
-                        val entryBlock = Block.T {label = label,
-                                                  args = Vector.new0 (),
-                                                  statements = statements,
-                                                  transfer = transfer}
-                        val _ = List.push(blocks, entryBlock)
-                        val entry = FunctionEntry.T {args = args,
-                                                     function = function,
-                                                     name = name,
-                                                     start = label}
-                     in
-                        {entry = entry, post = post}
-                     end
-                  )
-              val df = Function.dominatorForest f
-              val _ = Vector.foreach (df, fn dt => Tree.traverse (dt, visitBlock))
+              val newEntries
+                = Vector.map
+                  (entryBlocks, fn {entry, entryBlock} =>
+                   let
+                     val FunctionEntry.T {name, ...} = entry
+                     val (Block.T {label, args, statements, transfer}, post)
+                       = visitBlock' entryBlock
+                     val entryBlock = Block.T {label = label,
+                                               args = Vector.new0 (),
+                                               statements = statements,
+                                               transfer = transfer}
+                     val _ = List.push(blocks, entryBlock)
+                     val entry = FunctionEntry.T {args = args,
+                                                  name = name,
+                                                  start = label}
+                   in
+                      {entry = entry, post = post}
+                   end)
+              val _ =
+                 Vector.foreach
+                 (Function.dominatorForest f, fn dt =>
+                  Tree.traverse (dt, visitBlock))
 
               (* Run post() for all of the new blocks that were just added. *)
-              val _ = Vector.foreach
-                 (insertedEntries, fn {post, ...} => post () )
-              val entries = Vector.map (insertedEntries, #entry)
+              val _ = Vector.foreach (newEntries, fn {post, ...} => post ())
             in
               Function.new {blocks = Vector.fromList (!blocks),
-                            entries = entries,
+                            entries = Vector.map (newEntries, #entry),
                             mayInline = mayInline,
                             name = name,
                             raises = raises,

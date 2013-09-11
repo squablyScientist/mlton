@@ -1,4 +1,5 @@
-(* Copyright (C) 1999-2006 Henry Cejtin, Matthew Fluet, Suresh
+(* Copyright (C) 2013 Matthew Fluet.
+ * Copyright (C) 1999-2006 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
@@ -6,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor CommonBlock (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM = 
+functor MeCommonBlock (S: ME_SSA_TRANSFORM_STRUCTS): ME_SSA_TRANSFORM =
 struct
 
 open S
@@ -49,7 +50,7 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
 
       fun eliminateFunction f = 
          let
-            val {args, blocks, mayInline, name, returns, raises, start} =
+            val {blocks, entries, mayInline, name, returns, raises} =
                Function.dest f
             val newBlocks = ref []
             local
@@ -148,13 +149,12 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
                 end)
             val blocks = Vector.concat [Vector.fromList (!newBlocks), blocks]
          in
-            shrink (Function.new {args = args,
-                                  blocks = blocks,
+            shrink (Function.new {blocks = blocks,
+                                  entries = entries,
                                   mayInline = mayInline,
                                   name = name,
                                   raises = raises,
-                                  returns = returns,
-                                  start = start})
+                                  returns = returns})
          end
 
       val program = 

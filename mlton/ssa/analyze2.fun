@@ -1,4 +1,5 @@
-(* Copyright (C) 2011 Matthew Fluet.
+(* Copyright (C) 2013 Matthew Fluet, David Larsen.
+ * Copyright (C) 2011 Matthew Fluet.
  * Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -31,13 +32,12 @@ fun 'a analyze
           Property.initRaise ("analyze var value", Var.layout))
       val value = Trace.trace ("Analyze2.value", Var.layout, layout) value
       fun values xs = Vector.map (xs, value)
-      val {get = funcEntry, set = setFuncEntry, ...} =
-         Property.getSetOnce
-         (FuncEntry.plist, Property.initRaise ("analyze funcEntry name",
-         FuncEntry.layout))
       val {get = func, set = setFunc, ...} =
          Property.getSetOnce
          (Func.plist, Property.initRaise ("analyze func name", Func.layout))
+      val {get = entry, set = setEntry, ...} =
+         Property.getSetOnce
+         (FuncEntry.plist, Property.initRaise ("analyze entry name", FuncEntry.layout))
       val {get = labelInfo, set = setLabelInfo, ...} =
          Property.getSetOnce
          (Label.plist, Property.initRaise ("analyze label", Label.layout))
@@ -54,18 +54,13 @@ fun 'a analyze
          (functions, fn f =>
           let
              val {entries, name, raises, returns, ...} = Function.dest f
-             val entryNames = Vector.map
-               (entries,
-               fn FunctionEntry.T{args, name, ...} =>
-                  (setFuncEntry (name, {args = loopArgs args});
-                  name)
-               )
           in
-             setFunc (name, {entries = entryNames,
-                             raises = Option.map (raises, fn ts =>
+             setFunc (name, {raises = Option.map (raises, fn ts =>
                                                   Vector.map (ts, fromType)),
                              returns = Option.map (returns, fn ts =>
                                                    Vector.map (ts, fromType))})
+             ; Vector.foreach (entries, fn FunctionEntry.T {args, name, ...} =>
+                               setEntry (name, loopArgs args))
           end)
       fun loopTransfer (t: Transfer.t,
                         shouldReturns: 'a vector option,
@@ -79,10 +74,10 @@ fun 'a analyze
                                           resultVar = NONE},
                           to = Vector.sub (labelValues success, 0)})
           | Bug => ()
-          | Call {func = f, entry, args, return, ...} =>
+          | Call {func = f, entry = e, args, return, ...} =>
                let
-                  val {entries, raises, returns} = func f
-                  val {args = formals, ...} = funcEntry entry
+                  val {raises, returns} = func f
+                  val formals = entry e
                   val _ = coerces ("formals", values args, formals)
                   fun noHandler () =
                      case (raises, shouldRaises) of
@@ -277,7 +272,7 @@ fun 'a analyze
                       Statement.layout,
                       Unit.layout)
          loopStatement
-      val _ = coerces ("main entry", Vector.new0 (), #args (funcEntry main))
+      val _ = coerces ("main entry", Vector.new0 (), entry (#entry main))
       val _ = Vector.foreach (globals, loopStatement)
       val _ =
          List.foreach
@@ -308,15 +303,13 @@ fun 'a analyze
                          ; Transfer.foreachLabel (transfer, visit)
                       end
                 end
-             val _ = Vector.foreach (entries,
-                fn FunctionEntry.T{start, ...} => visit start
-               )
+             val _ = Vector.foreach (entries, visit o FunctionEntry.start)
           in
              ()
           end)
    in
       {func = func,
-       funcEntry = funcEntry,
+       entry = entry,
        label = labelValues,
        value = value}
    end

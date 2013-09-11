@@ -1,4 +1,5 @@
-(* Copyright (C) 1999-2005, 2008 Henry Cejtin, Matthew Fluet, Suresh
+(* Copyright (C) 2013 Matthew Fluet.
+ * Copyright (C) 1999-2005, 2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
@@ -18,7 +19,7 @@
  *     end
  *)
 
-functor LoopInvariant (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM = 
+functor MeLoopInvariant (S: ME_SSA_TRANSFORM_STRUCTS): ME_SSA_TRANSFORM =
 struct
 
 open S
@@ -30,7 +31,7 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
 
       fun simplifyFunction f =
          let
-            val {args, blocks, mayInline, name, raises, returns, start} =
+            val {blocks, entries, mayInline, name, raises, returns} =
                Function.dest f
             val {get = labelInfo: Label.t -> {callsSelf: bool ref,
                                               visited: bool ref,
@@ -153,13 +154,12 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
             val _ = Function.dfs (f, visit)
             val blocks = Vector.fromList (!newBlocks)
          in
-            shrink (Function.new {args = args,
-                                  blocks = blocks,
+            shrink (Function.new {blocks = blocks,
+                                  entries = entries,
                                   mayInline = mayInline,
                                   name = name,
                                   raises = raises,
-                                  returns = returns,
-                                  start = start})
+                                  returns = returns})
          end
       val program =
          Program.T {datatypes = datatypes,

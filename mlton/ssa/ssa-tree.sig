@@ -197,12 +197,12 @@ signature ME_SSA_TREE =
                T of {
                      args: (Var.t * Type.t) vector,
                      name: FuncEntry.t,
-                     function: Func.t,
                      start: Label.t
                      }
 
-            val function: t -> Func.t
+            val args: t -> (Var.t * Type.t) vector
             val name: t -> FuncEntry.t
+            val start: t -> Label.t
          end
 
       structure Function:
@@ -237,7 +237,7 @@ signature ME_SSA_TREE =
             val layoutDot:
                t * (Var.t -> string option) -> {destroy: unit -> unit,
                                                 graph: Layout.t,
-                                                tree: unit -> Layout.t}
+                                                forest: unit -> Layout.t}
             val mayInline: t -> bool
             val name: t -> Func.t
             val new: {blocks: Block.t vector,
@@ -255,7 +255,7 @@ signature ME_SSA_TREE =
                T of {datatypes: Datatype.t vector,
                      functions: Function.t list,
                      globals: Statement.t vector,
-                     main: FuncEntry.t (* Must be nullary. *)}
+                     main: {entry: FuncEntry.t, func: Func.t} (* Must be nullary. *)}
 
             val clear: t -> unit
             val clearTop: t -> unit
@@ -270,6 +270,5 @@ signature ME_SSA_TREE =
             val layouts: t * (Layout.t -> unit) -> unit
             val layoutStats: t -> Layout.t
             val mainFunction: t -> Function.t
-            val mainFunctionEntry: t -> FunctionEntry.t
          end
    end
