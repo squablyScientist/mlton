@@ -166,7 +166,7 @@ fun insertInFunction (f: Function.t): Function.t =
                             statements = Vector.new0 (),
                             transfer = Transfer.Goto {args = Vector.new0 (),
                                                       dst = start}})
-               val () = loop (Graph.loopForestSteensgaard (g, {root = labelNode start}))
+               val () = loop (Graph.loopForestSteensgaard (g, {roots = Vector.new1 (labelNode start)}))
             in
                FunctionEntry.T {args = args,
                                 name = name,
