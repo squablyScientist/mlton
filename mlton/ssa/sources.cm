@@ -134,6 +134,7 @@ local-ref.old.fun
 local-ref.fun
 loop-invariant.old.fun
 loop-invariant.fun
+merge-tail-calls.fun
 poly-equal.old.fun
 poly-equal.fun
 poly-hash.old.fun
