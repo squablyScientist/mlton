@@ -1395,8 +1395,8 @@ structure Function =
          fun layoutDot (f, global: Var.t -> string option) =
             let
                val {name, blocks, entries, ...} = dest f
-               fun makeName (name: string,
-                             formals: (Var.t * Type.t) vector): string =
+               fun makeNameFormals (name: string,
+                                    formals: (Var.t * Type.t) vector): string =
                   concat [name, " ",
                           let
                              open Layout
@@ -1415,19 +1415,39 @@ structure Function =
                val graph = Graph.new ()
                val {get = nodeOptions, ...} =
                   Property.get (Node.plist, Property.initFun (fn _ => ref []))
-               fun setNodeText (n: unit Node.t, l): unit =
-                  List.push (nodeOptions n, NodeOption.Label l)
-               fun newNode () = Graph.newNode graph
-               val {destroy, get = labelNode} =
-                  Property.destGet (Label.plist,
-                                    Property.initFun (fn _ => newNode ()))
+               fun pushNodeOption (n: unit Node.t, option): unit =
+                  List.push (nodeOptions n, option)
                val {get = edgeOptions, set = setEdgeOptions, ...} =
                   Property.getSetOnce (Edge.plist, Property.initConst [])
+               fun newNode () = Graph.newNode graph
+               val {destroy = destroyEntryNode, get = entryNode} =
+                  Property.destGet (FuncEntry.plist,
+                                    Property.initFun (fn _ => newNode ()))
+               val {destroy = destroyLabelNode, get = labelNode} =
+                  Property.destGet (Label.plist,
+                                    Property.initFun (fn _ => newNode ()))
+               val _ =
+                  Vector.foreach
+                  (entries, fn FunctionEntry.T {name, args, start} =>
+                   let
+                      val node = entryNode name
+                      val _ = pushNodeOption (node, NodeOption.Shape Ellipse)
+                      val text =
+                         (makeNameFormals (FuncEntry.toString name, args), Left)::
+                         (concat [Label.toString start, " ()"], Left)::
+                         nil
+                      val e = Graph.addEdge (graph, {from = node, to = labelNode start})
+                      val _ = setEdgeOptions (e, [EdgeOption.Style Solid])
+                      val _ = pushNodeOption (node, NodeOption.Label text)
+                   in
+                      ()
+                   end)
                val _ =
                   Vector.foreach
                   (blocks, fn Block.T {label, args, statements, transfer} =>
                    let
                       val from = labelNode label
+                      val _ = pushNodeOption (from, NodeOption.Shape Box)
                       fun edge (to: Label.t,
                                 label: string,
                                 style: style): unit =
@@ -1497,7 +1517,7 @@ structure Function =
                                    (Prim.layoutApp (prim, args, fn x =>
                                                     Layout.str
                                                     (Var.pretty (x, global))))])
-                      val lab =
+                      val text =
                          Vector.foldr
                          (statements, [(concat rest, Left)], fn (s, ac) =>
                           let
@@ -1525,34 +1545,37 @@ structure Function =
                           in
                              (s, Left) :: ac
                           end)
-                      val name = makeName (Label.toString label, args)
-                      val _ = setNodeText (from, (name, Left) :: lab)
+                      val text =
+                         (makeNameFormals (Label.toString label, args), Left)::
+                         text
+                      val _ = pushNodeOption (from, NodeOption.Label text)
                    in
                       ()
                    end)
-               val roots = Vector.map (entries, labelNode o FunctionEntry.start)
+               val roots = Vector.map (entries, entryNode o FunctionEntry.name)
                val graphLayout =
                   Graph.layoutDot
                   (graph, fn {nodeName} => 
                    {title = concat [Func.toString name, " control-flow graph"],
                     options = [GraphOption.Rank (Min, Vector.toListMap (roots, fn root => {nodeName = nodeName root}))],
                     edgeOptions = edgeOptions,
-                    nodeOptions =
-                    fn n => let
-                               val l = ! (nodeOptions n)
-                               open NodeOption
-                            in FontColor Black :: Shape Box :: l
-                            end}
-                  )
+                    nodeOptions = ! o nodeOptions})
                fun forestLayout () =
                   let
                      val {get = nodeOptions, set = setNodeOptions, ...} =
                         Property.getSetOnce (Node.plist, Property.initConst [])
                      val _ =
                         Vector.foreach
+                        (entries, fn FunctionEntry.T {name, ...} =>
+                         setNodeOptions (entryNode name,
+                                         [NodeOption.Shape Ellipse,
+                                          NodeOption.label (FuncEntry.toString name)]))
+                     val _ =
+                        Vector.foreach
                         (blocks, fn Block.T {label, ...} =>
                          setNodeOptions (labelNode label,
-                                         [NodeOption.label (Label.toString label)]))
+                                         [NodeOption.Shape Box,
+                                          NodeOption.label (Label.toString label)]))
                      val forestLayout =
                         Tree.Forest.layoutDot
                         (Graph.dominatorForest (graph,
@@ -1585,7 +1608,7 @@ structure Function =
                   end
                *)
             in
-               {destroy = destroy,
+               {destroy = fn () => (destroyEntryNode (); destroyLabelNode ()),
                 graph = graphLayout,
                 forest = forestLayout}
             end
