@@ -34,13 +34,14 @@ structure Redundant = MeRedundant (S)
 structure RedundantTests = MeRedundantTests (S)
 structure RemoveUnused = MeRemoveUnused (S)
 structure SimplifyTypes = MeSimplifyTypes (S)
+structure SplitEntries = MeSplitEntries (S)
 structure Useless = MeUseless (S)
 
 type pass = {name: string,
              doit: Program.t -> Program.t}
 
 val ssaPassesDefault =
-   {name = "duplicateEntries", doit = DuplicateEntries.transform} ::
+   (* {name = "duplicateEntries", doit = DuplicateEntries.transform} :: *)
    {name = "removeUnused1", doit = RemoveUnused.transform} ::
    {name = "introduceLoops1", doit = IntroduceLoops.transform} ::
    {name = "loopInvariant1", doit = LoopInvariant.transform} ::
@@ -74,6 +75,7 @@ val ssaPassesDefault =
    {name = "inlineNonRecursive", doit = fn p =>
     Inline.inlineNonRecursive (p, !Control.inlineNonRec)} ::
    {name = "localFlatten2", doit = LocalFlatten.transform} ::
+   {name = "splitEntries1", doit = SplitEntries.transform} ::
    {name = "removeUnused3", doit = RemoveUnused.transform} ::
    {name = "contify3", doit = Contify.transform} ::
    {name = "introduceLoops3", doit = IntroduceLoops.transform} ::
@@ -87,6 +89,7 @@ val ssaPassesDefault =
    {name = "commonBlock", doit = CommonBlock.transform} ::
    {name = "redundantTests", doit = RedundantTests.transform} ::
    {name = "redundant", doit = Redundant.transform} ::
+   {name = "splitEntries2", doit = SplitEntries.transform} ::
    {name = "knownCase", doit = KnownCase.transform} ::
    {name = "removeUnused4", doit = RemoveUnused.transform} ::
    nil
