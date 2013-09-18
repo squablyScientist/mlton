@@ -198,6 +198,7 @@ local
                  ("constantPropagation", ConstantPropagation.transform),
                  ("contify", Contify.transform),
                  ("dropProfile", Profile.dropProfile),
+                 ("duplicateEntries", DuplicateEntries.transform),
                  ("flatten", Flatten.transform),
                  ("introduceLoops", IntroduceLoops.transform),
                  ("knownCase", KnownCase.transform),
