@@ -28,6 +28,8 @@ structure LocalFlatten = MeLocalFlatten (S)
 structure LocalRef = MeLocalRef (S)
 structure LoopInvariant = MeLoopInvariant (S)
 structure MergeTailCalls = MeMergeTailCalls (S)
+structure MergeAllTailCalls = MergeTailCalls.MergeAllTailCalls
+structure MergeRecTailCalls = MergeTailCalls.MergeRecTailCalls
 structure PolyEqual = MePolyEqual (S)
 structure PolyHash = MePolyHash (S)
 structure Profile = MeProfile (S)
@@ -43,7 +45,7 @@ type pass = {name: string,
 val ssaPassesDefault =
    (* {name = "duplicateEntries", doit = DuplicateEntries.transform} :: *)
    {name = "removeUnused1", doit = RemoveUnused.transform} ::
-   {name = "mergeTailCalls1", doit = MergeTailCalls.transform} ::
+   {name = "mergeRecTailCalls1", doit = MergeRecTailCalls.transform} ::
    {name = "introduceLoops1", doit = IntroduceLoops.transform} ::
    {name = "loopInvariant1", doit = LoopInvariant.transform} ::
    {name = "inlineLeaf1", doit = fn p => 
@@ -70,7 +72,7 @@ val ssaPassesDefault =
     *   - before inlining so that hash functions can be inlined
     *)
    {name = "polyHash", doit = PolyHash.transform} ::
-   {name = "mergeTailCalls2", doit = MergeTailCalls.transform} ::
+   {name = "mergeRecTailCalls2", doit = MergeRecTailCalls.transform} ::
    {name = "introduceLoops2", doit = IntroduceLoops.transform} ::
    {name = "loopInvariant2", doit = LoopInvariant.transform} ::
    {name = "contify2", doit = Contify.transform} ::
@@ -79,7 +81,7 @@ val ssaPassesDefault =
    {name = "localFlatten2", doit = LocalFlatten.transform} ::
    {name = "removeUnused3", doit = RemoveUnused.transform} ::
    {name = "contify3", doit = Contify.transform} ::
-   {name = "mergeTailCalls3", doit = MergeTailCalls.transform} ::
+   {name = "mergeRecTailCalls3", doit = MergeRecTailCalls.transform} ::
    {name = "introduceLoops3", doit = IntroduceLoops.transform} ::
    {name = "loopInvariant3", doit = LoopInvariant.transform} ::
    {name = "localRef", doit = LocalRef.transform} ::
@@ -209,7 +211,8 @@ local
                  ("localFlatten", LocalFlatten.transform),
                  ("localRef", LocalRef.transform),
                  ("loopInvariant", LoopInvariant.transform),
-                 ("mergeTailCalls", MergeTailCalls.transform),
+                 ("mergeAllTailCalls", MergeAllTailCalls.transform),
+                 ("mergeRecTailCalls", MergeRecTailCalls.transform),
                  ("polyEqual", PolyEqual.transform),
                  ("polyHash", PolyHash.transform),
                  ("redundant", Redundant.transform),

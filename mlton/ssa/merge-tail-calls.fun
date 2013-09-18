@@ -5,14 +5,23 @@
  *)
 
 
-functor MeMergeTailCalls (S: ME_SSA_TRANSFORM_STRUCTS): ME_SSA_TRANSFORM =
+functor MeMergeTailCalls (S: ME_SSA_TRANSFORM_STRUCTS):
+   sig
+      structure MergeAllTailCalls: ME_SSA_TRANSFORM
+      structure MergeRecTailCalls: ME_SSA_TRANSFORM
+   end =
 struct
 
 open S
 structure Graph = DirectedGraph
 structure Node = Graph.Node
 
-fun transform (Program.T {datatypes, globals, functions, main}) =
+structure Param =
+   struct
+      datatype t = All | Rec
+   end
+
+fun transform (param: Param.t) (Program.T {datatypes, globals, functions, main}) =
    let
       val {get = funcInfo : Func.t -> {function: Function.t,
                                        node: unit Node.t,
@@ -67,7 +76,7 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
              val caller = funcToNode name
           in
              Vector.foreach
-             (#blocks (Function.dest f), fn block =>
+             (blocks, fn block =>
               case Block.transfer block of
                  Transfer.Call {func, return = Return.Tail, ...} =>
                     let
@@ -75,6 +84,24 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                           Function.dest (funcToFunction func)
                        val callee = funcToNode func
                        val () = ignore (Graph.addEdge (G, {from = caller, to = callee}))
+                       local
+                          fun compat (tysOpt, tysOpt') =
+                             case (tysOpt, tysOpt') of
+                                (NONE, NONE) => true
+                              | (SOME _, NONE) => false
+                              | (NONE, SOME _) => true
+                              | (SOME tys, SOME tys') =>
+                                   Vector.equals (tys, tys', Type.equals)
+                       in
+                          val () =
+                             case param of
+                                Param.All =>
+                                   if compat (returnsCaller, returnsCallee)
+                                      andalso compat (raisesCaller, raisesCallee)
+                                      then ignore (Graph.addEdge (G, {from = callee, to = caller}))
+                                   else ()
+                              | Param.Rec => ()
+                       end
                     in
                        ()
                     end
@@ -163,5 +190,17 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                  globals = globals,
                  functions = functions,
                  main = main}
+   end
+
+structure MergeAllTailCalls =
+   struct
+      open S
+      val transform = transform Param.All
+   end
+
+structure MergeRecTailCalls =
+   struct
+      open S
+      val transform = transform Param.Rec
    end
 end
