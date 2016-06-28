@@ -22,5 +22,6 @@ signature TRANSFORM =
                             res: Sxml.Var.t,
                             resTy: Sxml.Type.t} ->
                            Sxml.Lambda.t vector} ->
-                     Ssa.Program.t
+                     {program: Ssa.Program.t,
+                      destroy: unit -> unit}
    end
