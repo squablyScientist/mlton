@@ -1,4 +1,5 @@
-(* Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
+(* Copyright (C) 2016 Matthew Fluet.
+ * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
@@ -431,8 +432,8 @@ structure Exp =
                 | Fun {tyvars, decs, ...} =>
                      (Vector.foreach (decs, fn {ty, var, ...} =>
                                       handleBoundVar (var, tyvars, ty))
-                      ; Vector.foreach (decs, fn {lambda, ...} =>
-                                        loopLambda lambda))
+                      ; Vector.foreach (decs, fn {lambda, ty, var} =>
+                                        loopPrimExp (var, ty, Lambda lambda)))
             and loopLambda (Lam {arg, argType, body, ...}): unit =
                (monoVar (arg, argType); loopExp body)
          in loopExp exp
