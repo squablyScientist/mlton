@@ -19,5 +19,7 @@ is
 ../ssa/sources.cm
 ../xml/sources.cm
 
+cfa.sig
+transform.sig
 closure-convert.sig
 closure-convert.fun

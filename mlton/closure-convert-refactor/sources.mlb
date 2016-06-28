@@ -14,6 +14,8 @@ local
    ../ssa/sources.mlb
    ../xml/sources.mlb
 
+   cfa.sig
+   transform.sig
    closure-convert.sig
    closure-convert.fun
 in
