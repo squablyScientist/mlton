@@ -20,6 +20,7 @@ is
 ../xml/sources.cm
 
 cfa.sig
+ty-cfa.fun
 transform.sig
 closure-convert.sig
 closure-convert.fun
