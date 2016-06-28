@@ -16,15 +16,20 @@ open S
 fun cfa {program: Sxml.Program.t} =
    let
       val Sxml.Program.T {body, ...} = program
-      val {destroy, get} =
-         Property.destGet (Sxml.Type.plist, Property.initFun (fn _ => ref []))
+      val {destroy = destroyArrowInfo, get = arrowInfo} =
+         Property.destGet
+         (Sxml.Type.plist,
+          Property.initFun (fn ty =>
+                            if Option.isSome (Sxml.Type.deArrowOpt ty)
+                               then ref []
+                               else Error.bug "TyCFA.arrowInfo: non-arrow"))
 
       val () =
          Sxml.Exp.foreachPrimExp
          (body, fn (_, ty, exp) =>
           case exp of
              Sxml.PrimExp.Lambda lam =>
-                List.push (get ty, lam)
+                List.push (arrowInfo ty, lam)
            | _ => ())
 
       val cfa : {arg: Sxml.Var.t,
@@ -34,9 +39,9 @@ fun cfa {program: Sxml.Program.t} =
                  resTy: Sxml.Type.t} ->
                 Sxml.Lambda.t list =
          fn {argTy, resTy, ...} =>
-         ! (get (Sxml.Type.arrow (argTy, resTy)))
+         ! (arrowInfo (Sxml.Type.arrow (argTy, resTy)))
    in
-      {cfa = cfa, destroy = destroy}
+      {cfa = cfa, destroy = destroyArrowInfo}
    end
 
 end
