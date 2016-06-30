@@ -385,16 +385,16 @@ fun transform {program: Sxml.Program.t, cfa} =
             val {arg, argType, body, mayInline, ...} = Sxml.Lambda.dest lambda
             val {envVars, envTy, func, ...} = lambdaInfo lambda
 
-            val env = Var.newString "env"
-            val args = Vector.new2 ((env, envTy), convertBoundVar (arg, argType))
-            val resTy = #cty (varInfo (Sxml.VarExp.var (Sxml.Exp.result body)))
-
             val () =
                newScope
                (envVars, fn envVars =>
                 newScope
                 (Vector.map (recs, #var), fn recs' =>
                  let
+                    val env = Var.newString "env"
+                    val args = Vector.new2 ((env, envTy), convertBoundVar (arg, argType))
+                    val resTy = #cty (varInfo (Sxml.VarExp.var (Sxml.Exp.result body)))
+
                     val body =
                        Ssa.DirectExp.lett
                        {decs = ((Vector.toList o Vector.map2)
@@ -417,11 +417,16 @@ fun transform {program: Sxml.Program.t, cfa} =
                                  name = func,
                                  resTy = resTy}
                  end))
+
+            val env = Var.newString "env"
          in
-            mkClos {lambda = lambda,
-                    env = (Ssa.DirectExp.tuple
-                           {exps = convertVars envVars,
-                            ty = envTy})}
+            Ssa.DirectExp.lett
+            {decs = [{var = env,
+                      exp = Ssa.DirectExp.tuple
+                            {exps = convertVars envVars,
+                             ty = envTy}}],
+             body = mkClos {lambda = lambda,
+                            env = Ssa.DirectExp.var (env, envTy)}}
          end
 
       val globals = Vector.new0 ()
