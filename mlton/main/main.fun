@@ -287,7 +287,7 @@ fun makeOptions {usage} =
        (Expert, "closure-convert-globalize", " {true|false}",
         "whether to globalize during closure conversion",
         Bool (fn b => (closureConvertGlobalize := b))),
-       (Expert, "closure-convert-refactor", " {true|false}",
+       (Expert, "closure-convert-refactor", " {false|true}",
         "whether to use refactored closure conversion",
         Bool (fn b => (closureConvertRefactor := b))),
        (Expert, "closure-convert-shrink", " {true|false}",
