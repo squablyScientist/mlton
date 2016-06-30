@@ -21,7 +21,7 @@ signature TRANSFORM =
                             func: Sxml.Var.t,
                             res: Sxml.Var.t,
                             resTy: Sxml.Type.t} ->
-                           Sxml.Lambda.t vector} ->
+                           Sxml.Lambda.t list} ->
                      {program: Ssa.Program.t,
                       destroy: unit -> unit}
    end

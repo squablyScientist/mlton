@@ -12,7 +12,8 @@ struct
 
 open S
 
-structure TyCFA = TyCFA(structure Sxml = Sxml)
+structure TyCFA = TyCFA(S)
+structure TyTransform = TyTransform(S)
 
 fun closureConvert (program: Sxml.Program.t): Ssa.Program.t =
    Error.bug "ClosureConvert.closureConvert: unimplemented"

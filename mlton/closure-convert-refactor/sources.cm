@@ -24,5 +24,6 @@ ty-cfa.fun
 lambda-free.sig
 lambda-free.fun
 transform.sig
+ty-transform.fun
 closure-convert.sig
 closure-convert.fun
