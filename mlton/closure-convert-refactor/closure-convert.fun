@@ -7,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor ClosureConvert (S: CLOSURE_CONVERT_STRUCTS): CLOSURE_CONVERT =
+functor ClosureConvertRefactor (S: CLOSURE_CONVERT_STRUCTS): CLOSURE_CONVERT =
 struct
 
 open S
@@ -29,6 +29,3 @@ fun closureConvert (program: Sxml.Program.t): Ssa.Program.t =
    end
 
 end
-
-functor ClosureConvertRefactor(S: CLOSURE_CONVERT_STRUCTS): CLOSURE_CONVERT =
-   ClosureConvert(S)
