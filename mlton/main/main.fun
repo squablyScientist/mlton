@@ -1,4 +1,4 @@
-(* Copyright (C) 2010-2011,2013-2015 Matthew Fluet.
+(* Copyright (C) 2010-2011,2013-2016 Matthew Fluet.
  * Copyright (C) 1999-2009 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -287,6 +287,9 @@ fun makeOptions {usage} =
        (Expert, "closure-convert-globalize", " {true|false}",
         "whether to globalize during closure conversion",
         Bool (fn b => (closureConvertGlobalize := b))),
+       (Expert, "closure-convert-refactor", " {true|false}",
+        "whether to use refactored closure conversion",
+        Bool (fn b => (closureConvertRefactor := b))),
        (Expert, "closure-convert-shrink", " {true|false}",
         "whether to shrink during closure conversion",
         Bool (fn b => (closureConvertShrink := b))),

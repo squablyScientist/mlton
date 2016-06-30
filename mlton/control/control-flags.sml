@@ -1,4 +1,4 @@
-(* Copyright (C) 2009-2012,2014-2015 Matthew Fluet.
+(* Copyright (C) 2009-2012,2014-2016 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -55,6 +55,10 @@ val chunk = control {name = "chunk",
 val closureConvertGlobalize = control {name = "closureConvertGlobalize",
                                        default = true,
                                        toString = Bool.toString}
+
+val closureConvertRefactor = control {name = "closureConvertRefactor",
+                                      default = false,
+                                      toString = Bool.toString}
 
 val closureConvertShrink = control {name = "closureConvertShrink",
                                     default = true,
