@@ -299,8 +299,8 @@ fun transform {program: Sxml.Program.t, cfa} =
                                             ty = cty})}
                                end))),
                     default = if List.length lambdas < List.length (! (#lambdas (arrowInfo funcTy)))
-                                 then NONE
-                                 else SOME (Ssa.DirectExp.bug msg),
+                                 then SOME (Ssa.DirectExp.bug msg)
+                                 else NONE,
                     ty = cty}
                 end
            | Sxml.PrimExp.Case {test, cases, default} =>
