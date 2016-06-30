@@ -21,6 +21,8 @@ is
 
 cfa.sig
 ty-cfa.fun
+lambda-free.sig
+lambda-free.fun
 transform.sig
 closure-convert.sig
 closure-convert.fun
