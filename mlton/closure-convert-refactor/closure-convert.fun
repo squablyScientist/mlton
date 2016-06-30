@@ -16,6 +16,16 @@ structure TyCFA = TyCFA(S)
 structure TyTransform = TyTransform(S)
 
 fun closureConvert (program: Sxml.Program.t): Ssa.Program.t =
-   Error.bug "ClosureConvert.closureConvert: unimplemented"
+   let
+      val {cfa, destroy = destroyCFA, ...} =
+         TyCFA.cfa {program = program}
+      val {program, destroy = destroyTransform, ...} =
+         TyTransform.transform {program = program, cfa = cfa}
+      val _ = destroyCFA ()
+      val _ = destroyTransform ()
+      val _ = Ssa.Program.clear program
+   in
+      program
+   end
 
 end
