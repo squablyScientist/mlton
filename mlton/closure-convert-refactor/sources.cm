@@ -9,7 +9,7 @@
 
 Group
 
-functor ClosureConvert
+functor ClosureConvertRefactor
 
 is
 

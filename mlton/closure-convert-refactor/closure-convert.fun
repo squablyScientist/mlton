@@ -29,3 +29,6 @@ fun closureConvert (program: Sxml.Program.t): Ssa.Program.t =
    end
 
 end
+
+functor ClosureConvertRefactor(S: CLOSURE_CONVERT_STRUCTS): CLOSURE_CONVERT =
+   ClosureConvert(S)
