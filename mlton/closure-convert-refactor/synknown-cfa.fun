@@ -74,7 +74,7 @@ fun scan scanCFARec charRdr strm0 =
       val (s, strm1) =
          StringCvt.splitl Char.isAlphaNum charRdr strm0
    in
-      if String.equals ("synknowncfa", s)
+      if String.equals ("synkwn", s)
          then (case charRdr strm1 of
                   SOME (#"(", strm2) =>
                      case scanCFARec charRdr strm2 of
