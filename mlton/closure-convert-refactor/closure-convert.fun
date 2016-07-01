@@ -12,17 +12,51 @@ struct
 
 open S
 
+(* CFAs *)
 structure TyCFA = TyCFA(S)
+val cfaRef = ref (TyCFA.cfa {config = ()})
+val cfaString = ref "tycfa"
+val cfaGet = fn () => !cfaString
+val cfaSet =
+   let
+      val cfaRdrs =
+         TyCFA.scan ::
+         nil
+
+      fun cfaRdrRec charRdr strm0 =
+         let
+            fun loop cfaRdrs =
+               case cfaRdrs of
+                  [] => NONE
+                | cfaRdr::cfaRdrs =>
+                     (case cfaRdr cfaRdrRec charRdr strm0 of
+                         NONE => loop cfaRdrs
+                       | SOME (cfa, strm') => SOME (cfa, strm'))
+         in
+            loop cfaRdrs
+         end
+   in
+      fn s =>
+      case cfaRdrRec Substring.getc (Substring.full s) of
+         NONE => Result.No s
+       | SOME (cfa, ss') =>
+            if Substring.isEmpty ss'
+               then (cfaRef := cfa;
+                     cfaString := s;
+                     Result.Yes ())
+               else Result.No s
+   end
+val _ = List.push (Control.indirectFlags, {flag = "cc-cfa", get = cfaGet, set = cfaSet})
+
+(* Transforms *)
 structure TyTransform = TyTransform(S)
 
 fun closureConvert (program: Sxml.Program.t): Ssa.Program.t =
    let
       val Sxml.Program.T {body, ...} = program
 
-      val cfa = TyCFA.cfa {config = ()}
       val cfa =
-         Control.trace (Control.Pass, "cfa")
-         cfa
+         Control.trace (Control.Pass, "cfa: " ^ !cfaString) (!cfaRef)
 
       val {cfa, destroy = destroyCFA, ...} =
          cfa {program = program}

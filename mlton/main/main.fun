@@ -284,6 +284,17 @@ fun makeOptions {usage} =
                                                  end
                                             else usage ()
                                       end))),
+       (Expert, "closure-convert-cfa", " <cfa>",
+        "which control-flow-analysis to use during closure conversion",
+        SpaceString
+        (fn s =>
+         case List.peek (!Control.indirectFlags,
+                         fn {flag, ...} => String.equals ("cc-cfa", flag)) of
+            SOME {set, ...} =>
+               (case set s of
+                   Result.Yes () => ()
+                 | Result.No s' => usage (concat ["invalid -closure-convert-cfa arg: ", s']))
+          | NONE => Error.bug "closure convert cfa missing")),
        (Expert, "closure-convert-globalize", " {true|false}",
         "whether to globalize during closure conversion",
         Bool (fn b => (closureConvertGlobalize := b))),
