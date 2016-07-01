@@ -19,8 +19,13 @@ fun closureConvert (program: Sxml.Program.t): Ssa.Program.t =
    let
       val Sxml.Program.T {body, ...} = program
 
+      val cfa = TyCFA.cfa {config = ()}
+      val cfa =
+         Control.trace (Control.Pass, "cfa")
+         cfa
+
       val {cfa, destroy = destroyCFA, ...} =
-         TyCFA.cfa {config = ()} {program = program}
+         cfa {program = program}
 
       val _ =
          Control.diagnostics
