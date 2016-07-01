@@ -13,6 +13,7 @@ struct
 open S
 
 (* CFAs *)
+structure SynKnownCFA = SynKnownCFA(S)
 structure TyCFA = TyCFA(S)
 val cfaRef = ref (TyCFA.cfa {config = ()})
 val cfaString = ref "tycfa"
@@ -20,6 +21,7 @@ val cfaGet = fn () => !cfaString
 val cfaSet =
    let
       val cfaRdrs =
+         SynKnownCFA.scan ::
          TyCFA.scan ::
          nil
 
