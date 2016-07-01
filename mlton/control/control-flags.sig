@@ -15,6 +15,9 @@ signature CONTROL_FLAGS =
       val all : unit -> {name: string, 
                          value: string} list
 
+      val indirectFlags:
+         {flag: string, set: string -> unit Result.t, get: unit -> string} list ref
+
       (*------------------------------------*)
       (*            Begin Flags             *)
       (*------------------------------------*)
@@ -285,9 +288,6 @@ signature CONTROL_FLAGS =
             val split: int option ref
          end
 
-      val optimizationPasses:
-         {il: string, set: string -> unit Result.t, get: unit -> string} list ref
-      
       val positionIndependent : bool ref
 
       (* Only duplicate big functions when

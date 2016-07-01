@@ -604,10 +604,12 @@ fun makeOptions {usage} =
                            usage (concat ["invalid -opt-passes flag: ", s])
                      in
                         List.foreach
-                        (!optimizationPasses, fn {il,set,...} =>
-                         case set s of
-                            Result.Yes () => ()
-                          | Result.No s' => err (concat [s', "(for ", il, ")"]))
+                        (!indirectFlags, fn {flag,set,...} =>
+                         if String.hasSuffix (flag, {suffix = "-passes"})
+                            then (case set s of
+                                     Result.Yes () => ()
+                                   | Result.No s' => err (concat [s', "(for ", flag, ")"]))
+                            else ())
                      end)),
        (Normal, "output", " <file>", "name of output file",
         SpaceString (fn s => output := SOME s)),
@@ -754,8 +756,8 @@ fun makeOptions {usage} =
        (Expert, "ssa-passes", " <passes>", "ssa optimization passes",
         SpaceString
         (fn s =>
-         case List.peek (!Control.optimizationPasses,
-                         fn {il, ...} => String.equals ("ssa", il)) of
+         case List.peek (!Control.indirectFlags,
+                         fn {flag, ...} => String.equals ("ssa-passes", flag)) of
             SOME {set, ...} =>
                (case set s of
                    Result.Yes () => ()
@@ -764,8 +766,8 @@ fun makeOptions {usage} =
        (Expert, "ssa2-passes", " <passes>", "ssa2 optimization passes",
         SpaceString
         (fn s =>
-         case List.peek (!Control.optimizationPasses,
-                         fn {il, ...} => String.equals ("ssa2", il)) of
+         case List.peek (!Control.indirectFlags,
+                         fn {flag, ...} => String.equals ("ssa2-passes", flag)) of
             SOME {set, ...} =>
                (case set s of
                    Result.Yes () => ()
@@ -783,8 +785,8 @@ fun makeOptions {usage} =
        (Expert, "sxml-passes", " <passes>", "sxml optimization passes",
         SpaceString
         (fn s =>
-         case List.peek (!Control.optimizationPasses,
-                         fn {il, ...} => String.equals ("sxml", il)) of
+         case List.peek (!Control.indirectFlags,
+                         fn {flag, ...} => String.equals ("sxml-passes", flag)) of
             SOME {set, ...} =>
                (case set s of
                    Result.Yes () => ()
@@ -865,8 +867,8 @@ fun makeOptions {usage} =
        (Expert, "xml-passes", " <passes>", "xml optimization passes",
         SpaceString
         (fn s =>
-         case List.peek (!Control.optimizationPasses,
-                         fn {il, ...} => String.equals ("xml", il)) of
+         case List.peek (!Control.indirectFlags,
+                         fn {flag, ...} => String.equals ("xml-flags", flag)) of
             SOME {set, ...} =>
                (case set s of
                    Result.Yes () => ()

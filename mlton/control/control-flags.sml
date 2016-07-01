@@ -13,6 +13,14 @@ struct
 structure C = Control ()
 open C
 
+val indirectFlags:
+   {flag: string, set: string -> unit Result.t, get: unit -> string} list ref =
+   control {name = "indirectFlags",
+            default = [],
+            toString = List.toString
+                       (fn {flag,get,...} => concat ["<",flag,"::",get (),">"])}
+
+
 structure Align =
    struct
       datatype t = Align4 | Align8
@@ -901,13 +909,6 @@ structure Native =
                            default = SOME 20000,
                            toString = Option.toString Int.toString}
    end
-
-val optimizationPasses:
-   {il: string, set: string -> unit Result.t, get: unit -> string} list ref =
-   control {name = "optimizationPasses",
-            default = [],
-            toString = List.toString 
-                       (fn {il,get,...} => concat ["<",il,"::",get (),">"])}
 
 val polyvariance =
    control {name = "polyvariance",
