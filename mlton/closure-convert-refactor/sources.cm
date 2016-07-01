@@ -20,6 +20,7 @@ is
 ../xml/sources.cm
 
 cfa.sig
+intersect-cfa.fun
 synknown-cfa.fun
 ty-cfa.fun
 lambda-free.sig

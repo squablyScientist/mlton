@@ -15,6 +15,7 @@ local
    ../xml/sources.mlb
 
    cfa.sig
+   intersect-cfa.fun
    synknown-cfa.fun
    ty-cfa.fun
    lambda-free.sig
