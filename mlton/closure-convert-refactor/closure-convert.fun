@@ -20,7 +20,7 @@ fun closureConvert (program: Sxml.Program.t): Ssa.Program.t =
       val Sxml.Program.T {body, ...} = program
 
       val {cfa, destroy = destroyCFA, ...} =
-         TyCFA.cfa {program = program}
+         TyCFA.cfa {config = ()} {program = program}
 
       val _ =
          Control.diagnostics

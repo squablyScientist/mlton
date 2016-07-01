@@ -13,7 +13,12 @@ signature CFA =
    sig
       include CFA_STRUCTS
 
-      val cfa: {program: Sxml.Program.t} ->
+      structure Config:
+         sig
+            type t
+         end
+
+      type t = {program: Sxml.Program.t} ->
                {cfa: {arg: Sxml.Var.t,
                       argTy: Sxml.Type.t,
                       func: Sxml.Var.t,
@@ -21,4 +26,6 @@ signature CFA =
                       resTy: Sxml.Type.t} ->
                      Sxml.Lambda.t list,
                 destroy: unit -> unit}
+
+      val cfa: {config: Config.t} -> t
    end

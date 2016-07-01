@@ -13,7 +13,19 @@ struct
 
 open S
 
-fun cfa {program: Sxml.Program.t} =
+structure Config = struct type t = unit end
+
+type t = {program: Sxml.Program.t} ->
+         {cfa: {arg: Sxml.Var.t,
+                argTy: Sxml.Type.t,
+                func: Sxml.Var.t,
+                res: Sxml.Var.t,
+                resTy: Sxml.Type.t} ->
+               Sxml.Lambda.t list,
+          destroy: unit -> unit}
+
+fun cfa {config: Config.t} : t =
+   fn {program: Sxml.Program.t} =>
    let
       val Sxml.Program.T {body, ...} = program
       val {get = arrowInfo: Sxml.Type.t -> Sxml.Lambda.t list ref,
@@ -45,8 +57,8 @@ fun cfa {program: Sxml.Program.t} =
       {cfa = cfa, destroy = destroyArrowInfo}
    end
 
-val cfa =
+val cfa = fn config =>
    Control.trace (Control.Pass, "TyCFA")
-   cfa
+   (cfa config)
 
 end
