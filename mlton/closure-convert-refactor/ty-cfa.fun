@@ -53,8 +53,11 @@ fun cfa (_ : {config: Config.t}) : t =
                 Sxml.Lambda.t list =
          fn {argTy, resTy, ...} =>
          ! (arrowInfo (Sxml.Type.arrow (argTy, resTy)))
+
+      val destroy = fn () =>
+         destroyArrowInfo ()
    in
-      {cfa = cfa, destroy = destroyArrowInfo}
+      {cfa = cfa, destroy = destroy}
    end
 val cfa = fn config =>
    Control.trace (Control.Detail, "TyCFA")

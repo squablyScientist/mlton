@@ -52,10 +52,13 @@ fun cfa {config = {baseCFAs}: Config.t} : t =
          List.fold
          (baseCFAs, baseCFA0 call, fn (baseCFA, lambdas) =>
           intersect (lambdas, baseCFA call))
+
+      val destroy = fn () =>
+         List.foreach
+         (destroyBaseCFAs, fn destroyBaseCFA =>
+          destroyBaseCFA ())
    in
-      {cfa = cfa,
-       destroy = fn () => List.foreach(destroyBaseCFAs, fn destroyBaseCFA =>
-                                       destroyBaseCFA ())}
+      {cfa = cfa, destroy = destroy}
    end
 val cfa = fn config =>
    Control.trace (Control.Detail, "IntersectCFA")

@@ -61,9 +61,12 @@ fun cfa {config = {baseCFA}: Config.t} : t =
                   (lambdas, fn lambda =>
                    Sxml.Lambda.equals (lambda, knownLambda))
          end
+
+      val destroy = fn () =>
+         (destroyBaseCFA ();
+          destroyVarInfo ())
    in
-      {cfa = cfa,
-       destroy = fn () => (destroyBaseCFA (); destroyVarInfo ())}
+      {cfa = cfa, destroy = destroy}
    end
 val cfa = fn config =>
    Control.trace (Control.Detail, "SynKnownCFA")
