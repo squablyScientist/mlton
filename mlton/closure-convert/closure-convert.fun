@@ -1,4 +1,5 @@
-(* Copyright (C) 1999-2005, 2008 Henry Cejtin, Matthew Fluet, Suresh
+(* Copyright (C) 2016 Matthew Fluet.
+ * Copyright (C) 1999-2005, 2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
@@ -392,6 +393,38 @@ fun closureConvert
                                                   str " ",
                                                   Value.layout (value x)]
                                           end)))
+      val _ =
+         Control.diagnostics
+         (fn display =>
+          let
+             val _ =
+                Sxml.Exp.foreachPrimExp
+                (body, fn (res, _, exp) =>
+                 case exp of
+                    Sxml.PrimExp.App {func, arg} =>
+                       let
+                          val func = SvarExp.var func
+                          val arg = SvarExp.var arg
+                          val lambdasCard =
+                             case Value.dest (value func) of
+                                Value.Lambdas l =>
+                                   List.length (Value.Lambdas.toList l)
+                              | _ => Error.bug "ClosureConvert.lambdasCard: non-lambda"
+                       in
+                          (display o Layout.str o String.concat)
+                          ["|cfa(val ",
+                           Sxml.Var.toString res,
+                           " = ",
+                           Sxml.Var.toString func,
+                           " ",
+                           Sxml.Var.toString arg,
+                           ")| = ",
+                           Int.toString lambdasCard]
+                       end
+                  | _ => ())
+          in
+             ()
+          end)
       val overflow = valOf overflow
       val _ =
          Control.trace (Control.Pass, "free variables")
