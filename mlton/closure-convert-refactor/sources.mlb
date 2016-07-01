@@ -14,8 +14,11 @@ local
    ../ssa/sources.mlb
    ../xml/sources.mlb
 
+   abstract-value.sig
+   abstract-value.fun
    cfa.sig
    intersect-cfa.fun
+   orig-cfa.fun
    synknown-cfa.fun
    ty-cfa.fun
    lambda-free.sig

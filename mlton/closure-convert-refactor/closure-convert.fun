@@ -14,6 +14,7 @@ open S
 
 (* CFAs *)
 structure IntersectCFA = IntersectCFA(S)
+structure OrigCFA = OrigCFA(S)
 structure SynKnownCFA = SynKnownCFA(S)
 structure TyCFA = TyCFA(S)
 val cfaRef = ref (TyCFA.cfa {config = ()})
@@ -23,6 +24,7 @@ val cfaSet =
    let
       val cfaRdrs =
          IntersectCFA.scan ::
+         OrigCFA.scan ::
          SynKnownCFA.scan ::
          TyCFA.scan ::
          nil

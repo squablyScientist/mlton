@@ -19,8 +19,11 @@ is
 ../ssa/sources.cm
 ../xml/sources.cm
 
+abstract-value.sig
+abstract-value.sml
 cfa.sig
 intersect-cfa.fun
+orig-cfa.fun
 synknown-cfa.fun
 ty-cfa.fun
 lambda-free.sig
