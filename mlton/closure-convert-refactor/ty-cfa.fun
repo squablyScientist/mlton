@@ -56,6 +56,9 @@ fun cfa (_ : {config: Config.t}) : t =
    in
       {cfa = cfa, destroy = destroyArrowInfo}
    end
+val cfa = fn config =>
+   Control.trace (Control.Detail, "TyCFA")
+   (cfa config)
 
 fun scan _ charRdr strm0 =
    let

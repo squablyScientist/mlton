@@ -65,6 +65,9 @@ fun cfa {config = {baseCFA}: Config.t} : t =
       {cfa = cfa,
        destroy = fn () => (destroyBaseCFA (); destroyVarInfo ())}
    end
+val cfa = fn config =>
+   Control.trace (Control.Detail, "SynKnownCFA")
+   (cfa config)
 
 fun scan scanCFARec charRdr strm0 =
    let
