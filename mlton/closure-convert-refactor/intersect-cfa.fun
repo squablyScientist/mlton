@@ -48,7 +48,7 @@ fun cfa {config = {baseCFAs}: Config.t} : t =
                  res: Sxml.Var.t,
                  resTy: Sxml.Type.t} ->
                 Sxml.Lambda.t list =
-         fn call as {func, ...} =>
+         fn call =>
          List.fold
          (baseCFAs, baseCFA0 call, fn (baseCFA, lambdas) =>
           intersect (lambdas, baseCFA call))
