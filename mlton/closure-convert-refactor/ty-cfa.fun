@@ -57,7 +57,7 @@ fun cfa (_ : {config: Config.t}) : t =
       {cfa = cfa, destroy = destroyArrowInfo}
    end
 
-fun scan scanCFA charRdr strm0 =
+fun scan _ charRdr strm0 =
    let
       val (s, strm') =
          StringCvt.splitl Char.isAlphaNum charRdr strm0
