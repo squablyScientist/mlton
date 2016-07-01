@@ -28,4 +28,8 @@ signature CFA =
                 destroy: unit -> unit}
 
       val cfa: {config: Config.t} -> t
+
+      val scan: ((char, 'a) StringCvt.reader -> (t, 'a) StringCvt.reader) ->
+                (char, 'a) StringCvt.reader ->
+                (t, 'a) StringCvt.reader
    end

@@ -61,4 +61,14 @@ val cfa = fn config =>
    Control.trace (Control.Pass, "TyCFA")
    (cfa config)
 
+fun scan scanCFA charRdr strm0 =
+   let
+      val (s, strm') =
+         StringCvt.splitl Char.isAlphaNum charRdr strm0
+   in
+      if String.equals ("tycfa", s)
+         then SOME (cfa {config = ()}, strm')
+         else NONE
+   end
+
 end
