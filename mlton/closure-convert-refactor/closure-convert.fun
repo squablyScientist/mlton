@@ -67,7 +67,7 @@ fun closureConvert (program: Sxml.Program.t): Ssa.Program.t =
 
       val _ =
          Control.diagnostics
-         (fn lay =>
+         (fn display =>
           let
              val {get, set, rem} =
                 Property.getSetOnce
@@ -90,18 +90,36 @@ fun closureConvert (program: Sxml.Program.t): Ssa.Program.t =
                                   func = func,
                                   res = res,
                                   resTy = resTy}
+                          val lambdas =
+                             List.insertionSort
+                             (lambdas, fn (lam1, lam2) =>
+                              String.<= (Sxml.Var.toString (Sxml.Lambda.arg lam1),
+                                         Sxml.Var.toString (Sxml.Lambda.arg lam2)))
                           val lambdasCard =
-                             List.length lambdas
+                             Int.layout (List.length lambdas)
+                          fun layoutLam lam =
+                             Layout.seq
+                             [Layout.str "fn ",
+                              Sxml.Var.layout (Sxml.Lambda.arg lam)]
+                          val lambdas =
+                             Layout.seq [Layout.str "{",
+                                         (Layout.fill o Layout.separateRight)
+                                         (List.map (lambdas, layoutLam), ","),
+                                         Layout.str "}"]
+                          val call =
+                             (Layout.str o String.concat)
+                             ["val ",
+                              Sxml.Var.toString res,
+                              " = ",
+                              Sxml.Var.toString func,
+                              " ",
+                              Sxml.Var.toString arg]
                        in
-                          (lay o Layout.str o String.concat)
-                          ["|cfa(val ",
-                           Sxml.Var.toString res,
-                           " = ",
-                           Sxml.Var.toString func,
-                           " ",
-                           Sxml.Var.toString arg,
-                           ")| = ",
-                           Int.toString lambdasCard]
+                          (display o Layout.seq)
+                          [Layout.str "|cfa(", call, Layout.str ")| = ", lambdasCard];
+                          (display o Layout.align)
+                          [Layout.seq [Layout.str "cfa(", call, Layout.str ") ="],
+                           Layout.indent (lambdas, 3)]
                        end
                   | _ => ())
              val _ =
