@@ -24,7 +24,7 @@ type t = {program: Sxml.Program.t} ->
                Sxml.Lambda.t list,
           destroy: unit -> unit}
 
-fun cfa {config: Config.t} : t =
+fun cfa (_ : {config: Config.t}) : t =
    fn {program: Sxml.Program.t} =>
    let
       val Sxml.Program.T {body, ...} = program
