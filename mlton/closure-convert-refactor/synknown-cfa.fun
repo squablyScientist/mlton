@@ -77,13 +77,14 @@ fun scan scanCFARec charRdr strm0 =
       if String.equals ("synkwn", s)
          then (case charRdr strm1 of
                   SOME (#"(", strm2) =>
-                     case scanCFARec charRdr strm2 of
-                        SOME (baseCFA, strm3) =>
-                           (case charRdr strm3 of
-                               SOME (#")", strm4) =>
-                                  SOME (cfa {config = {baseCFA = baseCFA}}, strm4)
-                                | _ => NONE)
-                      | _ => NONE)
+                     (case scanCFARec charRdr strm2 of
+                         SOME (baseCFA, strm3) =>
+                            (case charRdr strm3 of
+                                SOME (#")", strm4) =>
+                                   SOME (cfa {config = {baseCFA = baseCFA}}, strm4)
+                              | _ => NONE)
+                       | _ => NONE)
+                | _ => NONE)
          else NONE
    end
 
