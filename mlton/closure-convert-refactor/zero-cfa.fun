@@ -27,6 +27,7 @@ type t = {program: Sxml.Program.t} ->
 structure Proxy :>
    sig
       type t
+      val all: unit -> t list
       val equals: t * t -> bool
       val hash: t -> Word.t
       val layout: t -> Layout.t
@@ -35,11 +36,15 @@ structure Proxy :>
    end =
    struct
       type t = Sxml.Var.t
+      val all = ref []
       val equals = Sxml.Var.equals
       val hash = Sxml.Var.hash
       val layout = Sxml.Var.layout
-      val new = fn () => Sxml.Var.newString "p"
+      val new = fn () => let val p = Sxml.Var.newString "p"
+                         in List.push (all, p); p
+                         end
       val plist = Sxml.Var.plist
+      val all = fn () => !all
    end
 structure AbstractValue =
    struct
