@@ -91,7 +91,7 @@ structure AbstractValue =
              | Weak x => seq [str "Weak ", Sxml.Var.layout x]
          end
 
-      fun hash e = 0wx0
+      fun hash _ = 0wx0
 
       val unit = Tuple (Vector.new0 ())
       val truee = ConApp {con = Sxml.Con.truee, arg = NONE}
@@ -243,7 +243,7 @@ fun cfa {config = {reachabilityExt}: Config.t} : t =
                 end
            | Sxml.PrimExp.Lambda lam =>
                 AbsValSet.singleton (loopLambda lam)
-           | Sxml.PrimExp.PrimApp {prim, targs, args} =>
+           | Sxml.PrimExp.PrimApp {prim, args, ...} =>
                 let
                    val res = AbsValSet.empty ()
                    fun arg' i = Sxml.VarExp.var (Vector.sub (args, i))
@@ -390,9 +390,10 @@ fun cfa {config = {reachabilityExt}: Config.t} : t =
            | _ => Error.bug "ZeroCFA.cfa: non-lambda")
 
       val destroy = fn () =>
-         Sxml.Exp.foreachBoundVar
-         (body, fn (var, _, _) =>
-          remVarInfo var)
+         (Sxml.Exp.foreachBoundVar
+          (body, fn (var, _, _) =>
+           remVarInfo var);
+          destroyLambdaInfo ())
    in
       {cfa = cfa, destroy = destroy}
    end
