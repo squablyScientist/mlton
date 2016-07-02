@@ -371,10 +371,14 @@ fun cfa {config = {reachabilityExt}: Config.t} : t =
       val _ =
          Control.diagnostics
          (fn display =>
-          Sxml.Exp.foreachBoundVar
-          (body, fn (x, _, _) =>
-           (display o Layout.seq)
-           [Sxml.Var.layout x, Layout.str ": ", AbsValSet.layout (varInfo x)]))
+          (List.foreach
+           (Proxy.all (), fn p =>
+            (display o Layout.seq)
+            [Proxy.layout p, Layout.str ": ", AbsValSet.layout (proxyInfo p)]);
+           Sxml.Exp.foreachBoundVar
+           (body, fn (x, _, _) =>
+            (display o Layout.seq)
+            [Sxml.Var.layout x, Layout.str ": ", AbsValSet.layout (varInfo x)])))
 
       val cfa : {arg: Sxml.Var.t,
                  argTy: Sxml.Type.t,
