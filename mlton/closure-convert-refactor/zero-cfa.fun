@@ -128,6 +128,21 @@ fun cfa (_ : {config: Config.t}) : t =
 
       val exnProxy = Proxy.new ()
 
+      fun fromType ty =
+         case (Sxml.Type.equals (ty, Sxml.Type.bool),
+               Sxml.Type.equals (ty, Sxml.Type.unit),
+               Sxml.Type.deVectorOpt ty) of
+            (true, _, _) => AbsValSet.bool
+          | (_, true, _) => AbsValSet.unit
+          | (_, _, SOME ty) =>
+               let
+                  val pv = Proxy.new ()
+                  val _ = AbsValSet.<= (fromType ty, proxyInfo pv)
+               in
+                  AbsValSet.singleton (AbsVal.Vector pv)
+               end
+          | _ => AbsValSet.singleton (AbsVal.Base ty)
+
       fun loopExp (exp: Sxml.Exp.t): AbsValSet.t =
          let
             val {decs, result} = Sxml.Exp.dest exp
@@ -206,7 +221,7 @@ fun cfa (_ : {config: Config.t}) : t =
            | Sxml.PrimExp.ConApp {con, arg, ...} =>
                 AbsValSet.singleton (AbsVal.ConApp {con = con, arg = Option.map (arg, Sxml.VarExp.var)})
            | Sxml.PrimExp.Const c =>
-                AbsValSet.singleton (AbsVal.Base (Sxml.Type.ofConst c))
+                fromType (Sxml.Type.ofConst c)
            | Sxml.PrimExp.Handle {try, catch = (var, _), handler} =>
                 let
                    val res = AbsValSet.empty ()
@@ -300,17 +315,9 @@ fun cfa (_ : {config: Config.t}) : t =
                             (arg 0, fn v =>
                              case v of
                                 AbsVal.Vector pv => AbsValSet.<= (proxyInfo pv, res)
-                              | AbsVal.Base ty =>
-                                   (case Sxml.Type.deVectorOpt ty of
-                                       SOME _ => ()
-                                     | _ => bug ("Vector", v))
                               | _ => bug ("Vector", v))
                        | _ =>
-                            if Sxml.Type.equals (ty, Sxml.Type.bool)
-                               then AbsValSet.<= (AbsValSet.bool, res)
-                            else if Sxml.Type.equals (ty, Sxml.Type.unit)
-                               then AbsValSet.<= (AbsValSet.unit, res)
-                            else AbsValSet.<< (AbsVal.Base ty, res)
+                            AbsValSet.<= (fromType ty, res)
                 in
                    res
                 end
