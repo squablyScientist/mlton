@@ -4,7 +4,6 @@
  * See the file MLton-LICENSE for details.
  *)
 
-
 (* Intersect a (non-empty) list of CFAs. *)
 functor IntersectCFA (S: CFA_STRUCTS): CFA =
 struct

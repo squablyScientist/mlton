@@ -4,7 +4,6 @@
  * See the file MLton-LICENSE for details.
  *)
 
-
 (* The simple known-function refinement of a base control-flow
  * analysis using syntactic heuristics.
  *)
