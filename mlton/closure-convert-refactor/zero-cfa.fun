@@ -13,7 +13,7 @@ struct
 open S
 open Sxml.Atoms
 
-structure Config = struct type t = unit end
+structure Config = struct type t = {reachabilityExt: bool} end
 
 type t = {program: Sxml.Program.t} ->
          {cfa: {arg: Sxml.Var.t,
@@ -109,22 +109,28 @@ structure AbstractValueSet =
 structure AbsValSet = AbstractValueSet
 
 
-fun cfa (_ : {config: Config.t}) : t =
+fun cfa {config = {reachabilityExt}: Config.t} : t =
    fn {program: Sxml.Program.t} =>
    let
       val Sxml.Program.T {body, ...} = program
 
-      val {get = varInfo : Sxml.Var.t -> AbsValSet.t,
+      val {get = varInfo: Sxml.Var.t -> AbsValSet.t,
            rem = remVarInfo} =
          Property.get
          (Sxml.Var.plist,
           Property.initFun (fn _ => AbsValSet.empty ()))
       val varExpInfo = varInfo o Sxml.VarExp.var
 
-      val {get = proxyInfo : Proxy.t -> AbsValSet.t, ...} =
+      val {get = proxyInfo: Proxy.t -> AbsValSet.t, ...} =
          Property.get
          (Proxy.plist,
           Property.initFun (fn _ => AbsValSet.empty ()))
+
+      val {get = lambdaInfo: Sxml.Lambda.t -> bool,
+           set = setLambdaInfo, destroy = destroyLambdaInfo} =
+         Property.destGetSet
+         (Sxml.Lambda.plist,
+          Property.initFun (fn _ => false))
 
       val exnProxy = Proxy.new ()
 
@@ -150,6 +156,7 @@ fun cfa (_ : {config: Config.t}) : t =
          in
             varExpInfo result
          end
+      and loopExp' (exp: Sxml.Exp.t): unit = ignore (loopExp exp)
       and loopDec (dec: Sxml.Dec.t): unit =
          (case dec of
              Sxml.Dec.Fun {decs, ...} =>
@@ -173,6 +180,9 @@ fun cfa (_ : {config: Config.t}) : t =
                                      val {arg = formal, body, ...} = Sxml.Lambda.dest lam
                                   in
                                      AbsValSet.<= (varExpInfo arg, varInfo formal);
+                                     if reachabilityExt andalso not (lambdaInfo lam)
+                                        then (setLambdaInfo (lam, true); loopExp' body)
+                                        else ();
                                      AbsValSet.<= (varExpInfo (Sxml.Exp.result body), res)
                                   end
                              | _ => Error.bug "ZeroCFA.loopPrimExp: non-lambda")
@@ -348,12 +358,15 @@ fun cfa (_ : {config: Config.t}) : t =
       and loopLambda (lambda: Sxml.Lambda.t): AbsVal.t =
          let
             val {body, ...} = Sxml.Lambda.dest lambda
-            val _ = loopExp body
+            val _ =
+               if reachabilityExt
+                  then setLambdaInfo (lambda, false)
+                  else loopExp' body
          in
             AbsVal.Lambda lambda
          end
 
-      val _ = loopExp body
+      val _ = loopExp' body
 
       val _ =
          Control.diagnostics
@@ -389,11 +402,20 @@ val cfa = fn config =>
 
 fun scan _ charRdr strm0 =
    let
-      val (s, strm') =
+      val (s, strm1) =
          StringCvt.splitl Char.isAlphaNum charRdr strm0
    in
       if String.equals ("0cfa", s)
-         then SOME (cfa {config = ()}, strm')
+         then (case charRdr strm1 of
+                  SOME (#"(", strm2) =>
+                     (case Pervasive.Bool.scan charRdr strm2 of
+                         SOME (reachabilityExt, strm3) =>
+                            (case charRdr strm3 of
+                                SOME (#")", strm4) =>
+                                   SOME (cfa {config = {reachabilityExt = reachabilityExt}}, strm4)
+                              | _ => NONE)
+                       | _ => NONE)
+                | _ => NONE)
          else NONE
    end
 
