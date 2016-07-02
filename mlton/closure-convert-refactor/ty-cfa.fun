@@ -65,11 +65,11 @@ val cfa = fn config =>
 
 fun scan _ charRdr strm0 =
    let
-      val (s, strm') =
+      val (s, strm1) =
          StringCvt.splitl Char.isAlphaNum charRdr strm0
    in
       if String.equals ("tycfa", s)
-         then SOME (cfa {config = ()}, strm')
+         then SOME (cfa {config = ()}, strm1)
          else NONE
    end
 
