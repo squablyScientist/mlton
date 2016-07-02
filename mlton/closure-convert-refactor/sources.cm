@@ -19,16 +19,22 @@ is
 ../ssa/sources.cm
 ../xml/sources.cm
 
-abstract-value.sig
-abstract-value.sml
 cfa.sig
-intersect-cfa.fun
-orig-cfa.fun
-synknown-cfa.fun
 ty-cfa.fun
+synknown-cfa.fun
+intersect-cfa.fun
+abstract-value.sig
+abstract-value.fun
+orig-cfa.fun
+powerset-lattice.sig
+powerset-lattice.fun
+zero-cfa.fun
+
 lambda-free.sig
 lambda-free.fun
+
 transform.sig
 ty-transform.fun
+
 closure-convert.sig
 closure-convert.fun
