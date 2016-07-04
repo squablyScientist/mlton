@@ -126,6 +126,36 @@ fun cfa {config = {reachabilityExt}: Config.t} : t =
          (Proxy.plist,
           Property.initFun (fn _ => AbsValSet.empty ()))
 
+      val {get = typeInfo: Sxml.Type.t -> AbsValSet.t,
+           set = setTypeInfo, destroy = destroyTypeInfo} =
+         Property.destGetSetOnce
+         (Sxml.Type.plist,
+          Property.initRaise ("ZeroCFA.typeInfo", Sxml.Type.layout))
+
+      val _ = setTypeInfo (Sxml.Type.bool, AbsValSet.bool)
+      val _ = setTypeInfo (Sxml.Type.unit, AbsValSet.unit)
+      local
+         fun mkSingletonBase ty =
+            setTypeInfo (ty, AbsValSet.singleton (AbsVal.Base ty))
+      in
+         val _ = mkSingletonBase (Sxml.Type.cpointer)
+         val _ = mkSingletonBase (Sxml.Type.intInf)
+         val _ = Vector.foreach (Tycon.reals, fn (_, rs) =>
+                                 mkSingletonBase (Sxml.Type.real rs))
+         val _ = mkSingletonBase (Sxml.Type.thread)
+         val _ = Vector.foreach (Tycon.words, fn (_, ws) =>
+                                 mkSingletonBase (Sxml.Type.word ws))
+      end
+      val _ = Vector.foreach (Tycon.words, fn (_, ws) =>
+                              let
+                                 val ety = Sxml.Type.word ws
+                                 val vty = Sxml.Type.vector ety
+                                 val pv = Proxy.new ()
+                                 val _ = AbsValSet.<= (typeInfo ety, proxyInfo pv)
+                              in
+                                 setTypeInfo (vty, AbsValSet.singleton (AbsVal.Vector pv))
+                              end)
+
       val {get = lambdaInfo: Sxml.Lambda.t -> bool,
            set = setLambdaInfo, destroy = destroyLambdaInfo} =
          Property.destGetSet
@@ -133,21 +163,6 @@ fun cfa {config = {reachabilityExt}: Config.t} : t =
           Property.initFun (fn _ => false))
 
       val exnProxy = Proxy.new ()
-
-      fun fromType ty =
-         case (Sxml.Type.equals (ty, Sxml.Type.bool),
-               Sxml.Type.equals (ty, Sxml.Type.unit),
-               Sxml.Type.deVectorOpt ty) of
-            (true, _, _) => AbsValSet.bool
-          | (_, true, _) => AbsValSet.unit
-          | (_, _, SOME ty) =>
-               let
-                  val pv = Proxy.new ()
-                  val _ = AbsValSet.<= (fromType ty, proxyInfo pv)
-               in
-                  AbsValSet.singleton (AbsVal.Vector pv)
-               end
-          | _ => AbsValSet.singleton (AbsVal.Base ty)
 
       fun loopExp (exp: Sxml.Exp.t): AbsValSet.t =
          let
@@ -231,7 +246,7 @@ fun cfa {config = {reachabilityExt}: Config.t} : t =
            | Sxml.PrimExp.ConApp {con, arg, ...} =>
                 AbsValSet.singleton (AbsVal.ConApp {con = con, arg = Option.map (arg, Sxml.VarExp.var)})
            | Sxml.PrimExp.Const c =>
-                fromType (Sxml.Type.ofConst c)
+                typeInfo (Sxml.Type.ofConst c)
            | Sxml.PrimExp.Handle {try, catch = (var, _), handler} =>
                 let
                    val res = AbsValSet.empty ()
@@ -327,7 +342,7 @@ fun cfa {config = {reachabilityExt}: Config.t} : t =
                                 AbsVal.Vector pv => AbsValSet.<= (proxyInfo pv, res)
                               | _ => bug ("Vector", v))
                        | _ =>
-                            AbsValSet.<= (fromType ty, res)
+                            AbsValSet.<= (typeInfo ty, res)
                 in
                    res
                 end
@@ -397,6 +412,7 @@ fun cfa {config = {reachabilityExt}: Config.t} : t =
          (Sxml.Exp.foreachBoundVar
           (body, fn (var, _, _) =>
            remVarInfo var);
+          destroyTypeInfo ();
           destroyLambdaInfo ())
    in
       {cfa = cfa, destroy = destroy}
