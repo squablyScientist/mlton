@@ -25,10 +25,15 @@ structure EltSet :>
    end =
    struct
       type t = Elt.t list
-      val {add, contains, empty, layout, singleton, ...} =
+      val {add, contains, empty, singleton, ...} =
          List.set {equals = Elt.equals, layout = Elt.layout}
       val foreach = List.foreach
       fun fromList es = List.removeDuplicates (es, Elt.equals)
+      fun layout es =
+         Layout.seq [Layout.str "{",
+                     (Layout.fill o Layout.separateRight)
+                     (List.map (es, Elt.layout), ","),
+                     Layout.str "}"]
       val toList = fn es => es
    end
 
