@@ -24,7 +24,7 @@ structure Config = struct type t = {baseCFAs: t list} end
 val {intersect, ...} =
    List.set {equals = Sxml.Lambda.equals, layout = Sxml.Lambda.layout}
 
-fun cfa {config = {baseCFAs}: Config.t} : t =
+fun cfa {config = {baseCFAs}: Config.t}: t =
    fn {program: Sxml.Program.t} =>
    let
       val (baseCFAs, destroyBaseCFAs) =
@@ -65,8 +65,9 @@ val cfa = fn config =>
 
 fun scan scanCFARec charRdr strm0 =
    let
-      val (s, strm1) =
-         StringCvt.splitl Char.isAlphaNum charRdr strm0
+      fun scanAlphaNums strm =
+         SOME (StringCvt.splitl Char.isAlphaNum charRdr strm)
+
       fun loop (strm, baseCFAs) =
          case scanCFARec charRdr strm of
             SOME (baseCFA, strm') =>
@@ -78,11 +79,12 @@ fun scan scanCFARec charRdr strm0 =
                  | _ => NONE)
           | NONE => NONE
    in
-      if String.equals ("isect", s)
-         then (case charRdr strm1 of
-                  SOME (#"(", strm2) => loop (strm2, [])
-                | _ => NONE)
-         else NONE
+      case scanAlphaNums strm0 of
+         SOME ("isect", strm1) =>
+            (case charRdr strm1 of
+                SOME (#"(", strm2) => loop (strm2, [])
+              | _ => NONE)
+       | _ => NONE
    end
 
 end

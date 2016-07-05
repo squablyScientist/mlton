@@ -23,7 +23,7 @@ type t = {program: Sxml.Program.t} ->
 
 structure Config = struct type t = {baseCFA: t} end
 
-fun cfa {config = {baseCFA}: Config.t} : t =
+fun cfa {config = {baseCFA}: Config.t}: t =
    fn {program: Sxml.Program.t} =>
    let
       val {cfa = baseCFA, destroy = destroyBaseCFA} =
@@ -73,21 +73,22 @@ val cfa = fn config =>
 
 fun scan scanCFARec charRdr strm0 =
    let
-      val (s, strm1) =
-         StringCvt.splitl Char.isAlphaNum charRdr strm0
+      fun scanAlphaNums strm =
+         SOME (StringCvt.splitl Char.isAlphaNum charRdr strm)
    in
-      if String.equals ("synkwn", s)
-         then (case charRdr strm1 of
-                  SOME (#"(", strm2) =>
-                     (case scanCFARec charRdr strm2 of
-                         SOME (baseCFA, strm3) =>
-                            (case charRdr strm3 of
-                                SOME (#")", strm4) =>
-                                   SOME (cfa {config = {baseCFA = baseCFA}}, strm4)
-                              | _ => NONE)
-                       | _ => NONE)
-                | _ => NONE)
-         else NONE
+      case scanAlphaNums strm0 of
+         SOME ("synkwn", strm1) =>
+            (case charRdr strm1 of
+                SOME (#"(", strm2) =>
+                   (case scanCFARec charRdr strm2 of
+                       SOME (baseCFA, strm3) =>
+                          (case charRdr strm3 of
+                              SOME (#")", strm4) =>
+                                 SOME (cfa {config = {baseCFA = baseCFA}}, strm4)
+                            | _ => NONE)
+                     | _ => NONE)
+              | _ => NONE)
+       | _ => NONE
    end
 
 end

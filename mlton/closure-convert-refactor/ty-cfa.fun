@@ -24,7 +24,7 @@ type t = {program: Sxml.Program.t} ->
                Sxml.Lambda.t list,
           destroy: unit -> unit}
 
-fun cfa (_ : {config: Config.t}) : t =
+fun cfa (_: {config: Config.t}): t =
    fn {program: Sxml.Program.t} =>
    let
       val Sxml.Program.T {body, ...} = program
@@ -65,12 +65,12 @@ val cfa = fn config =>
 
 fun scan _ charRdr strm0 =
    let
-      val (s, strm1) =
-         StringCvt.splitl Char.isAlphaNum charRdr strm0
+      fun scanAlphaNums strm =
+         SOME (StringCvt.splitl Char.isAlphaNum charRdr strm)
    in
-      if String.equals ("tycfa", s)
-         then SOME (cfa {config = ()}, strm1)
-         else NONE
+      case scanAlphaNums strm0 of
+         SOME ("tycfa", strm1) => SOME (cfa {config = ()}, strm1)
+       | _ => NONE
    end
 
 end

@@ -47,7 +47,7 @@ val traceLoopBind =
                    ("exp", SprimExp.layout exp)],
     Unit.layout)
 
-fun cfa (_ : {config: Config.t}) : t =
+fun cfa (_: {config: Config.t}): t =
    fn {program: Sxml.Program.t} =>
    let
       val Sxml.Program.T {datatypes, body, ...} = program
@@ -230,12 +230,13 @@ val cfa = fn config =>
 
 fun scan _ charRdr strm0 =
    let
-      val (s, strm1) =
-         StringCvt.splitl Char.isAlphaNum charRdr strm0
+      fun scanAlphaNums strm =
+         SOME (StringCvt.splitl Char.isAlphaNum charRdr strm)
    in
-      if String.equals ("ocfa", s)
-         then SOME (cfa {config = ()}, strm1)
-         else NONE
+      case scanAlphaNums strm0 of
+         SOME ("ocfa", strm1) =>
+            SOME (cfa {config = ()}, strm1)
+       | _ => NONE
    end
 
 end
