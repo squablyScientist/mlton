@@ -197,11 +197,7 @@ fun cfa {config = {firstOrderOpt, reachabilityExt}: Config.t} : t =
          if firstOrderOpt
             then Property.destGet
                  (Sxml.Type.plist,
-                  Property.initFun (fn ty =>
-                                    if Order.isFirstOrder (typeOrder ty)
-                                       then AbsValSet.frozenSingletonBase ty
-                                       else Error.bug ("ZeroCFA.typeInfo: " ^
-                                                       (Layout.toString (Sxml.Type.layout ty)))))
+                  Property.initFun AbsValSet.frozenSingletonBase)
             else let
                     val {get = typeInfo,
                          set = setTypeInfo, destroy = destroyTypeInfo} =
