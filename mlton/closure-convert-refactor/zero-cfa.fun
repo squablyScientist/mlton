@@ -192,19 +192,22 @@ fun cfa {config = {firstOrderOpt, reachabilityExt}: Config.t} : t =
           Property.initFun (fn _ => AbsValSet.empty ()))
 
       val {get = typeInfo: Sxml.Type.t -> AbsValSet.t,
-           set = setTypeInfo, destroy = destroyTypeInfo} =
-         Property.destGetSetOnce
-         (Sxml.Type.plist,
-          Property.initFun (fn ty =>
-                            if firstOrderOpt andalso Order.isFirstOrder (typeOrder ty)
-                               then AbsValSet.singletonBase ty
-                               else (Error.bug o Layout.toString o Layout.seq)
-                                    [Sxml.Type.layout ty,
-                                     Layout.str " has no ZeroCFA.typeInfo property"]))
-      val _ =
+           destroy = destroyTypeInfo} =
          if firstOrderOpt
-            then ()
+            then Property.destGet
+                 (Sxml.Type.plist,
+                  Property.initFun (fn ty =>
+                                    if Order.isFirstOrder (typeOrder ty)
+                                       then AbsValSet.singletonBase ty
+                                       else Error.bug ("ZeroCFA.typeInfo: " ^
+                                                       (Layout.toString (Sxml.Type.layout ty)))))
             else let
+                    val {get = typeInfo,
+                         set = setTypeInfo, destroy = destroyTypeInfo} =
+                       Property.destGetSetOnce
+                       (Sxml.Type.plist,
+                        Property.initRaise ("ZeroCFA.typeInfo", Sxml.Type.layout))
+
                     val _ = setTypeInfo (Sxml.Type.unit, AbsValSet.unit)
                     val _ = setTypeInfo (Sxml.Type.bool, AbsValSet.bool)
                     fun setSingletonBase ty =
@@ -226,7 +229,7 @@ fun cfa {config = {firstOrderOpt, reachabilityExt}: Config.t} : t =
                                                setTypeInfo (vty, AbsValSet.singleton (AbsVal.Vector pv))
                                             end)
                  in
-                    ()
+                    {get = typeInfo, destroy = destroyTypeInfo}
                  end
 
       val {get = lambdaInfo: Sxml.Lambda.t -> bool,
