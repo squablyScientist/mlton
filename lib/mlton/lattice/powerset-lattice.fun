@@ -52,13 +52,14 @@ fun empty () = new EltSet.empty
 fun singleton e = new (EltSet.singleton e)
 fun fromList es = new (EltSet.fromList es)
 
-fun getElements (T {elements, frozen, handlers, ...}) =
-   (frozen := true;
-    handlers := [];
-    EltSet.toList (!elements))
+fun freeze (T {frozen, handlers, ...}) =
+   (frozen := true; handlers := [])
 
-fun addHandler (T {elements, handlers, ...}, h) =
-   (List.push (handlers, h);
+fun getElements (es as T {elements, ...}) =
+   (freeze es; EltSet.toList (!elements))
+
+fun addHandler (T {elements, frozen, handlers, ...}, h) =
+   (if !frozen then () else List.push (handlers, h);
     EltSet.foreach (!elements, fn e => h e))
 
 fun op<< (e, T {elements, frozen, handlers, ...}) =

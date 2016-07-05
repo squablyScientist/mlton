@@ -27,6 +27,7 @@ signature POWERSET_LATTICE =
       (* handler will be run once for each element *)
       val addHandler: t * (Element.t -> unit) -> unit
       val empty: unit -> t
+      val freeze: t -> unit
       val fromList: Element.t list -> t
       val getElements: t -> Element.t list
       val layout: t -> Layout.t
