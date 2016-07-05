@@ -58,6 +58,39 @@ val _ = List.push (Control.indirectFlags, {flag = "cc-cfa", get = cfaGet, set = 
 
 (* Transforms *)
 structure TyTransform = TyTransform(S)
+val transRef = ref (TyTransform.transform {config = ()})
+val transString = ref "tytrans"
+val transGet = fn () => !transString
+val transSet =
+   let
+      val transRdrs =
+         TyTransform.scan ::
+         nil
+
+      fun transRdrRec charRdr strm0 =
+         let
+            fun loop transRdrs =
+               case transRdrs of
+                  [] => NONE
+                | transRdr::transRdrs =>
+                     (case transRdr transRdrRec charRdr strm0 of
+                         NONE => loop transRdrs
+                       | SOME (trans, strm') => SOME (trans, strm'))
+         in
+            loop transRdrs
+         end
+   in
+      fn s =>
+      case transRdrRec Substring.getc (Substring.full s) of
+         NONE => Result.No s
+       | SOME (trans, ss') =>
+            if Substring.isEmpty ss'
+               then (transRef := trans;
+                     transString := s;
+                     Result.Yes ())
+               else Result.No s
+   end
+val _ = List.push (Control.indirectFlags, {flag = "cc-trans", get = transGet, set = transSet})
 
 fun closureConvert (program: Sxml.Program.t): Ssa.Program.t =
    let
@@ -133,8 +166,12 @@ fun closureConvert (program: Sxml.Program.t): Ssa.Program.t =
              ()
           end)
 
+      val transform =
+         Control.trace (Control.Pass, "trans: " ^ !cfaString) (!transRef)
+
       val {program, destroy = destroyTransform, ...} =
-         TyTransform.transform {program = program, cfa = cfa}
+         transform {program = program, cfa = cfa}
+
       val _ = destroyCFA ()
       val _ = destroyTransform ()
       val _ = Ssa.Program.clear program

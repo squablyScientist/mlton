@@ -15,13 +15,24 @@ signature TRANSFORM =
    sig
       include TRANSFORM_STRUCTS
 
-      val transform: {program: Sxml.Program.t,
-                      cfa: {arg: Sxml.Var.t,
-                            argTy: Sxml.Type.t,
-                            func: Sxml.Var.t,
-                            res: Sxml.Var.t,
-                            resTy: Sxml.Type.t} ->
-                           Sxml.Lambda.t list} ->
-                     {program: Ssa.Program.t,
-                      destroy: unit -> unit}
+      structure Config:
+         sig
+            type t
+         end
+
+      type t = {program: Sxml.Program.t,
+                cfa: {arg: Sxml.Var.t,
+                      argTy: Sxml.Type.t,
+                      func: Sxml.Var.t,
+                      res: Sxml.Var.t,
+                      resTy: Sxml.Type.t} ->
+                     Sxml.Lambda.t list} ->
+               {program: Ssa.Program.t,
+                destroy: unit -> unit}
+
+      val transform: {config: Config.t} -> t
+
+      val scan: ((char, 'a) StringCvt.reader -> (t, 'a) StringCvt.reader) ->
+                (char, 'a) StringCvt.reader ->
+                (t, 'a) StringCvt.reader
    end

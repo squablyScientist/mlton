@@ -304,6 +304,17 @@ fun makeOptions {usage} =
        (Expert, "closure-convert-shrink", " {true|false}",
         "whether to shrink during closure conversion",
         Bool (fn b => (closureConvertShrink := b))),
+       (Expert, "closure-convert-trans", " <cfa>",
+        "which transform to use during closure conversion",
+        SpaceString
+        (fn s =>
+         case List.peek (!Control.indirectFlags,
+                         fn {flag, ...} => String.equals ("cc-trans", flag)) of
+            SOME {set, ...} =>
+               (case set s of
+                   Result.Yes () => ()
+                 | Result.No s' => usage (concat ["invalid -closure-convert-trans arg: ", s']))
+          | NONE => Error.bug "closure convert trans missing")),
        (Normal, "codegen",
         concat [" {",
                 String.concatWith

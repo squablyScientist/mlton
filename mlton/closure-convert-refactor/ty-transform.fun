@@ -22,7 +22,20 @@ open Sxml.Atoms
 
 structure LambdaFree = LambdaFree(S)
 
-fun transform {program: Sxml.Program.t, cfa} =
+structure Config = struct type t = unit end
+
+type t = {program: Sxml.Program.t,
+          cfa: {arg: Sxml.Var.t,
+                argTy: Sxml.Type.t,
+                func: Sxml.Var.t,
+                res: Sxml.Var.t,
+                resTy: Sxml.Type.t} ->
+               Sxml.Lambda.t list} ->
+         {program: Ssa.Program.t,
+          destroy: unit -> unit}
+
+fun transform (_: {config: Config.t}): t =
+   fn {program: Sxml.Program.t, cfa} =>
    let
       val Sxml.Program.T {datatypes, body, overflow} = program
       val overflow = valOf overflow
@@ -451,9 +464,19 @@ fun transform {program: Sxml.Program.t, cfa} =
                            Sxml.Exp.foreachBoundVar (body, remVarInfo o #1);
                            destroyLambdaInfo ())}
    end
-
-val transform =
+val transform = fn config =>
    Control.trace (Control.Pass, "TyTransform")
-   transform
+   (transform config)
+
+fun scan _ charRdr strm0 =
+   let
+      fun scanAlphaNums strm =
+         SOME (StringCvt.splitl Char.isAlphaNum charRdr strm)
+   in
+      case scanAlphaNums strm0 of
+         SOME ("tyxform", strm1) =>
+            SOME (transform {config = ()}, strm1)
+        | _ => NONE
+   end
 
 end
