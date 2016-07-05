@@ -124,10 +124,12 @@ structure AbstractValueSet = PowerSetLattice(structure Element = AbstractValue)
 structure AbstractValueSet =
    struct
       open AbstractValueSet
-      val unit = singleton AbstractValue.unit
-      val bool = fromList [AbstractValue.truee, AbstractValue.falsee]
-      fun singletonBase ty =
-         singleton (AbsVal.Base ty)
+      val freeze = fn es => (freeze es; es)
+      val frozenSingleton = freeze o singleton
+      val unit = frozenSingleton AbstractValue.unit
+      val bool = freeze (fromList [AbstractValue.truee, AbstractValue.falsee])
+      fun frozenSingletonBase ty =
+         frozenSingleton (AbsVal.Base ty)
    end
 structure AbsValSet = AbstractValueSet
 
@@ -197,7 +199,7 @@ fun cfa {config = {firstOrderOpt, reachabilityExt}: Config.t} : t =
                  (Sxml.Type.plist,
                   Property.initFun (fn ty =>
                                     if Order.isFirstOrder (typeOrder ty)
-                                       then AbsValSet.singletonBase ty
+                                       then AbsValSet.frozenSingletonBase ty
                                        else Error.bug ("ZeroCFA.typeInfo: " ^
                                                        (Layout.toString (Sxml.Type.layout ty)))))
             else let
@@ -209,15 +211,15 @@ fun cfa {config = {firstOrderOpt, reachabilityExt}: Config.t} : t =
 
                     val _ = setTypeInfo (Sxml.Type.unit, AbsValSet.unit)
                     val _ = setTypeInfo (Sxml.Type.bool, AbsValSet.bool)
-                    fun setSingletonBase ty =
-                       setTypeInfo (ty, AbsValSet.singletonBase ty)
-                    val _ = setSingletonBase (Sxml.Type.cpointer)
-                    val _ = setSingletonBase (Sxml.Type.intInf)
+                    fun setFrozenSingletonBase ty =
+                       setTypeInfo (ty, AbsValSet.frozenSingletonBase ty)
+                    val _ = setFrozenSingletonBase (Sxml.Type.cpointer)
+                    val _ = setFrozenSingletonBase (Sxml.Type.intInf)
                     val _ = Vector.foreach (Tycon.reals, fn (_, rs) =>
-                                            setSingletonBase (Sxml.Type.real rs))
-                    val _ = setSingletonBase (Sxml.Type.thread)
+                                            setFrozenSingletonBase (Sxml.Type.real rs))
+                    val _ = setFrozenSingletonBase (Sxml.Type.thread)
                     val _ = Vector.foreach (Tycon.words, fn (_, ws) =>
-                                            setSingletonBase (Sxml.Type.word ws))
+                                            setFrozenSingletonBase (Sxml.Type.word ws))
                     val _ = Vector.foreach (Tycon.words, fn (_, ws) =>
                                             let
                                                val ety = Sxml.Type.word ws
@@ -225,7 +227,7 @@ fun cfa {config = {firstOrderOpt, reachabilityExt}: Config.t} : t =
                                                val pv = Proxy.new ()
                                                val _ = AbsValSet.<= (typeInfo ety, proxyInfo pv)
                                             in
-                                               setTypeInfo (vty, AbsValSet.singleton (AbsVal.Vector pv))
+                                               setTypeInfo (vty, AbsValSet.frozenSingleton (AbsVal.Vector pv))
                                             end)
                  in
                     {get = typeInfo, destroy = destroyTypeInfo}
@@ -330,7 +332,7 @@ fun cfa {config = {firstOrderOpt, reachabilityExt}: Config.t} : t =
            | Sxml.PrimExp.ConApp {con, arg, ...} =>
                 if firstOrderOpt andalso Order.isFirstOrder (conOrder con)
                    then typeInfo ty
-                   else AbsValSet.singleton (AbsVal.ConApp {con = con, arg = Option.map (arg, Sxml.VarExp.var)})
+                   else AbsValSet.frozenSingleton (AbsVal.ConApp {con = con, arg = Option.map (arg, Sxml.VarExp.var)})
            | Sxml.PrimExp.Const c =>
                 typeInfo ty
            | Sxml.PrimExp.Handle {try, catch = (var, _), handler} =>
@@ -343,7 +345,7 @@ fun cfa {config = {firstOrderOpt, reachabilityExt}: Config.t} : t =
                    res
                 end
            | Sxml.PrimExp.Lambda lam =>
-                AbsValSet.singleton (loopLambda lam)
+                AbsValSet.frozenSingleton (loopLambda lam)
            | Sxml.PrimExp.PrimApp {prim, targs, args, ...} =>
                 if firstOrderOpt andalso Vector.forall (targs, fn ty => Order.isFirstOrder (typeOrder ty))
                    then typeInfo ty
@@ -460,7 +462,7 @@ fun cfa {config = {firstOrderOpt, reachabilityExt}: Config.t} : t =
            | Sxml.PrimExp.Tuple xs =>
                 if firstOrderOpt andalso Order.isFirstOrder (typeOrder ty)
                    then typeInfo ty
-                   else AbsValSet.singleton (AbsVal.Tuple (Vector.map (xs, Sxml.VarExp.var)))
+                   else AbsValSet.frozenSingleton (AbsVal.Tuple (Vector.map (xs, Sxml.VarExp.var)))
            | Sxml.PrimExp.Var x =>
                 varExpInfo x)
       and loopLambda (lambda: Sxml.Lambda.t): AbsVal.t =
