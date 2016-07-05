@@ -137,18 +137,23 @@ fun cfa {config = {firstOrderOpt, reachabilityExt}: Config.t} : t =
    let
       val Sxml.Program.T {datatypes, body, ...} = program
 
-      val {get = conInfo: Sxml.Con.t -> {order: Order.t},
-           rem = remConInfo} =
+      val {get = conOrder: Sxml.Con.t -> Order.t,
+           rem = remConOrder} =
          Property.get
          (Sxml.Con.plist,
-          Property.initFun (fn _ => {order = Order.new ()}))
-      val conOrder = #order o conInfo
-      val {get = tyconInfo: Sxml.Tycon.t -> {order: Order.t},
-           rem = remTyConInfo} =
+          Property.initFun (fn _ => Order.new ()))
+      val destroyConOrder = fn () =>
+         Vector.foreach
+         (datatypes, fn {cons, ...} =>
+          Vector.foreach (cons, remConOrder o #con))
+      val {get = tyconOrder: Sxml.Tycon.t -> Order.t,
+           rem = remTyconOrder} =
          Property.get
          (Sxml.Tycon.plist,
-          Property.initFun (fn _ => {order = Order.new ()}))
-      val tyconOrder = #order o tyconInfo
+          Property.initFun (fn _ => Order.new ()))
+      val destroyTyconOrder = fn () =>
+         Vector.foreach
+         (datatypes, remTyconOrder o #tycon)
       val {hom = typeOrder: Sxml.Type.t -> Order.t,
            destroy = destroyTypeOrder} =
          Sxml.Type.makeMonoHom
@@ -497,7 +502,10 @@ fun cfa {config = {firstOrderOpt, reachabilityExt}: Config.t} : t =
            | _ => Error.bug "ZeroCFA.cfa: non-lambda")
 
       val destroy = fn () =>
-         (Sxml.Exp.foreachBoundVar
+         (destroyConOrder ();
+          destroyTyconOrder ();
+          destroyTypeOrder ();
+          Sxml.Exp.foreachBoundVar
           (body, fn (var, _, _) =>
            remVarInfo var);
           destroyTypeInfo ();
