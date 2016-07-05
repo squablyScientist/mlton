@@ -4,7 +4,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-(* A naive 0CFA control-flow analysis, using a powerset lattice of
+(* A basic 0CFA control-flow analysis, using a powerset lattice of
  * abstract values.
  *)
 functor ZeroCFA (S: CFA_STRUCTS): CFA =
@@ -13,7 +13,19 @@ struct
 open S
 open Sxml.Atoms
 
-structure Config = struct type t = {reachabilityExt: bool} end
+structure Config =
+   struct
+      type t = {firstOrderOpt: bool,
+                reachabilityExt: bool}
+      val init = {firstOrderOpt = true, reachabilityExt = true}
+      fun updateFirstOrderOpt ({reachabilityExt, ...}: t, firstOrderOpt) =
+         {firstOrderOpt = firstOrderOpt,
+          reachabilityExt = reachabilityExt}
+      fun updateReachabilityExt ({firstOrderOpt, ...}: t, reachabilityExt) =
+         {firstOrderOpt = firstOrderOpt,
+          reachabilityExt = reachabilityExt}
+
+   end
 
 type t = {program: Sxml.Program.t} ->
          {cfa: {arg: Sxml.Var.t,
@@ -23,6 +35,15 @@ type t = {program: Sxml.Program.t} ->
                 resTy: Sxml.Type.t} ->
                Sxml.Lambda.t list,
           destroy: unit -> unit}
+
+structure Order =
+   struct
+      structure L = TwoPointLattice (val bottom = "first-order"
+                                     val top = "higher-order")
+      open L
+      val isFirstOrder = isBottom
+      val makeHigherOrder = makeTop
+   end
 
 structure Proxy :>
    sig
@@ -105,14 +126,53 @@ structure AbstractValueSet =
       open AbstractValueSet
       val unit = singleton AbstractValue.unit
       val bool = fromList [AbstractValue.truee, AbstractValue.falsee]
+      fun singletonBase ty =
+         singleton (AbsVal.Base ty)
    end
 structure AbsValSet = AbstractValueSet
 
 
-fun cfa {config = {reachabilityExt}: Config.t} : t =
+fun cfa {config = {firstOrderOpt, reachabilityExt}: Config.t} : t =
    fn {program: Sxml.Program.t} =>
    let
-      val Sxml.Program.T {body, ...} = program
+      val Sxml.Program.T {datatypes, body, ...} = program
+
+      val {get = conInfo: Sxml.Con.t -> {order: Order.t},
+           rem = remConInfo} =
+         Property.get
+         (Sxml.Con.plist,
+          Property.initFun (fn _ => {order = Order.new ()}))
+      val conOrder = #order o conInfo
+      val {get = tyconInfo: Sxml.Tycon.t -> {order: Order.t},
+           rem = remTyConInfo} =
+         Property.get
+         (Sxml.Tycon.plist,
+          Property.initFun (fn _ => {order = Order.new ()}))
+      val tyconOrder = #order o tyconInfo
+      val {hom = typeOrder: Sxml.Type.t -> Order.t,
+           destroy = destroyTypeOrder} =
+         Sxml.Type.makeMonoHom
+         {con = (fn (_, tycon, vs) =>
+                 let
+                    val res = Order.new ()
+                    val _ =
+                       if Sxml.Tycon.equals (tycon, Sxml.Tycon.arrow)
+                          then Order.makeHigherOrder res
+                       else (Order.<= (tyconOrder tycon, res);
+                             Vector.foreach (vs, fn v => Order.<= (v, res)))
+                 in
+                    res
+                 end)}
+      val _ =
+         Vector.foreach
+         (datatypes, fn {tycon, cons, ...} =>
+          Vector.foreach
+          (cons, fn {con, arg} =>
+           (Order.<= (conOrder con, tyconOrder tycon);
+            Order.<= (tyconOrder tycon, conOrder con);
+            Option.foreach (arg, fn ty =>
+                            Order.<= (typeOrder ty, conOrder con)))))
+
 
       val {get = varInfo: Sxml.Var.t -> AbsValSet.t,
            rem = remVarInfo} =
@@ -130,31 +190,39 @@ fun cfa {config = {reachabilityExt}: Config.t} : t =
            set = setTypeInfo, destroy = destroyTypeInfo} =
          Property.destGetSetOnce
          (Sxml.Type.plist,
-          Property.initRaise ("ZeroCFA.typeInfo", Sxml.Type.layout))
-
-      val _ = setTypeInfo (Sxml.Type.bool, AbsValSet.bool)
-      val _ = setTypeInfo (Sxml.Type.unit, AbsValSet.unit)
-      local
-         fun mkSingletonBase ty =
-            setTypeInfo (ty, AbsValSet.singleton (AbsVal.Base ty))
-      in
-         val _ = mkSingletonBase (Sxml.Type.cpointer)
-         val _ = mkSingletonBase (Sxml.Type.intInf)
-         val _ = Vector.foreach (Tycon.reals, fn (_, rs) =>
-                                 mkSingletonBase (Sxml.Type.real rs))
-         val _ = mkSingletonBase (Sxml.Type.thread)
-         val _ = Vector.foreach (Tycon.words, fn (_, ws) =>
-                                 mkSingletonBase (Sxml.Type.word ws))
-      end
-      val _ = Vector.foreach (Tycon.words, fn (_, ws) =>
-                              let
-                                 val ety = Sxml.Type.word ws
-                                 val vty = Sxml.Type.vector ety
-                                 val pv = Proxy.new ()
-                                 val _ = AbsValSet.<= (typeInfo ety, proxyInfo pv)
-                              in
-                                 setTypeInfo (vty, AbsValSet.singleton (AbsVal.Vector pv))
-                              end)
+          Property.initFun (fn ty =>
+                            if firstOrderOpt andalso Order.isFirstOrder (typeOrder ty)
+                               then AbsValSet.singletonBase ty
+                               else (Error.bug o Layout.toString o Layout.seq)
+                                    [Sxml.Type.layout ty,
+                                     Layout.str " has no ZeroCFA.typeInfo property"]))
+      val _ =
+         if firstOrderOpt
+            then ()
+            else let
+                    val _ = setTypeInfo (Sxml.Type.unit, AbsValSet.unit)
+                    val _ = setTypeInfo (Sxml.Type.bool, AbsValSet.bool)
+                    fun setSingletonBase ty =
+                       setTypeInfo (ty, AbsValSet.singletonBase ty)
+                    val _ = setSingletonBase (Sxml.Type.cpointer)
+                    val _ = setSingletonBase (Sxml.Type.intInf)
+                    val _ = Vector.foreach (Tycon.reals, fn (_, rs) =>
+                                            setSingletonBase (Sxml.Type.real rs))
+                    val _ = setSingletonBase (Sxml.Type.thread)
+                    val _ = Vector.foreach (Tycon.words, fn (_, ws) =>
+                                            setSingletonBase (Sxml.Type.word ws))
+                    val _ = Vector.foreach (Tycon.words, fn (_, ws) =>
+                                            let
+                                               val ety = Sxml.Type.word ws
+                                               val vty = Sxml.Type.vector ety
+                                               val pv = Proxy.new ()
+                                               val _ = AbsValSet.<= (typeInfo ety, proxyInfo pv)
+                                            in
+                                               setTypeInfo (vty, AbsValSet.singleton (AbsVal.Vector pv))
+                                            end)
+                 in
+                    ()
+                 end
 
       val {get = lambdaInfo: Sxml.Lambda.t -> bool,
            set = setLambdaInfo, destroy = destroyLambdaInfo} =
@@ -216,6 +284,16 @@ fun cfa {config = {reachabilityExt}: Config.t} : t =
                                   (cases, fn (Sxml.Pat.T {con, arg, ...}, _) =>
                                    {con = con, arg = arg})
                             in
+                               if firstOrderOpt
+                                  then Vector.foreach
+                                       (cases, fn {con, arg} =>
+                                        if Order.isFirstOrder (conOrder con)
+                                           then case arg of
+                                                   SOME (arg, ty) =>
+                                                      AbsValSet.<= (typeInfo ty, varInfo arg)
+                                                 | _ => ()
+                                           else ())
+                                  else ();
                                AbsValSet.addHandler
                                (varExpInfo test, fn v =>
                                 case v of
@@ -229,6 +307,7 @@ fun cfa {config = {reachabilityExt}: Config.t} : t =
                                                     AbsValSet.<= (varInfo arg, varInfo arg')
                                                | _ => Error.bug "ZeroCFA.loopPrimExp: Case")
                                         | NONE => ())
+                                 | AbsVal.Base _ => ()
                                  | _ => Error.bug "ZeroCFA.loopPrimExp: non-con")
                             end
                        | Sxml.Cases.Word _ => ()
@@ -244,9 +323,11 @@ fun cfa {config = {reachabilityExt}: Config.t} : t =
                    res
                 end
            | Sxml.PrimExp.ConApp {con, arg, ...} =>
-                AbsValSet.singleton (AbsVal.ConApp {con = con, arg = Option.map (arg, Sxml.VarExp.var)})
+                if firstOrderOpt andalso Order.isFirstOrder (conOrder con)
+                   then typeInfo ty
+                   else AbsValSet.singleton (AbsVal.ConApp {con = con, arg = Option.map (arg, Sxml.VarExp.var)})
            | Sxml.PrimExp.Const c =>
-                typeInfo (Sxml.Type.ofConst c)
+                typeInfo ty
            | Sxml.PrimExp.Handle {try, catch = (var, _), handler} =>
                 let
                    val res = AbsValSet.empty ()
@@ -258,7 +339,10 @@ fun cfa {config = {reachabilityExt}: Config.t} : t =
                 end
            | Sxml.PrimExp.Lambda lam =>
                 AbsValSet.singleton (loopLambda lam)
-           | Sxml.PrimExp.PrimApp {prim, args, ...} =>
+           | Sxml.PrimExp.PrimApp {prim, targs, args, ...} =>
+                if firstOrderOpt andalso Vector.forall (targs, fn ty => Order.isFirstOrder (typeOrder ty))
+                   then typeInfo ty
+                else
                 let
                    val res = AbsValSet.empty ()
                    fun arg' i = Sxml.VarExp.var (Vector.sub (args, i))
@@ -347,7 +431,7 @@ fun cfa {config = {reachabilityExt}: Config.t} : t =
                    res
                 end
            | Sxml.PrimExp.Profile _ =>
-                AbsValSet.unit
+                typeInfo ty
            | Sxml.PrimExp.Raise {exn, ...} =>
                 let
                    val _ = AbsValSet.<= (varExpInfo exn, proxyInfo exnProxy)
@@ -355,19 +439,23 @@ fun cfa {config = {reachabilityExt}: Config.t} : t =
                    AbsValSet.empty ()
                 end
            | Sxml.PrimExp.Select {tuple, offset} =>
-                let
-                   val res = AbsValSet.empty ()
-                   val _ = AbsValSet.addHandler
-                           (varExpInfo tuple, fn v =>
-                            case v of
-                               AbsVal.Tuple xs =>
-                                  AbsValSet.<= (varInfo (Vector.sub (xs, offset)), res)
-                             | _ => Error.bug "ZeroCFA.loopPrimExp: non-tuple")
-                in
-                   res
-                end
+                if firstOrderOpt andalso Order.isFirstOrder (typeOrder ty)
+                   then typeInfo ty
+                   else let
+                           val res = AbsValSet.empty ()
+                           val _ = AbsValSet.addHandler
+                                   (varExpInfo tuple, fn v =>
+                                    case v of
+                                       AbsVal.Tuple xs =>
+                                          AbsValSet.<= (varInfo (Vector.sub (xs, offset)), res)
+                                     | _ => Error.bug "ZeroCFA.loopPrimExp: non-tuple")
+                        in
+                           res
+                        end
            | Sxml.PrimExp.Tuple xs =>
-                AbsValSet.singleton (AbsVal.Tuple (Vector.map (xs, Sxml.VarExp.var)))
+                if firstOrderOpt andalso Order.isFirstOrder (typeOrder ty)
+                   then typeInfo ty
+                   else AbsValSet.singleton (AbsVal.Tuple (Vector.map (xs, Sxml.VarExp.var)))
            | Sxml.PrimExp.Var x =>
                 varExpInfo x)
       and loopLambda (lambda: Sxml.Lambda.t): AbsVal.t =
@@ -423,21 +511,48 @@ val cfa = fn config =>
 
 fun scan _ charRdr strm0 =
    let
-      val (s, strm1) =
-         StringCvt.splitl Char.isAlphaNum charRdr strm0
+      fun scanAlphaNums strm =
+         SOME (StringCvt.splitl Char.isAlphaNum charRdr strm)
+
+      fun mkNameArgScan (name, scanArg, updateConfig) (config: Config.t) strm0 =
+         case scanAlphaNums strm0 of
+            SOME (s, strm1) =>
+               if String.equals (name, s)
+                  then (case charRdr strm1 of
+                           SOME (#":", strm2) =>
+                              (case scanArg strm2 of
+                                  SOME (arg, strm3) =>
+                                     SOME (updateConfig (config, arg), strm3)
+                                | _ => NONE)
+                         | _ => NONE)
+                  else NONE
+          | _ => NONE
+      val nameArgScans =
+         (mkNameArgScan ("fo", Pervasive.Bool.scan charRdr, Config.updateFirstOrderOpt))::
+         (mkNameArgScan ("reach", Pervasive.Bool.scan charRdr, Config.updateReachabilityExt))::
+         nil
+
+      fun scanNameArgs (nameArgScans, config) strm =
+         case nameArgScans of
+            nameArgScan::nameArgScans =>
+               (case nameArgScan config strm of
+                   SOME (config', strm') =>
+                      (case nameArgScans of
+                          [] => (case charRdr strm' of
+                                    SOME (#")", strm'') => SOME (cfa {config = config'}, strm'')
+                                  | _ => NONE)
+                        | _ => (case charRdr strm' of
+                                   SOME (#",", strm'') => scanNameArgs (nameArgScans, config') strm''
+                                 | _ => NONE))
+                 | _ => NONE)
+          | _ => NONE
    in
-      if String.equals ("0cfa", s)
-         then (case charRdr strm1 of
-                  SOME (#"(", strm2) =>
-                     (case Pervasive.Bool.scan charRdr strm2 of
-                         SOME (reachabilityExt, strm3) =>
-                            (case charRdr strm3 of
-                                SOME (#")", strm4) =>
-                                   SOME (cfa {config = {reachabilityExt = reachabilityExt}}, strm4)
-                              | _ => NONE)
-                       | _ => NONE)
-                | _ => NONE)
-         else NONE
+      case scanAlphaNums strm0 of
+         SOME ("0cfa", strm1) =>
+            (case charRdr strm1 of
+                SOME (#"(", strm2) => scanNameArgs (nameArgScans, Config.init) strm2
+              | _ => NONE)
+       | _ => NONE
    end
 
 end
