@@ -173,10 +173,9 @@ fun cfa {config = {firstOrderOpt, reachabilityExt}: Config.t} : t =
          (datatypes, fn {tycon, cons, ...} =>
           Vector.foreach
           (cons, fn {con, arg} =>
-           (Order.<= (conOrder con, tyconOrder tycon);
-            Order.<= (tyconOrder tycon, conOrder con);
-            Option.foreach (arg, fn ty =>
-                            Order.<= (typeOrder ty, conOrder con)))))
+           (Option.foreach (arg, fn ty =>
+                            Order.<= (typeOrder ty, conOrder con));
+            Order.<= (conOrder con, tyconOrder tycon))))
 
 
       val {get = varInfo: Sxml.Var.t -> AbsValSet.t,
@@ -296,10 +295,8 @@ fun cfa {config = {firstOrderOpt, reachabilityExt}: Config.t} : t =
                                   then Vector.foreach
                                        (cases, fn {con, arg} =>
                                         if Order.isFirstOrder (conOrder con)
-                                           then case arg of
-                                                   SOME (arg, ty) =>
-                                                      AbsValSet.<= (typeInfo ty, varInfo arg)
-                                                 | _ => ()
+                                           then Option.foreach (arg, fn (arg, ty) =>
+                                                                AbsValSet.<= (typeInfo ty, varInfo arg))
                                            else ())
                                   else ();
                                AbsValSet.addHandler
