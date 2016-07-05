@@ -26,8 +26,6 @@ intersect-cfa.fun
 abstract-value.sig
 abstract-value.fun
 orig-cfa.fun
-powerset-lattice.sig
-powerset-lattice.fun
 zero-cfa.fun
 
 lambda-free.sig
