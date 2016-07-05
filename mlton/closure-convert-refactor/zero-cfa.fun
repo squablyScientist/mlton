@@ -36,7 +36,7 @@ structure Proxy :>
    end =
    struct
       type t = Sxml.Var.t
-      val all = ref []
+      val all : t list ref = ref []
       val equals = Sxml.Var.equals
       val hash = Sxml.Var.hash
       val layout = Sxml.Var.layout
