@@ -19,6 +19,9 @@ is
 ../ssa/sources.cm
 ../xml/sources.cm
 
+lambda-free.sig
+lambda-free.fun
+
 cfa.sig
 ty-cfa.fun
 synknown-cfa.fun
@@ -27,9 +30,7 @@ abstract-value.sig
 abstract-value.fun
 orig-cfa.fun
 zero-cfa.fun
-
-lambda-free.sig
-lambda-free.fun
+m-cfa.fun
 
 transform.sig
 ty-transform.fun

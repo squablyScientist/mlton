@@ -18,6 +18,7 @@ structure OrigCFA = OrigCFA(S)
 structure SynKnownCFA = SynKnownCFA(S)
 structure TyCFA = TyCFA(S)
 structure ZeroCFA = ZeroCFA(S)
+structure mCFA = mCFA(S)
 val cfaRef = ref (TyCFA.cfa {config = ()})
 val cfaString = ref "tycfa"
 val cfaGet = fn () => !cfaString
@@ -29,6 +30,7 @@ val cfaSet =
          SynKnownCFA.scan ::
          TyCFA.scan ::
          ZeroCFA.scan ::
+         mCFA.scan ::
          nil
 
       fun cfaRdrRec charRdr strm0 =
