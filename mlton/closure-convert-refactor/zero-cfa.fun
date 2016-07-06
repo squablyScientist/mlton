@@ -76,7 +76,7 @@ structure AbstractValue =
        | Ref of Proxy.t
        | Tuple of Sxml.Var.t vector
        | Vector of Proxy.t
-       | Weak of Sxml.Var.t
+       | Weak of Proxy.t
 
       fun equals (e, e') =
          case (e, e') of
@@ -89,7 +89,7 @@ structure AbstractValue =
           | (Ref p, Ref p') => Proxy.equals (p, p')
           | (Tuple xs, Tuple xs') => Vector.equals (xs, xs', Sxml.Var.equals)
           | (Vector p, Vector p') => Proxy.equals (p, p')
-          | (Weak x, Weak x') => Sxml.Var.equals (x, x')
+          | (Weak p, Weak p') => Proxy.equals (p, p')
           | _ => false
 
       fun layout e =
@@ -108,7 +108,7 @@ structure AbstractValue =
              | Ref p => seq [str "Ref ", Proxy.layout p]
              | Tuple xs => tuple (Vector.toListMap (xs, Sxml.Var.layout))
              | Vector p => seq [str "Vector ", Proxy.layout p]
-             | Weak x => seq [str "Weak ", Sxml.Var.layout x]
+             | Weak p => seq [str "Weak ", Proxy.layout p]
          end
 
       fun hash _ = 0wx0
@@ -414,12 +414,17 @@ fun cfa {config = {firstOrderOpt, reachabilityExt}: Config.t} : t =
                                AbsValSet.<< (AbsVal.Ref pr, res)
                             end
                        | Weak_new =>
-                            AbsValSet.<< (AbsVal.Weak (arg' 0), res)
+                            let
+                               val pw = Proxy.new ()
+                            in
+                               AbsValSet.<= (arg 0, proxyInfo pw);
+                               AbsValSet.<< (AbsVal.Weak pw, res)
+                            end
                        | Weak_get =>
                             AbsValSet.addHandler
                             (arg 0, fn v =>
                              case v of
-                                AbsVal.Weak x => AbsValSet.<= (varInfo x, res)
+                                AbsVal.Weak pw => AbsValSet.<= (proxyInfo pw, res)
                               | _ => bug ("Weak", v))
                        | Vector_sub =>
                             AbsValSet.addHandler
