@@ -11,7 +11,6 @@ functor ZeroCFA (S: CFA_STRUCTS): CFA =
 struct
 
 open S
-open Sxml.Atoms
 
 structure Config =
    struct
@@ -211,12 +210,12 @@ fun cfa {config = {firstOrderOpt, reachabilityExt}: Config.t} : t =
                        setTypeInfo (ty, AbsValSet.frozenSingletonBase ty)
                     val _ = setFrozenSingletonBase (Sxml.Type.cpointer)
                     val _ = setFrozenSingletonBase (Sxml.Type.intInf)
-                    val _ = Vector.foreach (Tycon.reals, fn (_, rs) =>
+                    val _ = Vector.foreach (Sxml.Tycon.reals, fn (_, rs) =>
                                             setFrozenSingletonBase (Sxml.Type.real rs))
                     val _ = setFrozenSingletonBase (Sxml.Type.thread)
-                    val _ = Vector.foreach (Tycon.words, fn (_, ws) =>
+                    val _ = Vector.foreach (Sxml.Tycon.words, fn (_, ws) =>
                                             setFrozenSingletonBase (Sxml.Type.word ws))
-                    val _ = Vector.foreach (Tycon.words, fn (_, ws) =>
+                    val _ = Vector.foreach (Sxml.Tycon.words, fn (_, ws) =>
                                             let
                                                val ety = Sxml.Type.word ws
                                                val vty = Sxml.Type.vector ety
@@ -354,10 +353,10 @@ fun cfa {config = {firstOrderOpt, reachabilityExt}: Config.t} : t =
                       (Error.bug o String.concat)
                       ["ZeroCFA.loopPrimExp: non-", k,
                        " (got ", Layout.toString (AbsVal.layout v),
-                       " for ",Prim.Name.toString (Prim.name prim), ")"]
-                   datatype z = datatype Prim.Name.t
+                       " for ", Sxml.Prim.Name.toString (Sxml.Prim.name prim), ")"]
+                   datatype z = datatype Sxml.Prim.Name.t
                    val _ =
-                      case Prim.name prim of
+                      case Sxml.Prim.name prim of
                          Array_array =>
                             let
                                val pa = Proxy.new ()
