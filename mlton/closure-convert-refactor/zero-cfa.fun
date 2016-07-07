@@ -4,26 +4,58 @@
  * See the file MLton-LICENSE for details.
  *)
 
-(* A basic 0CFA control-flow analysis, using a powerset lattice of
- * abstract values.
- *)
-functor ZeroCFA (S: CFA_STRUCTS): CFA =
+
+(* A basic 0CFA control-flow analysis, parameterized by the
+ * implementation of abstract values.
+*)
+functor MkZeroCFA (S:
+                   sig
+                      include CFA_STRUCTS
+                      structure AbstractValue :
+                         sig
+                            type t
+
+                            datatype elt =
+                               Array of t
+                             | Base of Sxml.Type.t
+                             | ConApp of {con: Sxml.Con.t, arg: t option}
+                             | Lambda of Sxml.Lambda.t
+                             | Ref of t
+                             | Tuple of t vector
+                             | Vector of t
+                             | Weak of t
+                            structure Elt :
+                               sig
+                                  type t = elt
+                                  val layout: t -> Layout.t
+                               end
+
+                            val addHandler: t * (Sxml.Var.t -> t) * (elt -> unit) -> unit
+                            val diagnostics: (Layout.t -> unit) -> unit
+                            val flow: {from: t, to: t} -> unit
+                            val forBool: t
+                            val forUnit: t
+                            val fromConApp: {con: Sxml.Con.t, arg: Sxml.Var.t option} * (Sxml.Var.t -> t) -> t
+                            val fromLambda: Sxml.Lambda.t -> t
+                            val fromTuple: Sxml.Var.t vector * (Sxml.Var.t -> t) -> t
+                            val fromType: Sxml.Type.t -> t
+                            val layout: t -> Layout.t
+                            val new: unit -> t
+                            val newArray: t -> t
+                            val newRef: t -> t
+                            val newVector: t -> t
+                            val newWeak: t -> t
+                         end
+                   end) =
 struct
 
 open S
+structure AbsVal = AbstractValue
 
 structure Config =
    struct
-      type t = {firstOrderOpt: bool,
-                reachabilityExt: bool}
-      val init = {firstOrderOpt = true, reachabilityExt = true}
-      fun updateFirstOrderOpt ({reachabilityExt, ...}: t, firstOrderOpt) =
-         {firstOrderOpt = firstOrderOpt,
-          reachabilityExt = reachabilityExt}
-      fun updateReachabilityExt ({firstOrderOpt, ...}: t, reachabilityExt) =
-         {firstOrderOpt = firstOrderOpt,
-          reachabilityExt = reachabilityExt}
-
+      datatype t = T of {firstOrderOpt: bool,
+                         reachabilityExt: bool}
    end
 
 type t = {program: Sxml.Program.t} ->
@@ -44,6 +76,461 @@ structure Order =
       val makeHigherOrder = makeTop
    end
 
+
+fun cfa {config: Config.t}: t =
+   fn {program: Sxml.Program.t} =>
+   let
+      val Config.T {firstOrderOpt, reachabilityExt} = config
+      val Sxml.Program.T {datatypes, body, ...} = program
+
+      val {get = conOrder: Sxml.Con.t -> Order.t,
+           rem = remConOrder} =
+         Property.get
+         (Sxml.Con.plist,
+          Property.initFun (fn _ => Order.new ()))
+      val destroyConOrder = fn () =>
+         Vector.foreach
+         (datatypes, fn {cons, ...} =>
+          Vector.foreach (cons, remConOrder o #con))
+      val {get = tyconOrder: Sxml.Tycon.t -> Order.t,
+           rem = remTyconOrder} =
+         Property.get
+         (Sxml.Tycon.plist,
+          Property.initFun (fn _ => Order.new ()))
+      val destroyTyconOrder = fn () =>
+         Vector.foreach
+         (datatypes, remTyconOrder o #tycon)
+      val {hom = typeOrder: Sxml.Type.t -> Order.t,
+           destroy = destroyTypeOrder} =
+         Sxml.Type.makeMonoHom
+         {con = (fn (_, tycon, vs) =>
+                 let
+                    val res = Order.new ()
+                    val _ =
+                       if Sxml.Tycon.equals (tycon, Sxml.Tycon.arrow)
+                          then Order.makeHigherOrder res
+                       else (Order.<= (tyconOrder tycon, res);
+                             Vector.foreach (vs, fn v => Order.<= (v, res)))
+                 in
+                    res
+                 end)}
+      val _ =
+         Vector.foreach
+         (datatypes, fn {tycon, cons, ...} =>
+          Vector.foreach
+          (cons, fn {con, arg} =>
+           (Option.foreach (arg, fn ty =>
+                            Order.<= (typeOrder ty, conOrder con));
+            Order.<= (conOrder con, tyconOrder tycon))))
+
+
+      val {get = varInfo: Sxml.Var.t -> {value: AbsVal.t},
+           rem = remVarInfo} =
+         Property.get
+         (Sxml.Var.plist,
+          Property.initFun (fn _ => {value = AbsVal.new ()}))
+      val varValue = #value o varInfo
+      val varExpValue = varValue o Sxml.VarExp.var
+
+      val {get = typeInfo: Sxml.Type.t -> {value: AbsVal.t},
+           destroy = destroyTypeInfo} =
+         if firstOrderOpt
+            then Property.destGet
+                 (Sxml.Type.plist,
+                  Property.initFun (fn ty => {value = AbsVal.fromType ty}))
+            else let
+                    val {get = typeInfo,
+                         set = setTypeInfo, destroy = destroyTypeInfo} =
+                       Property.destGetSetOnce
+                       (Sxml.Type.plist,
+                        Property.initRaise ("ZeroCFA.tyInfo", Sxml.Type.layout))
+                    val typeValue = #value o typeInfo
+
+                    val _ = setTypeInfo (Sxml.Type.unit, {value = AbsVal.forUnit})
+                    val _ = setTypeInfo (Sxml.Type.bool, {value = AbsVal.forBool})
+                    fun setTypeInfoFromType ty =
+                       setTypeInfo (ty, {value = AbsVal.fromType ty})
+                    val _ = setTypeInfoFromType (Sxml.Type.cpointer)
+                    val _ = setTypeInfoFromType (Sxml.Type.intInf)
+                    val _ = Vector.foreach (Sxml.Tycon.reals, fn (_, rs) =>
+                                            setTypeInfoFromType (Sxml.Type.real rs))
+                    val _ = setTypeInfoFromType (Sxml.Type.thread)
+                    val _ = Vector.foreach (Sxml.Tycon.words, fn (_, ws) =>
+                                            setTypeInfoFromType (Sxml.Type.word ws))
+                    val _ = Vector.foreach (Sxml.Tycon.words, fn (_, ws) =>
+                                            let
+                                               val ety = Sxml.Type.word ws
+                                               val vty = Sxml.Type.vector ety
+                                            in
+                                               setTypeInfo (vty, {value = AbsVal.newVector (typeValue ety)})
+                                            end)
+                 in
+                    {get = typeInfo, destroy = destroyTypeInfo}
+                 end
+      val typeValue = #value o typeInfo
+
+      val {get = lambdaInfo: Sxml.Lambda.t -> bool,
+           set = setLambdaInfo, destroy = destroyLambdaInfo} =
+         Property.destGetSet
+         (Sxml.Lambda.plist,
+          Property.initFun (fn _ => false))
+
+      val exnAbsVal = AbsVal.new ()
+
+      fun loopExp (exp: Sxml.Exp.t): AbsVal.t =
+         let
+            val {decs, result} = Sxml.Exp.dest exp
+            val () = List.foreach (decs, loopDec)
+         in
+            varExpValue result
+         end
+      and loopExp' (exp: Sxml.Exp.t): unit = ignore (loopExp exp)
+      and loopDec (dec: Sxml.Dec.t): unit =
+         (case dec of
+             Sxml.Dec.Fun {decs, ...} =>
+                Vector.foreach
+                (decs, fn {var, ty, lambda, ...} =>
+                 loopBind {var = var, ty = ty,
+                           exp = Sxml.PrimExp.Lambda lambda})
+           | Sxml.Dec.MonoVal bind => loopBind bind
+           | _ => Error.bug "ZeroCFA.loopDec: strange dec")
+      and loopBind (bind as {var, ty, exp, ...}): unit =
+         AbsVal.flow {from = loopPrimExp bind,
+                      to = varValue var}
+      and loopPrimExp {ty: Sxml.Type.t, exp: Sxml.PrimExp.t, ...}: AbsVal.t =
+         (case exp of
+             Sxml.PrimExp.App {func, arg} =>
+                let
+                   val res = AbsVal.new ()
+                   val _ = AbsVal.addHandler
+                           (varExpValue func, varValue, fn v' =>
+                            case v' of
+                               AbsVal.Lambda lambda' =>
+                                  let
+                                     val {arg = arg', body = body', ...} = Sxml.Lambda.dest lambda'
+                                  in
+                                     AbsVal.flow {from = varExpValue arg,
+                                                  to = varValue arg'};
+                                     if reachabilityExt andalso not (lambdaInfo lambda')
+                                        then (setLambdaInfo (lambda', true); loopExp' body')
+                                        else ();
+                                     AbsVal.flow {from = varExpValue (Sxml.Exp.result body'),
+                                                  to = res}
+                                  end
+                             | _ => Error.bug "ZeroCFA.loopPrimExp: non-lambda")
+                in
+                   res
+                end
+           | Sxml.PrimExp.Case {test, cases, default} =>
+                let
+                   val res = AbsVal.new ()
+                   val _ =
+                      case cases of
+                         Sxml.Cases.Con cases =>
+                            let
+                               val cases =
+                                  Vector.map
+                                  (cases, fn (Sxml.Pat.T {con, arg, ...}, _) =>
+                                   {con = con, arg = arg})
+                            in
+                               if firstOrderOpt
+                                  then Vector.foreach
+                                       (cases, fn {con, arg} =>
+                                        if Order.isFirstOrder (conOrder con)
+                                           then Option.foreach
+                                                (arg, fn (arg, ty) =>
+                                                 AbsVal.flow {from = typeValue ty,
+                                                              to = varValue arg})
+                                           else ())
+                                  else ();
+                               AbsVal.addHandler
+                               (varExpValue test, varValue, fn v' =>
+                                case v' of
+                                   AbsVal.ConApp {con = con', arg = arg'} =>
+                                      (case Vector.peek (cases, fn {con, ...} =>
+                                                         Sxml.Con.equals (con, con')) of
+                                          SOME {arg = arg, ...} =>
+                                             (case (arg', arg) of
+                                                 (NONE, NONE) => ()
+                                               | (SOME arg', SOME (arg, _)) =>
+                                                    AbsVal.flow {from = arg', to = varValue arg}
+                                               | _ => Error.bug "ZeroCFA.loopPrimExp: Case")
+                                        | NONE => ())
+                                 | AbsVal.Base _ => ()
+                                 | _ => Error.bug "ZeroCFA.loopPrimExp: non-con")
+                            end
+                       | Sxml.Cases.Word _ => ()
+                   val _ =
+                      Sxml.Cases.foreach
+                      (cases, fn exp =>
+                       AbsVal.flow {from = loopExp exp, to = res})
+                   val _ =
+                      Option.foreach
+                      (default, fn (exp, _) =>
+                       AbsVal.flow {from = loopExp exp, to = res})
+                in
+                   res
+                end
+           | Sxml.PrimExp.ConApp {con, arg, ...} =>
+                if firstOrderOpt andalso Order.isFirstOrder (conOrder con)
+                   then typeValue ty
+                   else AbsVal.fromConApp ({con = con, arg = Option.map (arg, Sxml.VarExp.var)}, varValue)
+           | Sxml.PrimExp.Const c =>
+                typeValue (Sxml.Type.ofConst c)
+           | Sxml.PrimExp.Handle {try, catch = (var, _), handler} =>
+                let
+                   val res = AbsVal.new ()
+                   val _ = AbsVal.flow {from = loopExp try, to = res}
+                   val _ = AbsVal.flow {from = exnAbsVal, to = varValue var}
+                   val _ = AbsVal.flow {from = loopExp handler, to = res}
+                in
+                   res
+                end
+           | Sxml.PrimExp.Lambda lambda =>
+                (loopLambda lambda;
+                 AbsVal.fromLambda lambda)
+           | Sxml.PrimExp.PrimApp {prim, targs, args, ...} =>
+                if firstOrderOpt andalso Vector.forall (targs, fn ty => Order.isFirstOrder (typeOrder ty))
+                   then typeValue ty
+                else
+                let
+                   fun arg i = varExpValue (Vector.sub (args, i))
+                   fun bug (k, v) =
+                      (Error.bug o String.concat)
+                      ["ZeroCFA.loopPrimExp: non-", k,
+                       " (got ", Layout.toString (AbsVal.Elt.layout v),
+                       " for ", Sxml.Prim.Name.toString (Sxml.Prim.name prim), ")"]
+                   datatype z = datatype Sxml.Prim.Name.t
+                in
+                   case Sxml.Prim.name prim of
+                      Array_array =>
+                         AbsVal.newArray (AbsVal.new ())
+                    | Array_array0Const =>
+                         AbsVal.newArray (AbsVal.new ())
+                    | Array_sub =>
+                         let
+                            val res = AbsVal.new ()
+                            val _ =
+                               AbsVal.addHandler
+                               (arg 0, varValue, fn v' =>
+                                case v' of
+                                   AbsVal.Array pa' => AbsVal.flow {from = pa', to = res}
+                                 | _ => bug ("Array", v'))
+                         in
+                            res
+                         end
+                    | Array_update =>
+                         let
+                            val _ =
+                               AbsVal.addHandler
+                               (arg 0, varValue, fn v' =>
+                                case v' of
+                                   AbsVal.Array pa' => AbsVal.flow {from = arg 2, to = pa'}
+                                 | _ => bug ("Array", v'))
+                         in
+                            typeValue Sxml.Type.unit
+                         end
+                    | Array_toVector =>
+                         let
+                            val pv = AbsVal.new ()
+                            val _ =
+                               AbsVal.addHandler
+                               (arg 0, varValue, fn v' =>
+                                case v' of
+                                   AbsVal.Array pa' => AbsVal.flow {from = pa', to = pv}
+                                 | _ => bug ("Array", v'))
+                         in
+                            AbsVal.newVector pv
+                         end
+                    | Ref_assign =>
+                         let
+                            val _ =
+                               AbsVal.addHandler
+                               (arg 0, varValue, fn v' =>
+                                case v' of
+                                   AbsVal.Ref pr' => AbsVal.flow {from = arg 1, to = pr'}
+                                 | _ => bug ("Ref", v'))
+                         in
+                            typeValue Sxml.Type.unit
+                         end
+                    | Ref_deref =>
+                         let
+                            val res = AbsVal.new ()
+                            val _ =
+                               AbsVal.addHandler
+                               (arg 0, varValue, fn v' =>
+                                case v' of
+                                   AbsVal.Ref pr' => AbsVal.flow {from = pr', to = res}
+                                 | _ => bug ("Ref", v'))
+                         in
+                            res
+                         end
+                    | Ref_ref =>
+                         AbsVal.newRef (arg 0)
+                    | Weak_new =>
+                         AbsVal.newWeak (arg 0)
+                    | Weak_get =>
+                         let
+                            val res = AbsVal.new ()
+                            val _ =
+                               AbsVal.addHandler
+                               (arg 0, varValue, fn v' =>
+                                case v' of
+                                   AbsVal.Weak pw' => AbsVal.flow {from = pw', to = res}
+                                 | _ => bug ("Weak", v'))
+                         in
+                            res
+                         end
+                    | Vector_sub =>
+                         let
+                            val res = AbsVal.new ()
+                            val _ =
+                               AbsVal.addHandler
+                               (arg 0, varValue, fn v' =>
+                                case v' of
+                                   AbsVal.Vector pv' => AbsVal.flow {from = pv', to = res}
+                                 | _ => bug ("Vector", v'))
+                         in
+                            res
+                         end
+                    | _ =>
+                         typeValue ty
+                end
+           | Sxml.PrimExp.Profile _ =>
+                typeValue Sxml.Type.unit
+           | Sxml.PrimExp.Raise {exn, ...} =>
+                let
+                   val _ = AbsVal.flow {from = varExpValue exn, to = exnAbsVal}
+                in
+                   AbsVal.new ()
+                end
+           | Sxml.PrimExp.Select {tuple, offset} =>
+                if firstOrderOpt andalso Order.isFirstOrder (typeOrder ty)
+                   then typeValue ty
+                   else let
+                           val res = AbsVal.new ()
+                           val _ = AbsVal.addHandler
+                                   (varExpValue tuple, varValue, fn v' =>
+                                    case v' of
+                                       AbsVal.Tuple xs' =>
+                                          AbsVal.flow {from = Vector.sub (xs', offset), to = res}
+                                     | _ => Error.bug "ZeroCFA.loopPrimExp: non-tuple")
+                        in
+                           res
+                        end
+           | Sxml.PrimExp.Tuple xs =>
+                if firstOrderOpt andalso Order.isFirstOrder (typeOrder ty)
+                   then typeValue ty
+                   else AbsVal.fromTuple (Vector.map (xs, Sxml.VarExp.var), varValue)
+           | Sxml.PrimExp.Var x =>
+                varExpValue x)
+      and loopLambda (lambda: Sxml.Lambda.t): unit =
+         let
+            val {body, ...} = Sxml.Lambda.dest lambda
+            val _ =
+               if reachabilityExt
+                  then setLambdaInfo (lambda, false)
+                  else loopExp' body
+         in
+            ()
+         end
+
+      val _ = loopExp' body
+
+      val _ =
+         Control.diagnostics
+         (fn display =>
+          (AbsVal.diagnostics display;
+           Sxml.Exp.foreachBoundVar
+           (body, fn (x, _, _) =>
+            (display o Layout.seq)
+            [Sxml.Var.layout x, Layout.str ": ", AbsVal.layout (varValue x)])))
+
+      val cfa : {arg: Sxml.Var.t,
+                 argTy: Sxml.Type.t,
+                 func: Sxml.Var.t,
+                 res: Sxml.Var.t,
+                 resTy: Sxml.Type.t} ->
+                Sxml.Lambda.t list =
+         fn {func, ...} =>
+         let
+            val lams = ref []
+            val _ =
+               AbsVal.addHandler
+               (varValue func, varValue, fn v =>
+                case v of
+                   AbsVal.Lambda lam => List.push (lams, lam)
+                 | _ => Error.bug "ZeroCFA.cfa: non-lambda")
+         in
+            !lams
+         end
+
+      val destroy = fn () =>
+         (destroyConOrder ();
+          destroyTyconOrder ();
+          destroyTypeOrder ();
+          Sxml.Exp.foreachBoundVar
+          (body, fn (var, _, _) =>
+           remVarInfo var);
+          destroyTypeInfo ();
+          destroyLambdaInfo ())
+   in
+      {cfa = cfa, destroy = destroy}
+   end
+val cfa = fn config =>
+   Control.trace (Control.Detail, "ZeroCFA")
+   (cfa config)
+
+end
+
+functor ZeroCFA (S: CFA_STRUCTS): CFA =
+struct
+
+open S
+
+structure AbstractValueRep =
+   struct
+      datatype t = PowerSet
+      fun scan charRdr strm0 =
+         case charRdr strm0 of
+            SOME (#"p", strm1) =>
+               (case charRdr strm1 of
+                   SOME (#"s", strm2) => SOME (PowerSet, strm2)
+                 | _ => NONE)
+          | _ => NONE
+   end
+structure Config =
+   struct
+      datatype t = T of {abstractValueRep: AbstractValueRep.t,
+                         firstOrderOpt: bool,
+                         reachabilityExt: bool}
+      val init = T {abstractValueRep = AbstractValueRep.PowerSet,
+                    firstOrderOpt = true,
+                    reachabilityExt = true}
+      fun updateAbstractValueRep (T {firstOrderOpt, reachabilityExt, ...}: t, abstractValueRep) =
+         T {abstractValueRep = abstractValueRep,
+            firstOrderOpt = firstOrderOpt,
+            reachabilityExt = reachabilityExt}
+      fun updateFirstOrderOpt (T {abstractValueRep, reachabilityExt, ...}: t, firstOrderOpt) =
+         T {abstractValueRep = abstractValueRep,
+            firstOrderOpt = firstOrderOpt,
+            reachabilityExt = reachabilityExt}
+      fun updateReachabilityExt (T {abstractValueRep, firstOrderOpt, ...}: t, reachabilityExt) =
+         T {abstractValueRep = abstractValueRep,
+            firstOrderOpt = firstOrderOpt,
+            reachabilityExt = reachabilityExt}
+   end
+
+type t = {program: Sxml.Program.t} ->
+         {cfa: {arg: Sxml.Var.t,
+                argTy: Sxml.Type.t,
+                func: Sxml.Var.t,
+                res: Sxml.Var.t,
+                resTy: Sxml.Type.t} ->
+               Sxml.Lambda.t list,
+          destroy: unit -> unit}
+
+local
 structure Proxy :>
    sig
       type t
@@ -66,7 +553,7 @@ structure Proxy :>
       val plist = Sxml.Var.plist
       val all = fn () => !all
    end
-structure AbstractValue =
+structure Element =
    struct
       datatype t =
          Array of Proxy.t
@@ -117,407 +604,116 @@ structure AbstractValue =
       val truee = ConApp {con = Sxml.Con.truee, arg = NONE}
       val falsee = ConApp {con = Sxml.Con.falsee, arg = NONE}
    end
-structure AbsVal = AbstractValue
-
-structure AbstractValueSet = PowerSetLattice(structure Element = AbstractValue)
-structure AbstractValueSet =
+structure ElementSet = PowerSetLattice(structure Element = Element)
+structure AbstractValue =
    struct
-      open AbstractValueSet
-      val freeze = fn es => (freeze es; es)
-      val frozenSingleton = freeze o singleton
-      val unit = frozenSingleton AbstractValue.unit
-      val bool = freeze (fromList [AbstractValue.truee, AbstractValue.falsee])
-      fun frozenSingletonBase ty =
-         frozenSingleton (AbsVal.Base ty)
-   end
-structure AbsValSet = AbstractValueSet
+      type t = ElementSet.t
+      datatype elt =
+         Array of t
+       | Base of Sxml.Type.t
+       | ConApp of {con: Sxml.Con.t, arg: t option}
+       | Lambda of Sxml.Lambda.t
+       | Ref of t
+       | Tuple of t vector
+       | Vector of t
+       | Weak of t
+      structure Elt =
+         struct
+            datatype t = datatype elt
+            fun layout e =
+               let
+                  open Layout
+               in
+                  case e of
+                     Array p => seq [str "Array ", ElementSet.layout p]
+                   | Base ty => seq [str "Base ", Sxml.Type.layout ty]
+                   | ConApp {con, arg} => seq [Sxml.Con.layout con,
+                                               case arg of
+                                                  NONE => empty
+                                                | SOME arg => seq [str " ",
+                                                                   ElementSet.layout arg]]
+                   | Lambda lam => seq [str "fn ", Sxml.Var.layout (Sxml.Lambda.arg lam)]
+                   | Ref p => seq [str "Ref ", ElementSet.layout p]
+                   | Tuple xs => tuple (Vector.toListMap (xs, ElementSet.layout))
+                   | Vector p => seq [str "Vector ", ElementSet.layout p]
+                   | Weak p => seq [str "Weak ", ElementSet.layout p]
+               end
+         end
 
-
-fun cfa {config = {firstOrderOpt, reachabilityExt}: Config.t} : t =
-   fn {program: Sxml.Program.t} =>
-   let
-      val Sxml.Program.T {datatypes, body, ...} = program
-
-      val {get = conOrder: Sxml.Con.t -> Order.t,
-           rem = remConOrder} =
-         Property.get
-         (Sxml.Con.plist,
-          Property.initFun (fn _ => Order.new ()))
-      val destroyConOrder = fn () =>
-         Vector.foreach
-         (datatypes, fn {cons, ...} =>
-          Vector.foreach (cons, remConOrder o #con))
-      val {get = tyconOrder: Sxml.Tycon.t -> Order.t,
-           rem = remTyconOrder} =
-         Property.get
-         (Sxml.Tycon.plist,
-          Property.initFun (fn _ => Order.new ()))
-      val destroyTyconOrder = fn () =>
-         Vector.foreach
-         (datatypes, remTyconOrder o #tycon)
-      val {hom = typeOrder: Sxml.Type.t -> Order.t,
-           destroy = destroyTypeOrder} =
-         Sxml.Type.makeMonoHom
-         {con = (fn (_, tycon, vs) =>
-                 let
-                    val res = Order.new ()
-                    val _ =
-                       if Sxml.Tycon.equals (tycon, Sxml.Tycon.arrow)
-                          then Order.makeHigherOrder res
-                       else (Order.<= (tyconOrder tycon, res);
-                             Vector.foreach (vs, fn v => Order.<= (v, res)))
-                 in
-                    res
-                 end)}
-      val _ =
-         Vector.foreach
-         (datatypes, fn {tycon, cons, ...} =>
-          Vector.foreach
-          (cons, fn {con, arg} =>
-           (Option.foreach (arg, fn ty =>
-                            Order.<= (typeOrder ty, conOrder con));
-            Order.<= (conOrder con, tyconOrder tycon))))
-
-
-      val {get = varInfo: Sxml.Var.t -> AbsValSet.t,
-           rem = remVarInfo} =
-         Property.get
-         (Sxml.Var.plist,
-          Property.initFun (fn _ => AbsValSet.empty ()))
-      val varExpInfo = varInfo o Sxml.VarExp.var
-
-      val {get = proxyInfo: Proxy.t -> AbsValSet.t, ...} =
+      val {get = proxyValue: Proxy.t -> ElementSet.t, ...} =
          Property.get
          (Proxy.plist,
-          Property.initFun (fn _ => AbsValSet.empty ()))
+          Property.initFun (fn _ => ElementSet.empty ()))
 
-      val {get = typeInfo: Sxml.Type.t -> AbsValSet.t,
-           destroy = destroyTypeInfo} =
-         if firstOrderOpt
-            then Property.destGet
-                 (Sxml.Type.plist,
-                  Property.initFun AbsValSet.frozenSingletonBase)
-            else let
-                    val {get = typeInfo,
-                         set = setTypeInfo, destroy = destroyTypeInfo} =
-                       Property.destGetSetOnce
-                       (Sxml.Type.plist,
-                        Property.initRaise ("ZeroCFA.typeInfo", Sxml.Type.layout))
-
-                    val _ = setTypeInfo (Sxml.Type.unit, AbsValSet.unit)
-                    val _ = setTypeInfo (Sxml.Type.bool, AbsValSet.bool)
-                    fun setFrozenSingletonBase ty =
-                       setTypeInfo (ty, AbsValSet.frozenSingletonBase ty)
-                    val _ = setFrozenSingletonBase (Sxml.Type.cpointer)
-                    val _ = setFrozenSingletonBase (Sxml.Type.intInf)
-                    val _ = Vector.foreach (Sxml.Tycon.reals, fn (_, rs) =>
-                                            setFrozenSingletonBase (Sxml.Type.real rs))
-                    val _ = setFrozenSingletonBase (Sxml.Type.thread)
-                    val _ = Vector.foreach (Sxml.Tycon.words, fn (_, ws) =>
-                                            setFrozenSingletonBase (Sxml.Type.word ws))
-                    val _ = Vector.foreach (Sxml.Tycon.words, fn (_, ws) =>
-                                            let
-                                               val ety = Sxml.Type.word ws
-                                               val vty = Sxml.Type.vector ety
-                                               val pv = Proxy.new ()
-                                               val _ = AbsValSet.<= (typeInfo ety, proxyInfo pv)
-                                            in
-                                               setTypeInfo (vty, AbsValSet.frozenSingleton (AbsVal.Vector pv))
-                                            end)
-                 in
-                    {get = typeInfo, destroy = destroyTypeInfo}
-                 end
-
-      val {get = lambdaInfo: Sxml.Lambda.t -> bool,
-           set = setLambdaInfo, destroy = destroyLambdaInfo} =
-         Property.destGetSet
-         (Sxml.Lambda.plist,
-          Property.initFun (fn _ => false))
-
-      val exnProxy = Proxy.new ()
-
-      fun loopExp (exp: Sxml.Exp.t): AbsValSet.t =
+      fun addHandler (es, varValue, h) =
+         ElementSet.addHandler
+         (es, fn e =>
+          case e of
+             Element.Array pa => h (Elt.Array (proxyValue pa))
+           | Element.Base ty => h (Elt.Base ty)
+           | Element.ConApp {con, arg} => h (Elt.ConApp {con = con, arg = Option.map (arg, varValue)})
+           | Element.Lambda lam => h (Elt.Lambda lam)
+           | Element.Ref pr => h (Elt.Ref (proxyValue pr))
+           | Element.Tuple xs => h (Elt.Tuple (Vector.map (xs, varValue)))
+           | Element.Vector pv => h (Elt.Vector (proxyValue pv))
+           | Element.Weak pw => h (Elt.Weak (proxyValue pw)))
+      fun diagnostics display =
+         List.foreach
+         (Proxy.all (), fn p =>
+          (display o Layout.seq)
+          [Proxy.layout p, Layout.str ": ", ElementSet.layout (proxyValue p)])
+      fun flow {from, to} = ElementSet.<= (from, to)
+      val forBool = ElementSet.fromList [Element.truee, Element.falsee]
+      val forUnit = ElementSet.singleton Element.unit
+      fun fromConApp ({con, arg}, _) = ElementSet.singleton (Element.ConApp {con = con, arg = arg})
+      fun fromLambda lam = ElementSet.singleton (Element.Lambda lam)
+      fun fromTuple (xs, _) = ElementSet.singleton (Element.Tuple xs)
+      fun fromType ty = ElementSet.singleton (Element.Base ty)
+      val layout = ElementSet.layout
+      val new = ElementSet.empty
+      fun newArray es =
          let
-            val {decs, result} = Sxml.Exp.dest exp
-            val () = List.foreach (decs, loopDec)
+            val pa = Proxy.new ()
+            val _ = ElementSet.<= (es, proxyValue pa)
          in
-            varExpInfo result
+            ElementSet.singleton (Element.Array pa)
          end
-      and loopExp' (exp: Sxml.Exp.t): unit = ignore (loopExp exp)
-      and loopDec (dec: Sxml.Dec.t): unit =
-         (case dec of
-             Sxml.Dec.Fun {decs, ...} =>
-                Vector.foreach
-                (decs, fn {var, lambda, ...} =>
-                 AbsValSet.<< (loopLambda lambda, varInfo var))
-           | Sxml.Dec.MonoVal bind => loopBind bind
-           | _ => Error.bug "ZeroCFA.loopDec: strange dec")
-      and loopBind {var, ty, exp, ...}: unit =
-         AbsValSet.<= (loopPrimExp (exp, ty), varInfo var)
-      and loopPrimExp (exp: Sxml.PrimExp.t, ty: Sxml.Type.t): AbsValSet.t =
-         (case exp of
-             Sxml.PrimExp.App {func, arg} =>
-                let
-                   val res = AbsValSet.empty ()
-                   val _ = AbsValSet.addHandler
-                           (varExpInfo func, fn v =>
-                            case v of
-                               AbsVal.Lambda lam =>
-                                  let
-                                     val {arg = formal, body, ...} = Sxml.Lambda.dest lam
-                                  in
-                                     AbsValSet.<= (varExpInfo arg, varInfo formal);
-                                     if reachabilityExt andalso not (lambdaInfo lam)
-                                        then (setLambdaInfo (lam, true); loopExp' body)
-                                        else ();
-                                     AbsValSet.<= (varExpInfo (Sxml.Exp.result body), res)
-                                  end
-                             | _ => Error.bug "ZeroCFA.loopPrimExp: non-lambda")
-                in
-                   res
-                end
-           | Sxml.PrimExp.Case {test, cases, default} =>
-                let
-                   val res = AbsValSet.empty ()
-                   val _ =
-                      case cases of
-                         Sxml.Cases.Con cases =>
-                            let
-                               val cases =
-                                  Vector.map
-                                  (cases, fn (Sxml.Pat.T {con, arg, ...}, _) =>
-                                   {con = con, arg = arg})
-                            in
-                               if firstOrderOpt
-                                  then Vector.foreach
-                                       (cases, fn {con, arg} =>
-                                        if Order.isFirstOrder (conOrder con)
-                                           then Option.foreach (arg, fn (arg, ty) =>
-                                                                AbsValSet.<= (typeInfo ty, varInfo arg))
-                                           else ())
-                                  else ();
-                               AbsValSet.addHandler
-                               (varExpInfo test, fn v =>
-                                case v of
-                                   AbsVal.ConApp {con, arg} =>
-                                      (case Vector.peek (cases, fn {con = con', ...} =>
-                                                         Sxml.Con.equals (con, con')) of
-                                          SOME {arg = arg', ...} =>
-                                             (case (arg, arg') of
-                                                 (NONE, NONE) => ()
-                                               | (SOME arg, SOME (arg', _)) =>
-                                                    AbsValSet.<= (varInfo arg, varInfo arg')
-                                               | _ => Error.bug "ZeroCFA.loopPrimExp: Case")
-                                        | NONE => ())
-                                 | AbsVal.Base _ => ()
-                                 | _ => Error.bug "ZeroCFA.loopPrimExp: non-con")
-                            end
-                       | Sxml.Cases.Word _ => ()
-                   val _ =
-                      Sxml.Cases.foreach
-                      (cases, fn exp =>
-                       AbsValSet.<= (loopExp exp, res))
-                   val _ =
-                      Option.foreach
-                      (default, fn (exp, _) =>
-                       AbsValSet.<= (loopExp exp, res))
-                in
-                   res
-                end
-           | Sxml.PrimExp.ConApp {con, arg, ...} =>
-                if firstOrderOpt andalso Order.isFirstOrder (conOrder con)
-                   then typeInfo ty
-                   else AbsValSet.frozenSingleton (AbsVal.ConApp {con = con, arg = Option.map (arg, Sxml.VarExp.var)})
-           | Sxml.PrimExp.Const c =>
-                typeInfo ty
-           | Sxml.PrimExp.Handle {try, catch = (var, _), handler} =>
-                let
-                   val res = AbsValSet.empty ()
-                   val _ = AbsValSet.<= (loopExp try, res)
-                   val _ = AbsValSet.<= (proxyInfo exnProxy, varInfo var)
-                   val _ = AbsValSet.<= (loopExp handler, res)
-                in
-                   res
-                end
-           | Sxml.PrimExp.Lambda lam =>
-                AbsValSet.frozenSingleton (loopLambda lam)
-           | Sxml.PrimExp.PrimApp {prim, targs, args, ...} =>
-                if firstOrderOpt andalso Vector.forall (targs, fn ty => Order.isFirstOrder (typeOrder ty))
-                   then typeInfo ty
-                else
-                let
-                   val res = AbsValSet.empty ()
-                   fun arg' i = Sxml.VarExp.var (Vector.sub (args, i))
-                   val arg = varInfo o arg'
-                   fun bug (k, v) =
-                      (Error.bug o String.concat)
-                      ["ZeroCFA.loopPrimExp: non-", k,
-                       " (got ", Layout.toString (AbsVal.layout v),
-                       " for ", Sxml.Prim.Name.toString (Sxml.Prim.name prim), ")"]
-                   datatype z = datatype Sxml.Prim.Name.t
-                   val _ =
-                      case Sxml.Prim.name prim of
-                         Array_array =>
-                            let
-                               val pa = Proxy.new ()
-                            in
-                               AbsValSet.<< (AbsVal.Array pa, res)
-                            end
-                       | Array_array0Const =>
-                            let
-                               val pa = Proxy.new ()
-                            in
-                               AbsValSet.<< (AbsVal.Array pa, res)
-                            end
-                       | Array_sub =>
-                            AbsValSet.addHandler
-                            (arg 0, fn v =>
-                             case v of
-                                AbsVal.Array pa => AbsValSet.<= (proxyInfo pa, res)
-                              | _ => bug ("Array", v))
-                       | Array_update =>
-                            (AbsValSet.addHandler
-                             (arg 0, fn v =>
-                              case v of
-                                 AbsVal.Array pa => AbsValSet.<= (arg 2, proxyInfo pa)
-                               | _ => bug ("Array", v));
-                             AbsValSet.<= (AbsValSet.unit, res))
-                       | Array_toVector =>
-                            let
-                               val pv = Proxy.new ()
-                            in
-                               AbsValSet.addHandler
-                               (arg 0, fn v =>
-                                case v of
-                                   AbsVal.Array pa => AbsValSet.<= (proxyInfo pa, proxyInfo pv)
-                                 | _ => bug ("Array", v));
-                               AbsValSet.<< (AbsVal.Vector pv, res)
-                            end
-                       | Ref_assign =>
-                            (AbsValSet.addHandler
-                             (arg 0, fn v =>
-                              case v of
-                                 AbsVal.Ref pr => AbsValSet.<= (arg 1, proxyInfo pr)
-                               | _ => bug ("Ref", v));
-                             AbsValSet.<= (AbsValSet.unit, res))
-                       | Ref_deref =>
-                            AbsValSet.addHandler
-                            (arg 0, fn v =>
-                             case v of
-                                AbsVal.Ref pr => AbsValSet.<= (proxyInfo pr, res)
-                              | _ => bug ("Ref", v))
-                       | Ref_ref =>
-                            let
-                               val pr = Proxy.new ()
-                            in
-                               AbsValSet.<= (arg 0, proxyInfo pr);
-                               AbsValSet.<< (AbsVal.Ref pr, res)
-                            end
-                       | Weak_new =>
-                            let
-                               val pw = Proxy.new ()
-                            in
-                               AbsValSet.<= (arg 0, proxyInfo pw);
-                               AbsValSet.<< (AbsVal.Weak pw, res)
-                            end
-                       | Weak_get =>
-                            AbsValSet.addHandler
-                            (arg 0, fn v =>
-                             case v of
-                                AbsVal.Weak pw => AbsValSet.<= (proxyInfo pw, res)
-                              | _ => bug ("Weak", v))
-                       | Vector_sub =>
-                            AbsValSet.addHandler
-                            (arg 0, fn v =>
-                             case v of
-                                AbsVal.Vector pv => AbsValSet.<= (proxyInfo pv, res)
-                              | _ => bug ("Vector", v))
-                       | _ =>
-                            AbsValSet.<= (typeInfo ty, res)
-                in
-                   res
-                end
-           | Sxml.PrimExp.Profile _ =>
-                typeInfo ty
-           | Sxml.PrimExp.Raise {exn, ...} =>
-                let
-                   val _ = AbsValSet.<= (varExpInfo exn, proxyInfo exnProxy)
-                in
-                   AbsValSet.empty ()
-                end
-           | Sxml.PrimExp.Select {tuple, offset} =>
-                if firstOrderOpt andalso Order.isFirstOrder (typeOrder ty)
-                   then typeInfo ty
-                   else let
-                           val res = AbsValSet.empty ()
-                           val _ = AbsValSet.addHandler
-                                   (varExpInfo tuple, fn v =>
-                                    case v of
-                                       AbsVal.Tuple xs =>
-                                          AbsValSet.<= (varInfo (Vector.sub (xs, offset)), res)
-                                     | _ => Error.bug "ZeroCFA.loopPrimExp: non-tuple")
-                        in
-                           res
-                        end
-           | Sxml.PrimExp.Tuple xs =>
-                if firstOrderOpt andalso Order.isFirstOrder (typeOrder ty)
-                   then typeInfo ty
-                   else AbsValSet.frozenSingleton (AbsVal.Tuple (Vector.map (xs, Sxml.VarExp.var)))
-           | Sxml.PrimExp.Var x =>
-                varExpInfo x)
-      and loopLambda (lambda: Sxml.Lambda.t): AbsVal.t =
+      fun newRef es =
          let
-            val {body, ...} = Sxml.Lambda.dest lambda
-            val _ =
-               if reachabilityExt
-                  then setLambdaInfo (lambda, false)
-                  else loopExp' body
+            val pr = Proxy.new ()
+            val _ = ElementSet.<= (es, proxyValue pr)
          in
-            AbsVal.Lambda lambda
+            ElementSet.singleton (Element.Ref pr)
          end
-
-      val _ = loopExp' body
-
-      val _ =
-         Control.diagnostics
-         (fn display =>
-          (List.foreach
-           (Proxy.all (), fn p =>
-            (display o Layout.seq)
-            [Proxy.layout p, Layout.str ": ", AbsValSet.layout (proxyInfo p)]);
-           Sxml.Exp.foreachBoundVar
-           (body, fn (x, _, _) =>
-            (display o Layout.seq)
-            [Sxml.Var.layout x, Layout.str ": ", AbsValSet.layout (varInfo x)])))
-
-      val cfa : {arg: Sxml.Var.t,
-                 argTy: Sxml.Type.t,
-                 func: Sxml.Var.t,
-                 res: Sxml.Var.t,
-                 resTy: Sxml.Type.t} ->
-                Sxml.Lambda.t list =
-         fn {func, ...} =>
-         List.keepAllMap
-         (AbsValSet.getElements (varInfo func), fn v =>
-          case v of
-             AbsVal.Lambda lam => SOME lam
-           | _ => Error.bug "ZeroCFA.cfa: non-lambda")
-
-      val destroy = fn () =>
-         (destroyConOrder ();
-          destroyTyconOrder ();
-          destroyTypeOrder ();
-          Sxml.Exp.foreachBoundVar
-          (body, fn (var, _, _) =>
-           remVarInfo var);
-          destroyTypeInfo ();
-          destroyLambdaInfo ())
-   in
-      {cfa = cfa, destroy = destroy}
+      fun newVector es =
+         let
+            val pv = Proxy.new ()
+            val _ = ElementSet.<= (es, proxyValue pv)
+         in
+            ElementSet.singleton (Element.Vector pv)
+         end
+      fun newWeak es =
+         let
+            val pw = Proxy.new ()
+            val _ = ElementSet.<= (es, proxyValue pw)
+         in
+            ElementSet.singleton (Element.Weak pw)
+         end
    end
-val cfa = fn config =>
-   Control.trace (Control.Detail, "ZeroCFA")
-   (cfa config)
+in
+structure ZeroCFA_PS = MkZeroCFA(struct
+                                    open S
+                                    structure AbstractValue = AbstractValue
+                                 end)
+end
+
+fun cfa {config: Config.t}: t =
+   let
+      val Config.T {firstOrderOpt, reachabilityExt, ...} = config
+      val config = ZeroCFA_PS.Config.T {firstOrderOpt = firstOrderOpt, reachabilityExt = reachabilityExt}
+   in
+      ZeroCFA_PS.cfa {config = config}
+   end
 
 fun scan _ charRdr strm0 =
    let
@@ -538,9 +734,26 @@ fun scan _ charRdr strm0 =
                   else NONE
           | _ => NONE
       val nameArgScans =
+         (mkNameArgScan ("avr", AbstractValueRep.scan charRdr, Config.updateAbstractValueRep))::
          (mkNameArgScan ("fo", Pervasive.Bool.scan charRdr, Config.updateFirstOrderOpt))::
          (mkNameArgScan ("reach", Pervasive.Bool.scan charRdr, Config.updateReachabilityExt))::
          nil
+
+      fun finish config =
+         let
+            val Config.T {abstractValueRep, firstOrderOpt, reachabilityExt} = config
+         in
+            case abstractValueRep of
+               AbstractValueRep.PowerSet =>
+                  let
+                     val config =
+                        ZeroCFA_PS.Config.T
+                        {firstOrderOpt = firstOrderOpt,
+                         reachabilityExt = reachabilityExt}
+                  in
+                     ZeroCFA_PS.cfa {config = config}
+                  end
+         end
 
       fun scanNameArgs (nameArgScans, config) strm =
          case nameArgScans of
@@ -549,7 +762,8 @@ fun scan _ charRdr strm0 =
                    SOME (config', strm') =>
                       (case nameArgScans of
                           [] => (case charRdr strm' of
-                                    SOME (#")", strm'') => SOME (cfa {config = config'}, strm'')
+                                    SOME (#")", strm'') =>
+                                       SOME (finish config', strm'')
                                   | _ => NONE)
                         | _ => (case charRdr strm' of
                                    SOME (#",", strm'') => scanNameArgs (nameArgScans, config') strm''
