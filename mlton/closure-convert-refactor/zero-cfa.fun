@@ -709,10 +709,18 @@ end
 
 fun cfa {config: Config.t}: t =
    let
-      val Config.T {firstOrderOpt, reachabilityExt, ...} = config
-      val config = ZeroCFA_PS.Config.T {firstOrderOpt = firstOrderOpt, reachabilityExt = reachabilityExt}
+      val Config.T {abstractValueRep, firstOrderOpt, reachabilityExt} = config
    in
-      ZeroCFA_PS.cfa {config = config}
+      case abstractValueRep of
+         AbstractValueRep.PowerSet =>
+            let
+               val config =
+                  ZeroCFA_PS.Config.T
+                  {firstOrderOpt = firstOrderOpt,
+                   reachabilityExt = reachabilityExt}
+            in
+               ZeroCFA_PS.cfa {config = config}
+            end
    end
 
 fun scan _ charRdr strm0 =
@@ -739,22 +747,6 @@ fun scan _ charRdr strm0 =
          (mkNameArgScan ("reach", Bool.scan charRdr, Config.updateReachabilityExt))::
          nil
 
-      fun finish config =
-         let
-            val Config.T {abstractValueRep, firstOrderOpt, reachabilityExt} = config
-         in
-            case abstractValueRep of
-               AbstractValueRep.PowerSet =>
-                  let
-                     val config =
-                        ZeroCFA_PS.Config.T
-                        {firstOrderOpt = firstOrderOpt,
-                         reachabilityExt = reachabilityExt}
-                  in
-                     ZeroCFA_PS.cfa {config = config}
-                  end
-         end
-
       fun scanNameArgs (nameArgScans, config) strm =
          case nameArgScans of
             nameArgScan::nameArgScans =>
@@ -763,7 +755,7 @@ fun scan _ charRdr strm0 =
                       (case nameArgScans of
                           [] => (case charRdr strm' of
                                     SOME (#")", strm'') =>
-                                       SOME (finish config', strm'')
+                                       SOME (cfa {config = config'}, strm'')
                                   | _ => NONE)
                         | _ => (case charRdr strm' of
                                    SOME (#",", strm'') => scanNameArgs (nameArgScans, config') strm''
