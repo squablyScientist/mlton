@@ -735,8 +735,8 @@ fun scan _ charRdr strm0 =
           | _ => NONE
       val nameArgScans =
          (mkNameArgScan ("avr", AbstractValueRep.scan charRdr, Config.updateAbstractValueRep))::
-         (mkNameArgScan ("fo", Pervasive.Bool.scan charRdr, Config.updateFirstOrderOpt))::
-         (mkNameArgScan ("reach", Pervasive.Bool.scan charRdr, Config.updateReachabilityExt))::
+         (mkNameArgScan ("fo", Bool.scan charRdr, Config.updateFirstOrderOpt))::
+         (mkNameArgScan ("reach", Bool.scan charRdr, Config.updateReachabilityExt))::
          nil
 
       fun finish config =
