@@ -34,11 +34,6 @@ end
 
 structure Value = AbstractValue (structure Sxml = Sxml)
 
-structure VarInfo =
-   struct
-      type t = {value: Value.t}
-   end
-
 val traceLoopBind =
    Trace.trace
    ("ClosureConvert.loopBind",
@@ -57,15 +52,11 @@ fun cfa (_: {config: Config.t}): t =
          Property.getSetOnce
          (Con.plist,
           Property.initRaise ("OrigCFA.conArg", Con.layout))
-      val {get = varInfo: Var.t -> VarInfo.t,
+      val {get = varInfo: Var.t -> {value: Value.t},
            set = setVarInfo, rem = remVarInfo} =
          Property.getSetOnce
          (Var.plist,
           Property.initRaise ("OrigCFA.varInfo", Var.layout))
-      val varInfo =
-         Trace.trace
-         ("OrigCFA.varInfo", Var.layout, Layout.ignore)
-         varInfo
       val value = #value o varInfo
       val varExp = value o SvarExp.var
       val expValue = varExp o Sexp.result
@@ -86,11 +77,6 @@ fun cfa (_: {config: Config.t}): t =
             open Sxml
             fun newVar (x, v) =
                setVarInfo (x, {value = v})
-            val newVar =
-               Trace.trace2
-               ("ClosureConvert.newVar",
-                Var.layout, Layout.ignore, Unit.layout)
-               newVar
             fun varExps xs = Vector.map (xs, varExp)
             fun loopExp (e: Exp.t): Value.t =
                let
