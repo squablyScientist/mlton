@@ -16,33 +16,18 @@ signature ABSTRACT_VALUE =
    sig
       include ABSTRACT_VALUE_STRUCTS
 
-      structure Lambda:
-         sig
-            type t
-
-            val dest: t -> Sxml.Lambda.t
-            val layout: t -> Layout.t
-         end
-
-      structure Lambdas:
-         sig
-            type t
-
-            val toList: t -> Lambda.t list
-         end
-
       type t
 
       datatype dest =
          Array of t
-       | Lambdas of Lambdas.t
+       | Lambdas of Sxml.Lambda.t list
        | Ref of t
        | Tuple of t vector
        | Type of Sxml.Type.t (* type doesn't contain any arrows *)
        | Vector of t
        | Weak of t
 
-      val addHandler: t * (Lambda.t -> unit) -> unit
+      val addHandler: t * (Sxml.Lambda.t -> unit) -> unit
       val coerce: {from: t, to: t} -> unit
       val dest: t -> dest
       (* Destroy info associated with Sxml.Type used to keep track of arrows. *)

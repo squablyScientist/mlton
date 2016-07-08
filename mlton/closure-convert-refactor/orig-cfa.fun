@@ -131,9 +131,8 @@ fun cfa (_: {config: Config.t}): t =
                         let val arg = varExp arg
                            val result = new ()
                         in Value.addHandler
-                           (varExp func, fn l =>
+                           (varExp func, fn lambda =>
                             let
-                               val lambda = Value.Lambda.dest l
                                val {arg = formal, body, ...} =
                                   Lambda.dest lambda
                             in Value.coerce {from = arg,
@@ -206,9 +205,7 @@ fun cfa (_: {config: Config.t}): t =
                 Sxml.Lambda.t list =
          fn {func, ...} =>
          case Value.dest (value func) of
-            Value.Lambdas l =>
-               List.map
-               (Value.Lambdas.toList l, Value.Lambda.dest)
+            Value.Lambdas lambdas => lambdas
           | _ => Error.bug "OrigCFA.cfa: non-lambda"
 
       val destroy = fn () =>

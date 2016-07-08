@@ -15,6 +15,7 @@ open Sxml
 
 structure Dset = DisjointSet
 
+local
 structure Lambda =
    struct
       datatype t = Lambda of {lambda: Sxml.Lambda.t,
@@ -35,24 +36,24 @@ structure Lambda =
 
       fun layout (Lambda {lambda, ...}) =
          let open Layout
-         in seq [str "lambda ", Sxml.Var.layout (Sxml.Lambda.arg lambda)]
+         in seq [str "fn ", Sxml.Var.layout (Sxml.Lambda.arg lambda)]
          end
    end
 
 structure Lambdas = UniqueSet (structure Element = Lambda
                                val cacheSize: int = 5
                                val bits: int = 13)
-
+in
 structure LambdaNode:
    sig
       type t
 
-      val addHandler: t * (Lambda.t -> unit) -> unit
+      val addHandler: t * (Sxml.Lambda.t -> unit) -> unit
       val coerce: {from: t, to: t} -> unit
       val lambda: Sxml.Lambda.t -> t
       val layout: t -> Layout.t
       val new: unit -> t
-      val toSet: t -> Lambdas.t
+      val toList: t -> Sxml.Lambda.t list
       val unify: t * t -> unit
    end =
    struct
@@ -63,6 +64,8 @@ structure LambdaNode:
       fun toSet (LambdaNode d) = !(#me (Dset.! d))
 
       val layout = Lambdas.layout o toSet
+
+      fun toList ln = List.map (Lambdas.toList (toSet ln), Lambda.dest)
 
       fun newSet s = LambdaNode (Dset.singleton {me = ref s,
                                                  handlers = ref [],
@@ -78,8 +81,9 @@ structure LambdaNode:
       fun handless (hs: (Lambda.t -> unit) list, s: Lambdas.t): unit =
          List.foreach (hs, fn h => handles (h, s))
 
-      fun addHandler (LambdaNode d, h: Lambda.t -> unit) =
+      fun addHandler (LambdaNode d, h: Sxml.Lambda.t -> unit) =
          let val {me, handlers, ...} = Dset.! d
+             val h = h o Lambda.dest
          in List.push (handlers, h)
             ; handles (h, !me)
          end
@@ -154,6 +158,7 @@ structure LambdaNode:
          unify
 *)
    end
+end
 
 structure UnaryTycon =
    struct
@@ -306,7 +311,7 @@ structure Dest =
    struct
       datatype dest =
          Array of t
-       | Lambdas of Lambdas.t
+       | Lambdas of Sxml.Lambda.t list
        | Ref of t
        | Tuple of t vector
        | Type of Type.t
@@ -323,7 +328,7 @@ fun dest v =
                          | UnaryTycon.Vector => Dest.Vector v
                          | UnaryTycon.Weak => Dest.Weak v)
     | Tuple vs => Dest.Tuple vs
-    | Lambdas l => Dest.Lambdas (LambdaNode.toSet l)
+    | Lambdas l => Dest.Lambdas (LambdaNode.toList l)
 
 open Dest
 
