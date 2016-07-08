@@ -22,6 +22,7 @@ signature OPTION
 signature ORDER
 signature ORDERED_RING
 signature POLY_CACHE
+signature POWERSET_LATTICE
 signature PROMISE
 signature REAL
 signature RING

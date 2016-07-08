@@ -504,6 +504,130 @@ val cfa = fn config =>
 
 end
 
+functor MkZeroCFA_PS (S:
+                      sig
+                         include CFA_STRUCTS
+                         structure Proxy:
+                            sig
+                               type t
+                               val all: unit -> t list
+                               val equals: t * t -> bool
+                               val hash: t -> Word.t
+                               val layout: t -> Layout.t
+                               val new: unit -> t
+                               val plist: t -> PropertyList.t
+                            end
+                         structure Element:
+                            sig
+                               datatype t =
+                                  Array of Proxy.t
+                                | Base of Sxml.Type.t
+                                | ConApp of {con: Sxml.Con.t, arg: Sxml.Var.t option}
+                                | Lambda of Sxml.Lambda.t
+                                | Ref of Proxy.t
+                                | Tuple of Sxml.Var.t vector
+                                | Vector of Proxy.t
+                                | Weak of Proxy.t
+                               val equals: t * t -> bool
+                               val layout: t -> Layout.t
+                               val hash: t -> word
+                               val unit: t
+                               val truee: t
+                               val falsee: t
+                            end
+                         structure ElementSet: POWERSET_LATTICE
+                         sharing Element = ElementSet.Element
+                      end) =
+struct
+open S
+structure PowerSetAbstractValue =
+   struct
+      type t = ElementSet.t
+      datatype elt =
+         Array of t
+       | Base of Sxml.Type.t
+       | ConApp of {con: Sxml.Con.t, arg: t option}
+       | Lambda of Sxml.Lambda.t
+       | Ref of t
+       | Tuple of t vector
+       | Vector of t
+       | Weak of t
+      structure Elt =
+         struct
+            datatype t = datatype elt
+            fun layout e =
+               let
+                  open Layout
+               in
+                  case e of
+                     Array p => seq [str "Array ", ElementSet.layout p]
+                   | Base ty => seq [str "Base ", Sxml.Type.layout ty]
+                   | ConApp {con, arg} => seq [Sxml.Con.layout con,
+                                               case arg of
+                                                  NONE => empty
+                                                | SOME arg => seq [str " ",
+                                                                   ElementSet.layout arg]]
+                   | Lambda lam => seq [str "fn ", Sxml.Var.layout (Sxml.Lambda.arg lam)]
+                   | Ref p => seq [str "Ref ", ElementSet.layout p]
+                   | Tuple xs => tuple (Vector.toListMap (xs, ElementSet.layout))
+                   | Vector p => seq [str "Vector ", ElementSet.layout p]
+                   | Weak p => seq [str "Weak ", ElementSet.layout p]
+               end
+         end
+
+      val {get = proxyValue: Proxy.t -> ElementSet.t, ...} =
+         Property.get
+         (Proxy.plist,
+          Property.initFun (fn _ => ElementSet.empty ()))
+
+      fun addHandler (es, varValue, h) =
+         ElementSet.addHandler
+         (es, fn e =>
+          case e of
+             Element.Array pa => h (Elt.Array (proxyValue pa))
+           | Element.Base ty => h (Elt.Base ty)
+           | Element.ConApp {con, arg} => h (Elt.ConApp {con = con, arg = Option.map (arg, varValue)})
+           | Element.Lambda lam => h (Elt.Lambda lam)
+           | Element.Ref pr => h (Elt.Ref (proxyValue pr))
+           | Element.Tuple xs => h (Elt.Tuple (Vector.map (xs, varValue)))
+           | Element.Vector pv => h (Elt.Vector (proxyValue pv))
+           | Element.Weak pw => h (Elt.Weak (proxyValue pw)))
+      fun diagnostics display =
+         List.foreach
+         (Proxy.all (), fn p =>
+          (display o Layout.seq)
+          [Proxy.layout p, Layout.str ": ", ElementSet.layout (proxyValue p)])
+      fun flow {from, to} = ElementSet.<= (from, to)
+      val forBool = ElementSet.fromList [Element.truee, Element.falsee]
+      val forUnit = ElementSet.singleton Element.unit
+      fun fromConApp ({con, arg}, _) = ElementSet.singleton (Element.ConApp {con = con, arg = arg})
+      fun fromLambda lam = ElementSet.singleton (Element.Lambda lam)
+      fun fromTuple (xs, _) = ElementSet.singleton (Element.Tuple xs)
+      fun fromType ty = ElementSet.singleton (Element.Base ty)
+      val layout = ElementSet.layout
+      val new = ElementSet.empty
+      local
+         fun mkNew mk es =
+            let
+               val p = Proxy.new ()
+               val _ = ElementSet.<= (es, proxyValue p)
+            in
+               ElementSet.singleton (mk p)
+            end
+      in
+         val newArray = mkNew Element.Array
+         val newRef = mkNew Element.Ref
+         val newVector = mkNew Element.Vector
+         val newWeak = mkNew Element.Weak
+      end
+   end
+structure ZeroCFA_PS = MkZeroCFA(struct
+                                    open S
+                                    structure AbstractValue = PowerSetAbstractValue
+                                 end)
+open ZeroCFA_PS
+end
+
 functor ZeroCFA (S: CFA_STRUCTS): CFA =
 struct
 
@@ -625,92 +749,13 @@ structure Element =
       val truee = ConApp {con = Sxml.Con.truee, arg = NONE}
       val falsee = ConApp {con = Sxml.Con.falsee, arg = NONE}
    end
-structure ElementSet = PowerSetLattice(structure Element = Element)
-structure PowerSetAbstractValue =
-   struct
-      type t = ElementSet.t
-      datatype elt =
-         Array of t
-       | Base of Sxml.Type.t
-       | ConApp of {con: Sxml.Con.t, arg: t option}
-       | Lambda of Sxml.Lambda.t
-       | Ref of t
-       | Tuple of t vector
-       | Vector of t
-       | Weak of t
-      structure Elt =
-         struct
-            datatype t = datatype elt
-            fun layout e =
-               let
-                  open Layout
-               in
-                  case e of
-                     Array p => seq [str "Array ", ElementSet.layout p]
-                   | Base ty => seq [str "Base ", Sxml.Type.layout ty]
-                   | ConApp {con, arg} => seq [Sxml.Con.layout con,
-                                               case arg of
-                                                  NONE => empty
-                                                | SOME arg => seq [str " ",
-                                                                   ElementSet.layout arg]]
-                   | Lambda lam => seq [str "fn ", Sxml.Var.layout (Sxml.Lambda.arg lam)]
-                   | Ref p => seq [str "Ref ", ElementSet.layout p]
-                   | Tuple xs => tuple (Vector.toListMap (xs, ElementSet.layout))
-                   | Vector p => seq [str "Vector ", ElementSet.layout p]
-                   | Weak p => seq [str "Weak ", ElementSet.layout p]
-               end
-         end
-
-      val {get = proxyValue: Proxy.t -> ElementSet.t, ...} =
-         Property.get
-         (Proxy.plist,
-          Property.initFun (fn _ => ElementSet.empty ()))
-
-      fun addHandler (es, varValue, h) =
-         ElementSet.addHandler
-         (es, fn e =>
-          case e of
-             Element.Array pa => h (Elt.Array (proxyValue pa))
-           | Element.Base ty => h (Elt.Base ty)
-           | Element.ConApp {con, arg} => h (Elt.ConApp {con = con, arg = Option.map (arg, varValue)})
-           | Element.Lambda lam => h (Elt.Lambda lam)
-           | Element.Ref pr => h (Elt.Ref (proxyValue pr))
-           | Element.Tuple xs => h (Elt.Tuple (Vector.map (xs, varValue)))
-           | Element.Vector pv => h (Elt.Vector (proxyValue pv))
-           | Element.Weak pw => h (Elt.Weak (proxyValue pw)))
-      fun diagnostics display =
-         List.foreach
-         (Proxy.all (), fn p =>
-          (display o Layout.seq)
-          [Proxy.layout p, Layout.str ": ", ElementSet.layout (proxyValue p)])
-      fun flow {from, to} = ElementSet.<= (from, to)
-      val forBool = ElementSet.fromList [Element.truee, Element.falsee]
-      val forUnit = ElementSet.singleton Element.unit
-      fun fromConApp ({con, arg}, _) = ElementSet.singleton (Element.ConApp {con = con, arg = arg})
-      fun fromLambda lam = ElementSet.singleton (Element.Lambda lam)
-      fun fromTuple (xs, _) = ElementSet.singleton (Element.Tuple xs)
-      fun fromType ty = ElementSet.singleton (Element.Base ty)
-      val layout = ElementSet.layout
-      val new = ElementSet.empty
-      local
-         fun mkNew mk es =
-            let
-               val p = Proxy.new ()
-               val _ = ElementSet.<= (es, proxyValue p)
-            in
-               ElementSet.singleton (mk p)
-            end
-      in
-         val newArray = mkNew Element.Array
-         val newRef = mkNew Element.Ref
-         val newVector = mkNew Element.Vector
-         val newWeak = mkNew Element.Weak
-      end
-   end
 in
-structure ZeroCFA_PS = MkZeroCFA(struct
-                                    open S
-                                    structure AbstractValue = PowerSetAbstractValue
+structure ZeroCFA_PS = MkZeroCFA_PS(struct
+                                       open S
+                                       structure Proxy = Proxy
+                                       structure Element = Element
+                                       structure ElementSet =
+                                          PowerSetLattice(structure Element = Element)
                                  end)
 end
 
