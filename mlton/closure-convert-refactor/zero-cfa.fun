@@ -626,7 +626,7 @@ structure Element =
       val falsee = ConApp {con = Sxml.Con.falsee, arg = NONE}
    end
 structure ElementSet = PowerSetLattice(structure Element = Element)
-structure AbstractValue =
+structure PowerSetAbstractValue =
    struct
       type t = ElementSet.t
       datatype elt =
@@ -692,39 +692,25 @@ structure AbstractValue =
       fun fromType ty = ElementSet.singleton (Element.Base ty)
       val layout = ElementSet.layout
       val new = ElementSet.empty
-      fun newArray es =
-         let
-            val pa = Proxy.new ()
-            val _ = ElementSet.<= (es, proxyValue pa)
-         in
-            ElementSet.singleton (Element.Array pa)
-         end
-      fun newRef es =
-         let
-            val pr = Proxy.new ()
-            val _ = ElementSet.<= (es, proxyValue pr)
-         in
-            ElementSet.singleton (Element.Ref pr)
-         end
-      fun newVector es =
-         let
-            val pv = Proxy.new ()
-            val _ = ElementSet.<= (es, proxyValue pv)
-         in
-            ElementSet.singleton (Element.Vector pv)
-         end
-      fun newWeak es =
-         let
-            val pw = Proxy.new ()
-            val _ = ElementSet.<= (es, proxyValue pw)
-         in
-            ElementSet.singleton (Element.Weak pw)
-         end
+      local
+         fun mkNew mk es =
+            let
+               val p = Proxy.new ()
+               val _ = ElementSet.<= (es, proxyValue p)
+            in
+               ElementSet.singleton (mk p)
+            end
+      in
+         val newArray = mkNew Element.Array
+         val newRef = mkNew Element.Ref
+         val newVector = mkNew Element.Vector
+         val newWeak = mkNew Element.Weak
+      end
    end
 in
 structure ZeroCFA_PS = MkZeroCFA(struct
                                     open S
-                                    structure AbstractValue = AbstractValue
+                                    structure AbstractValue = PowerSetAbstractValue
                                  end)
 end
 
