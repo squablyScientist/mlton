@@ -51,6 +51,17 @@ struct
 
 open S
 structure AbsVal = AbstractValue
+structure AbsVal =
+   struct
+      open AbsVal
+      val flow =
+         Trace.trace
+         ("AbsVal.flow",
+          fn {from, to} =>
+          Layout.record [("from", layout from), ("to", layout to)],
+          Unit.layout)
+         flow
+   end
 
 structure Config =
    struct
@@ -177,6 +188,13 @@ fun cfa {config: Config.t}: t =
 
       val exnAbsVal = AbsVal.new ()
 
+      val traceLoopBind =
+         Trace.trace
+         ("ZeroCFA.loopBind",
+          fn {var, ty = _: Sxml.Type.t, exp = _: Sxml.PrimExp.t} =>
+          Layout.seq [Layout.str "val ", Sxml.Var.layout var],
+          Unit.layout)
+
       fun loopExp (exp: Sxml.Exp.t): AbsVal.t =
          let
             val {decs, result} = Sxml.Exp.dest exp
@@ -194,9 +212,12 @@ fun cfa {config: Config.t}: t =
                            exp = Sxml.PrimExp.Lambda lambda})
            | Sxml.Dec.MonoVal bind => loopBind bind
            | _ => Error.bug "ZeroCFA.loopDec: strange dec")
-      and loopBind (bind as {var, ty, exp, ...}): unit =
-         AbsVal.flow {from = loopPrimExp bind,
-                      to = varValue var}
+      and loopBind bind: unit =
+         traceLoopBind
+         (fn bind as {var, ...} =>
+          AbsVal.flow {from = loopPrimExp bind,
+                       to = varValue var})
+         bind
       and loopPrimExp {ty: Sxml.Type.t, exp: Sxml.PrimExp.t, ...}: AbsVal.t =
          (case exp of
              Sxml.PrimExp.App {func, arg} =>
