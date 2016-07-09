@@ -12,7 +12,13 @@ struct
 
 open S
 
-structure Config = struct type t = unit end
+structure Config =
+   struct
+      datatype t = T of {reachabilityExt: bool}
+      val init = T {reachabilityExt = false}
+      fun updateReachabilityExt (T {...}: t, reachabilityExt) =
+         T {reachabilityExt = reachabilityExt}
+   end
 
 type t = {program: Sxml.Program.t} ->
          {cfa: {arg: Sxml.Var.t,
@@ -25,9 +31,10 @@ type t = {program: Sxml.Program.t} ->
 
 structure Value = AbstractValue (structure Sxml = Sxml)
 
-fun cfa (_: {config: Config.t}): t =
+fun cfa {config: Config.t}: t =
    fn {program: Sxml.Program.t} =>
    let
+      val Config.T {reachabilityExt} = config
       val Sxml.Program.T {datatypes, body, ...} = program
 
       val {get = conInfo: Sxml.Con.t -> {argValue: Value.t option},
@@ -44,6 +51,13 @@ fun cfa (_: {config: Config.t}): t =
       val varValue = #value o varInfo
       val varExpValue = varValue o Sxml.VarExp.var
       val expValue = varExpValue o Sxml.Exp.result
+      val {get = lambdaInfo: Sxml.Lambda.t -> {visited: bool ref},
+           rem = remLambdaInfo} =
+         Property.get
+         (Sxml.Lambda.plist,
+          Property.initFun (fn _ => {visited = ref false}))
+      val lambdaVisited = ! o #visited o lambdaInfo
+      val setLambdaVisited = fn lambda => #visited (lambdaInfo lambda) := true
 
       (* Do the flow analysis.
        *)
@@ -65,6 +79,7 @@ fun cfa (_: {config: Config.t}): t =
          in
             varExpValue result
          end
+      and loopExp' (e: Sxml.Exp.t): unit = ignore (loopExp e)
       and loopDec (d: Sxml.Dec.t): unit =
          (case d of
              Sxml.Dec.Fun {decs, ...} =>
@@ -97,10 +112,11 @@ fun cfa (_: {config: Config.t}): t =
                             val {arg = formal, body, ...} =
                                Sxml.Lambda.dest lambda
                          in
-                            Value.coerce {from = arg,
-                                          to = varValue formal};
-                            Value.coerce {from = expValue body,
-                                          to = result}
+                            Value.coerce {from = arg, to = varValue formal};
+                            if reachabilityExt andalso not (lambdaVisited lambda)
+                               then (setLambdaVisited lambda; loopExp' body)
+                               else ();
+                            Value.coerce {from = expValue body, to = result}
                          end)
                   in ()
                   end
@@ -230,11 +246,14 @@ fun cfa (_: {config: Config.t}): t =
          let
             val {arg, argType, body, ...} = Sxml.Lambda.dest lambda
             val _ = newVar (arg, Value.fromType argType)
-            val _ = loopExp body
+            val _ =
+               if reachabilityExt
+                  then ()
+                  else loopExp' body
          in
             Value.lambda lambda
          end
-      val _ = loopExp body
+      val _ = loopExp' body
 
       val cfa : {arg: Sxml.Var.t,
                  argTy: Sxml.Type.t,
@@ -254,9 +273,15 @@ fun cfa (_: {config: Config.t}): t =
            Vector.foreach
            (cons, fn {con, ...} =>
             remConInfo con));
-          Sxml.Exp.foreachBoundVar
-          (body, fn (var, _, _) =>
-           remVarInfo var))
+          Sxml.Exp.foreach
+          {exp = body,
+           handleExp = ignore,
+           handlePrimExp = (fn (_, _, e) =>
+                            case e of
+                               Sxml.PrimExp.Lambda lambda => remLambdaInfo lambda
+                             | _ => ()),
+           handleBoundVar = (fn (var, _, _) => remVarInfo var),
+           handleVarExp = ignore})
    in
       {cfa = cfa, destroy = destroy}
    end
@@ -265,8 +290,41 @@ val cfa = fn config =>
    (cfa config)
 
 fun scan _ charRdr strm0 =
-   case Scan.string "ocfa" charRdr strm0 of
-      SOME ((), strm1) => SOME (cfa {config = ()}, strm1)
-    | _ => NONE
+   let
+      fun mkNameArgScan (name, scanArg, updateConfig) (config: Config.t) strm0 =
+         case Scan.string (name ^ ":") charRdr strm0 of
+            SOME ((), strm1) =>
+               (case scanArg strm1 of
+                   SOME (arg, strm2) =>
+                      SOME (updateConfig (config, arg), strm2)
+                 | _ => NONE)
+          | _ => NONE
+      val nameArgScans =
+         (mkNameArgScan ("reach", Bool.scan charRdr, Config.updateReachabilityExt))::
+         nil
+
+      fun scanNameArgs (nameArgScans, config) strm =
+         case nameArgScans of
+            nameArgScan::nameArgScans =>
+               (case nameArgScan config strm of
+                   SOME (config', strm') =>
+                      (case nameArgScans of
+                          [] => (case charRdr strm' of
+                                    SOME (#")", strm'') =>
+                                       SOME (cfa {config = config'}, strm'')
+                                  | _ => NONE)
+                        | _ => (case charRdr strm' of
+                                   SOME (#",", strm'') => scanNameArgs (nameArgScans, config') strm''
+                                 | _ => NONE))
+                 | _ => NONE)
+          | _ => NONE
+   in
+      case Scan.string "ocfa" charRdr strm0 of
+         SOME ((), strm1) =>
+            (case charRdr strm1 of
+                SOME (#"(", strm2) => scanNameArgs (nameArgScans, Config.init) strm2
+              | _ => NONE)
+       | _ => NONE
+   end
 
 end
