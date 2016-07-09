@@ -255,12 +255,6 @@ val fromType = Trace.trace ("AbstractValue.fromType", Type.layout, layout) fromT
 fun tuple (vs: t vector): t = new (Tuple vs,
                                    Type.tuple (Vector.map (vs, ty)))
 
-fun select (v, i) =
-   case tree v of
-      Type t => fromType (Vector.sub (Type.deTuple t, i))
-    | Tuple vs => Vector.sub (vs, i)
-    | _ => Error.bug "AbstractValue.select: expected tuple"
-
 fun lambda (l: Sxml.Lambda.t, t: Type.t): t =
    new (Lambdas (LambdaNode.lambda l), t)
 

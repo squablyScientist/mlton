@@ -58,7 +58,6 @@ fun cfa (_: {config: Config.t}): t =
                               | SOME t => SOME (Value.fromType t)})))
 
       fun newVar (x, v) = setVarInfo (x, {value = v})
-      fun varExpValues xs = Vector.map (xs, varExpValue)
       fun loopExp (e: Sxml.Exp.t): Value.t =
          let
             val {decs, result} = Sxml.Exp.dest e

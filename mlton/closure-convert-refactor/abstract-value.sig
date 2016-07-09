@@ -35,10 +35,8 @@ signature ABSTRACT_VALUE =
       val fromType: Sxml.Type.t -> t
       val lambda: Sxml.Lambda.t * Sxml.Type.t (* The type of the lambda. *) -> t
       val layout: t -> Layout.t
-      val select: t * int -> t
       (* In tuple vs, there must be one argument that is not Type _. *)
       val tuple: t vector -> t
-      val ty: t -> Sxml.Type.t
       val typeIsFirstOrder: Sxml.Type.t -> bool
       val unify: t * t -> unit
    end
