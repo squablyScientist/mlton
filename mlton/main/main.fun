@@ -1531,6 +1531,7 @@ fun commandLine (args: string list): unit =
                            case !verbosity of
                               Silent => ()
                             | Top => ()
+                            | Pass => ()
                             | _ =>
                                  outputHeader
                                  (Control.No, fn l =>
