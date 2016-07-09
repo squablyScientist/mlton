@@ -72,8 +72,8 @@ fun cfa (_: {config: Config.t}): t =
                  (decs, fn {var, ty, ...} =>
                   newVar (var, Value.fromType ty));
                  Vector.foreach
-                 (decs, fn {var, ty, lambda, ...} =>
-                  Value.unify (varValue var, loopLambda (lambda, ty))))
+                 (decs, fn {var, lambda, ...} =>
+                  Value.unify (varValue var, loopLambda lambda)))
            | Sxml.Dec.MonoVal b => loopBind b
            | _ => Error.bug "OrigCFA.loopDec: strange dec")
       and loopBind {var, ty, exp} =
@@ -138,7 +138,7 @@ fun cfa (_: {config: Config.t}): t =
                      newVar (x, Value.fromType t);
                      Value.coerce {from = loopExp handler, to = result}
                   end
-             | Sxml.PrimExp.Lambda lambda => set (loopLambda (lambda, ty))
+             | Sxml.PrimExp.Lambda lambda => set (loopLambda lambda)
              | Sxml.PrimExp.PrimApp {prim, targs, args, ...} =>
                   if Vector.forall (targs, Value.typeIsFirstOrder)
                      then new' ()
@@ -226,13 +226,13 @@ fun cfa (_: {config: Config.t}): t =
                      else set (Value.tuple (Vector.map (xs, varExpValue)))
              | Sxml.PrimExp.Var x => set (varExpValue x)
          end
-      and loopLambda (lambda: Sxml.Lambda.t, ty: Sxml.Type.t): Value.t =
+      and loopLambda (lambda: Sxml.Lambda.t): Value.t =
          let
             val {arg, argType, body, ...} = Sxml.Lambda.dest lambda
             val _ = newVar (arg, Value.fromType argType)
             val _ = loopExp body
          in
-            Value.lambda (lambda, ty)
+            Value.lambda lambda
          end
       val _ = loopExp body
 

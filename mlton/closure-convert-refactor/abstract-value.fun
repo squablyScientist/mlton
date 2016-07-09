@@ -179,18 +179,15 @@ datatype tree =
  | Type of Type.t
  | Unify of UnaryTycon.t * t
 
-withtype t = {tree: tree,
-              ty: Type.t} Dset.t
+withtype t = {tree: tree} Dset.t
 
-fun new (tree: tree, ty: Type.t): t =
-   Dset.singleton {tree = tree,
-                   ty = ty}
+fun new (tree: tree): t =
+   Dset.singleton {tree = tree}
 
 local
    fun make sel : t -> 'a = sel o Dset.!
 in
    val tree = make #tree
-   val ty = make #ty
 end
 
 fun layout v =
@@ -211,7 +208,7 @@ local
    val {hom, destroy} =
       Type.makeMonoHom
       {con = fn (t, tycon, vs) =>
-       let val new = fn tree => new (tree, t)
+       let
        in if Tycon.equals (tycon, Tycon.arrow)
              then {isFirstOrder = false,
                    make = fn () => new (Lambdas (LambdaNode.new ()))}
@@ -252,11 +249,10 @@ end
 
 val fromType = Trace.trace ("AbstractValue.fromType", Type.layout, layout) fromType
 
-fun tuple (vs: t vector): t = new (Tuple vs,
-                                   Type.tuple (Vector.map (vs, ty)))
+fun tuple (vs: t vector): t = new (Tuple vs)
 
-fun lambda (l: Sxml.Lambda.t, t: Type.t): t =
-   new (Lambdas (LambdaNode.lambda l), t)
+fun lambda (l: Sxml.Lambda.t): t =
+   new (Lambdas (LambdaNode.lambda l))
 
 fun unify (v, v') =
    if Dset.equals (v, v')

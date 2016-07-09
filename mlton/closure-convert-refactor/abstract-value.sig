@@ -33,7 +33,7 @@ signature ABSTRACT_VALUE =
       (* Destroy info associated with Sxml.Type used to keep track of arrows. *)
       val destroy: unit -> unit
       val fromType: Sxml.Type.t -> t
-      val lambda: Sxml.Lambda.t * Sxml.Type.t (* The type of the lambda. *) -> t
+      val lambda: Sxml.Lambda.t -> t
       val layout: t -> Layout.t
       (* In tuple vs, there must be one argument that is not Type _. *)
       val tuple: t vector -> t
