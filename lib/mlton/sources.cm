@@ -125,6 +125,7 @@ structure Result
 structure Sexp
 structure Signal
 structure SMLofNJ
+structure Scan
 structure Socket
 structure Stream
 structure String

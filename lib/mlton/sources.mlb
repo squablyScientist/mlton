@@ -108,6 +108,7 @@ ann "forceUsed" in
       structure Sexp
       structure Signal
       structure SMLofNJ
+      structure Scan
       structure Stream
       structure String
       structure StringCvt
