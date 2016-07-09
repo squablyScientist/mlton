@@ -12,7 +12,7 @@ fun chars cs charRdr strm =
       [] => SOME ((), strm)
     | c::cs => (case charRdr strm of
                    SOME (c', strm') =>
-                      if c = c' then SOME ((),strm') else NONE
+                      if c = c' then chars cs charRdr strm' else NONE
                  | _ => NONE)
 
 fun string s = chars (String.explode s)
