@@ -71,7 +71,17 @@ fun cfa {config: Config.t}: t =
                                 NONE => NONE
                               | SOME t => SOME (Value.fromType t)})))
 
-      fun newVar (x, v) = setVarInfo (x, {value = v})
+      val newVar =
+         if reachabilityExt
+            then let
+                    val _ =
+                       Sxml.Exp.foreachBoundVar
+                       (body, fn (x, _, ty) =>
+                        setVarInfo (x, {value = Value.fromType ty}))
+                 in
+                    fn (x, v) => Value.unify (varValue x, v)
+                 end
+            else fn (x, v) => setVarInfo (x, {value = v})
       fun loopExp (e: Sxml.Exp.t): Value.t =
          let
             val {decs, result} = Sxml.Exp.dest e
