@@ -65,9 +65,6 @@ val cfa = fn config =>
 
 fun scan scanCFARec charRdr strm0 =
    let
-      fun scanAlphaNums strm =
-         SOME (StringCvt.splitl Char.isAlphaNum charRdr strm)
-
       fun loop (strm, baseCFAs) =
          case scanCFARec charRdr strm of
             SOME (baseCFA, strm') =>
@@ -79,8 +76,8 @@ fun scan scanCFARec charRdr strm0 =
                  | _ => NONE)
           | NONE => NONE
    in
-      case scanAlphaNums strm0 of
-         SOME ("isect", strm1) =>
+      case Scan.string "isect" charRdr strm0 of
+         SOME ((), strm1) =>
             (case charRdr strm1 of
                 SOME (#"(", strm2) => loop (strm2, [])
               | _ => NONE)

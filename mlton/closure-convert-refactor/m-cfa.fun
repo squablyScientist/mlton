@@ -528,21 +528,13 @@ val cfa = fn config =>
 
 fun scan _ charRdr strm0 =
    let
-      fun scanAlphaNums strm =
-         SOME (StringCvt.splitl Char.isAlphaNum charRdr strm)
-
       fun mkNameArgScan (name, scanArg, updateConfig) (config: Config.t) strm0 =
-         case scanAlphaNums strm0 of
-            SOME (s, strm1) =>
-               if String.equals (name, s)
-                  then (case charRdr strm1 of
-                           SOME (#":", strm2) =>
-                              (case scanArg strm2 of
-                                  SOME (arg, strm3) =>
-                                     SOME (updateConfig (config, arg), strm3)
-                                | _ => NONE)
-                         | _ => NONE)
-                  else NONE
+         case Scan.string (name ^ ":") charRdr strm0 of
+            SOME ((), strm1) =>
+               (case scanArg strm1 of
+                   SOME (arg, strm2) =>
+                      SOME (updateConfig (config, arg), strm2)
+                 | _ => NONE)
           | _ => NONE
       val nameArgScans =
          (mkNameArgScan ("m", Int.scan (StringCvt.DEC, charRdr), Config.updateM))::
@@ -563,8 +555,8 @@ fun scan _ charRdr strm0 =
                  | _ => NONE)
           | _ => NONE
    in
-      case scanAlphaNums strm0 of
-         SOME ("mcfa", strm1) =>
+      case Scan.string "mcfa" charRdr strm0 of
+         SOME ((), strm1) =>
             (case charRdr strm1 of
                 SOME (#"(", strm2) => scanNameArgs (nameArgScans, Config.init) strm2
               | _ => NONE)

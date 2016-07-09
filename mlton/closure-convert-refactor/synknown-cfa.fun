@@ -72,23 +72,18 @@ val cfa = fn config =>
    (cfa config)
 
 fun scan scanCFARec charRdr strm0 =
-   let
-      fun scanAlphaNums strm =
-         SOME (StringCvt.splitl Char.isAlphaNum charRdr strm)
-   in
-      case scanAlphaNums strm0 of
-         SOME ("synkwn", strm1) =>
-            (case charRdr strm1 of
-                SOME (#"(", strm2) =>
-                   (case scanCFARec charRdr strm2 of
-                       SOME (baseCFA, strm3) =>
-                          (case charRdr strm3 of
-                              SOME (#")", strm4) =>
-                                 SOME (cfa {config = {baseCFA = baseCFA}}, strm4)
-                            | _ => NONE)
-                     | _ => NONE)
-              | _ => NONE)
-       | _ => NONE
-   end
+   case Scan.string "synkwn" charRdr strm0 of
+      SOME ((), strm1) =>
+         (case charRdr strm1 of
+             SOME (#"(", strm2) =>
+                (case scanCFARec charRdr strm2 of
+                    SOME (baseCFA, strm3) =>
+                       (case charRdr strm3 of
+                           SOME (#")", strm4) =>
+                              SOME (cfa {config = {baseCFA = baseCFA}}, strm4)
+                         | _ => NONE)
+                  | _ => NONE)
+           | _ => NONE)
+    | _ => NONE
 
 end

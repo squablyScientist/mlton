@@ -637,11 +637,8 @@ structure AbstractValueRep =
    struct
       datatype t = PowerSet
       fun scan charRdr strm0 =
-         case charRdr strm0 of
-            SOME (#"p", strm1) =>
-               (case charRdr strm1 of
-                   SOME (#"s", strm2) => SOME (PowerSet, strm2)
-                 | _ => NONE)
+         case Scan.string "ps" charRdr strm0 of
+            SOME ((), strm1) => SOME (PowerSet, strm1)
           | _ => NONE
    end
 structure Config =
@@ -777,21 +774,13 @@ fun cfa {config: Config.t}: t =
 
 fun scan _ charRdr strm0 =
    let
-      fun scanAlphaNums strm =
-         SOME (StringCvt.splitl Char.isAlphaNum charRdr strm)
-
       fun mkNameArgScan (name, scanArg, updateConfig) (config: Config.t) strm0 =
-         case scanAlphaNums strm0 of
-            SOME (s, strm1) =>
-               if String.equals (name, s)
-                  then (case charRdr strm1 of
-                           SOME (#":", strm2) =>
-                              (case scanArg strm2 of
-                                  SOME (arg, strm3) =>
-                                     SOME (updateConfig (config, arg), strm3)
-                                | _ => NONE)
-                         | _ => NONE)
-                  else NONE
+         case Scan.string (name ^ ":") charRdr strm0 of
+            SOME ((), strm1) =>
+               (case scanArg strm1 of
+                   SOME (arg, strm2) =>
+                      SOME (updateConfig (config, arg), strm2)
+                 | _ => NONE)
           | _ => NONE
       val nameArgScans =
          (mkNameArgScan ("avr", AbstractValueRep.scan charRdr, Config.updateAbstractValueRep))::
@@ -815,8 +804,8 @@ fun scan _ charRdr strm0 =
                  | _ => NONE)
           | _ => NONE
    in
-      case scanAlphaNums strm0 of
-         SOME ("0cfa", strm1) =>
+      case Scan.string "0cfa" charRdr strm0 of
+         SOME ((), strm1) =>
             (case charRdr strm1 of
                 SOME (#"(", strm2) => scanNameArgs (nameArgScans, Config.init) strm2
               | _ => NONE)

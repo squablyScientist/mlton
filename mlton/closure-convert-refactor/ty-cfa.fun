@@ -64,13 +64,8 @@ val cfa = fn config =>
    (cfa config)
 
 fun scan _ charRdr strm0 =
-   let
-      fun scanAlphaNums strm =
-         SOME (StringCvt.splitl Char.isAlphaNum charRdr strm)
-   in
-      case scanAlphaNums strm0 of
-         SOME ("tycfa", strm1) => SOME (cfa {config = ()}, strm1)
-       | _ => NONE
-   end
+   case Scan.string "tycfa" charRdr strm0 of
+      SOME ((), strm1) => SOME (cfa {config = ()}, strm1)
+    | _ => NONE
 
 end

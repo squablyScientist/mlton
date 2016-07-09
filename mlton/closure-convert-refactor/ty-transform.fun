@@ -469,14 +469,8 @@ val transform = fn config =>
    (transform config)
 
 fun scan _ charRdr strm0 =
-   let
-      fun scanAlphaNums strm =
-         SOME (StringCvt.splitl Char.isAlphaNum charRdr strm)
-   in
-      case scanAlphaNums strm0 of
-         SOME ("tyxform", strm1) =>
-            SOME (transform {config = ()}, strm1)
-        | _ => NONE
-   end
+   case Scan.string "tyxform" charRdr strm0 of
+      SOME ((), strm1) => SOME (transform {config = ()}, strm1)
+    | _ => NONE
 
 end
