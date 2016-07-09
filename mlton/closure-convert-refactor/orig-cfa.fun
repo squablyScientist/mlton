@@ -169,9 +169,7 @@ fun cfa {config: Config.t}: t =
                      datatype z = datatype Sxml.Prim.Name.t
                   in
                      case Sxml.Prim.name prim of
-                        Array_array => new' ()
-                      | Array_array0Const => new' ()
-                      | Array_sub =>
+                        Array_sub =>
                            (case Value.dest (arg 0) of
                                Value.Array x => set x
                              | _ => bug ("Array", arg 0))
@@ -219,14 +217,12 @@ fun cfa {config: Config.t}: t =
                            (case Value.dest (arg 0) of
                                Value.Weak x => set x
                              | _ => bug ("Weak", arg 0))
+                      | Vector_length => new' ()
                       | Vector_sub =>
                            (case Value.dest (arg 0) of
                                Value.Vector x => set x
                              | _ => bug ("Vector", arg 0))
-                      | _ =>
-                           (Error.bug o String.concat)
-                           ["OrigCFA.loopPrimExp: strange prim (",
-                            Sxml.Prim.Name.toString (Sxml.Prim.name prim), ")"]
+                      | _ => new' ()
                   end
              | Sxml.PrimExp.Profile _ => new' ()
              | Sxml.PrimExp.Raise _ => new' ()
