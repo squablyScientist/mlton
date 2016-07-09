@@ -140,10 +140,79 @@ fun cfa (_: {config: Config.t}): t =
                      Value.coerce {from = loopExp handler, to = result}
                   end
              | Sxml.PrimExp.Lambda lambda => set (loopLambda (lambda, ty))
-             | Sxml.PrimExp.PrimApp {prim, args, ...} =>
-                  set (Value.primApply {prim = prim,
-                                        args = varExpValues args,
-                                        resultTy = ty})
+             | Sxml.PrimExp.PrimApp {prim, targs, args, ...} =>
+                  if Vector.forall (targs, Value.typeIsFirstOrder)
+                     then new' ()
+                  else
+                  let
+                     fun arg i = varExpValue (Vector.sub (args, i))
+                     fun bug (k, v) =
+                        (Error.bug o String.concat)
+                        ["OrigCFA.loopPrimExp: non-", k,
+                         " (got ", Layout.toString (Value.layout v),
+                         " for ", Sxml.Prim.Name.toString (Sxml.Prim.name prim), ")"]
+                     datatype z = datatype Sxml.Prim.Name.t
+                  in
+                     case Sxml.Prim.name prim of
+                        Array_array => new' ()
+                      | Array_array0Const => new' ()
+                      | Array_sub =>
+                           (case Value.dest (arg 0) of
+                               Value.Array x => set x
+                             | _ => bug ("Array", arg 0))
+                      | Array_update =>
+                           (case Value.dest (arg 0) of
+                               Value.Array x => Value.coerce {from = arg 2, to = x}
+                             | _ => bug ("Array", arg 0);
+                            new' ())
+                      | Array_toVector =>
+                           let val result = new ()
+                           in
+                              case (Value.dest (arg 0), Value.dest result) of
+                                 (Value.Array x, Value.Vector y) =>
+                                    (* Can't do a coercion here because that would imply
+                                     * walking over each element of the array and coercing it.
+                                     *)
+                                    Value.unify (x, y)
+                               | (Value.Array _, _) => bug ("Vector", result)
+                               | _ => bug ("Array", arg 0)
+                           end
+                      | Ref_assign =>
+                           (case Value.dest (arg 0) of
+                               Value.Ref x => Value.coerce {from = arg 1, to = x}
+                             | _ => bug ("Ref", arg 0);
+                            new' ())
+                      | Ref_deref =>
+                           (case Value.dest (arg 0) of
+                               Value.Ref x => set x
+                             | _ => bug ("Ref", arg 0))
+                      | Ref_ref =>
+                           let val result = new ()
+                           in
+                              case Value.dest result of
+                                 Value.Ref x => Value.coerce {from = arg 0, to = x}
+                               | _ => bug ("Ref", result)
+                           end
+                      | Weak_new =>
+                           let val result = new ()
+                           in
+                              case Value.dest result of
+                                 Value.Weak x => Value.coerce {from = arg 0, to = x}
+                               | _ => bug ("Weak", result)
+                           end
+                      | Weak_get =>
+                           (case Value.dest (arg 0) of
+                               Value.Weak x => set x
+                             | _ => bug ("Weak", arg 0))
+                      | Vector_sub =>
+                           (case Value.dest (arg 0) of
+                               Value.Vector x => set x
+                             | _ => bug ("Vector", arg 0))
+                      | _ =>
+                           (Error.bug o String.concat)
+                           ["OrigCFA.loopPrimExp: strange prim (",
+                            Sxml.Prim.Name.toString (Sxml.Prim.name prim), ")"]
+                  end
              | Sxml.PrimExp.Profile _ => new' ()
              | Sxml.PrimExp.Raise _ => new' ()
              | Sxml.PrimExp.Select {tuple, offset} =>
