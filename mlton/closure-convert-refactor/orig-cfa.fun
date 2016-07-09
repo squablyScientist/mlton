@@ -23,165 +23,146 @@ type t = {program: Sxml.Program.t} ->
                Sxml.Lambda.t list,
           destroy: unit -> unit}
 
-local open Sxml
-in
-   structure Sexp = Exp
-   structure SprimExp = PrimExp
-   structure SvarExp = VarExp
-   structure Stype = Type
-   open Atoms
-end
-
 structure Value = AbstractValue (structure Sxml = Sxml)
-
-val traceLoopBind =
-   Trace.trace
-   ("ClosureConvert.loopBind",
-    fn {exp, ty = _: Stype.t, var} =>
-    Layout.record [("var", Var.layout var),
-                   ("exp", SprimExp.layout exp)],
-    Unit.layout)
 
 fun cfa (_: {config: Config.t}): t =
    fn {program: Sxml.Program.t} =>
    let
       val Sxml.Program.T {datatypes, body, ...} = program
 
-      val {get = conArg: Con.t -> Value.t option,
-           set = setConArg, rem = remConArg} =
+      val {get = conInfo: Sxml.Con.t -> {argValue: Value.t option},
+           set = setConInfo, rem = remConInfo} =
          Property.getSetOnce
-         (Con.plist,
-          Property.initRaise ("OrigCFA.conArg", Con.layout))
-      val {get = varInfo: Var.t -> {value: Value.t},
+         (Sxml.Con.plist,
+          Property.initRaise ("OrigCFA.conInfo", Sxml.Con.layout))
+      val conArgValue = #argValue o conInfo
+      val {get = varInfo: Sxml.Var.t -> {value: Value.t},
            set = setVarInfo, rem = remVarInfo} =
          Property.getSetOnce
-         (Var.plist,
-          Property.initRaise ("OrigCFA.varInfo", Var.layout))
-      val value = #value o varInfo
-      val varExp = value o SvarExp.var
-      val expValue = varExp o Sexp.result
+         (Sxml.Var.plist,
+          Property.initRaise ("OrigCFA.varInfo", Sxml.Var.layout))
+      val varValue = #value o varInfo
+      val varExpValue = varValue o Sxml.VarExp.var
+      val expValue = varExpValue o Sxml.Exp.result
 
       (* Do the flow analysis.
-       * Initialize lambdaInfo and varInfo.
        *)
       val _ =
          Vector.foreach
          (datatypes, fn {cons, ...} =>
           Vector.foreach
           (cons, fn {con, arg} =>
-           setConArg (con, (case arg of
-                               NONE => NONE
-                             | SOME t => SOME (Value.fromType t)))))
-      val _ =
+           setConInfo (con, {argValue =
+                             case arg of
+                                NONE => NONE
+                              | SOME t => SOME (Value.fromType t)})))
+
+      fun newVar (x, v) = setVarInfo (x, {value = v})
+      fun varExpValues xs = Vector.map (xs, varExpValue)
+      fun loopExp (e: Sxml.Exp.t): Value.t =
          let
-            open Sxml
-            fun newVar (x, v) =
-               setVarInfo (x, {value = v})
-            fun varExps xs = Vector.map (xs, varExp)
-            fun loopExp (e: Exp.t): Value.t =
-               let
-                  val {decs, result} = Exp.dest e
-                  val () = List.foreach (decs, loopDec)
-               in
-                  varExp result
-               end
-            and loopDec (d: Dec.t): unit =
-               let
-                  datatype z = datatype Dec.t
-               in
-                  case d of
-                     Fun {decs, ...} =>
-                        (Vector.foreach (decs, fn {var, ty, ...} =>
-                                         newVar (var, Value.fromType ty))
-                         ; (Vector.foreach
-                            (decs, fn {var, lambda, ...} =>
-                             Value.unify (value var,
-                                          loopLambda lambda))))
-                   | MonoVal b => loopBind b
-                   | _ => Error.bug "OrigCFA.loopDec: strange dec"
-               end
-            and loopBind arg =
-               traceLoopBind
-               (fn {var, ty, exp} =>
-               let
-                  fun set v = newVar (var, v)
-                  fun new () =
-                     let val v = Value.fromType ty
-                     in set v; v
-                     end
-                  val new' = ignore o new
-                  datatype z = datatype PrimExp.t
-               in
-                  case exp of
-                     App {func, arg} =>
-                        let val arg = varExp arg
-                           val result = new ()
-                        in Value.addHandler
-                           (varExp func, fn lambda =>
-                            let
-                               val {arg = formal, body, ...} =
-                                  Lambda.dest lambda
-                            in Value.coerce {from = arg,
-                                             to = value formal}
-                               ; Value.coerce {from = expValue body,
-                                               to = result}
-                            end)
-                        end
-                   | Case {cases, default, ...} =>
-                        let
-                           val result = new ()
-                           fun branch e =
-                              Value.coerce {from = loopExp e, to = result}
-                           fun handlePat (Pat.T {con, arg, ...}) =
-                              case (arg,      conArg con) of
-                                 (NONE,        NONE)       => ()
-                               | (SOME (x, _), SOME v)     => newVar (x, v)
-                               | _ => Error.bug "OrigCFA.loopBind: Case"
-                           val _ = Cases.foreach' (cases, branch, handlePat)
-                           val _ = Option.app (default, branch o #1)
-                        in ()
-                        end
-                   | ConApp {con, arg, ...} =>
-                        (case (arg,    conArg con) of
-                            (NONE,   NONE)       => ()
-                          | (SOME x, SOME v)     =>
-                               Value.coerce {from = varExp x, to = v}
-                          | _ => Error.bug "OrigCFA.loopBind: ConApp"
-                         ; new' ())
-                   | Const _ => new' ()
-                   | Handle {try, catch = (x, t), handler} =>
-                        let
-                           val result = new ()
-                        in Value.coerce {from = loopExp try, to = result}
-                           ; newVar (x, Value.fromType t)
-                           ; Value.coerce {from = loopExp handler, to = result}
-                        end
-                   | Lambda l => set (loopLambda l)
-                   | PrimApp {prim, args, ...} =>
-                        set (Value.primApply {prim = prim,
-                                              args = varExps args,
-                                              resultTy = ty})
-                   | Profile _ => new' ()
-                   | Raise _ => new' ()
-                   | Select {tuple, offset} =>
-                        set (Value.select (varExp tuple, offset))
-                   | Tuple xs =>
-                        if Value.typeIsFirstOrder ty
-                           then new' ()
-                      else set (Value.tuple (Vector.map (xs, varExp)))
-                   | Var x => set (varExp x)
-               end) arg
-            and loopLambda (lambda: Lambda.t): Value.t =
-               let
-                  val {arg, argType, body, ...} = Lambda.dest lambda
-                  val _ = newVar (arg, Value.fromType argType)
-               in
-                  Value.lambda (lambda,
-                                Type.arrow (argType, Value.ty (loopExp body)))
-               end
-            val _ = loopExp body
-         in ()
+            val {decs, result} = Sxml.Exp.dest e
+            val () = List.foreach (decs, loopDec)
+         in
+            varExpValue result
          end
+      and loopDec (d: Sxml.Dec.t): unit =
+         (case d of
+             Sxml.Dec.Fun {decs, ...} =>
+                (Vector.foreach
+                 (decs, fn {var, ty, ...} =>
+                  newVar (var, Value.fromType ty));
+                 Vector.foreach
+                 (decs, fn {var, ty, lambda, ...} =>
+                  Value.unify (varValue var, loopLambda (lambda, ty))))
+           | Sxml.Dec.MonoVal b => loopBind b
+           | _ => Error.bug "OrigCFA.loopDec: strange dec")
+      and loopBind {var, ty, exp} =
+         let
+            fun set v = newVar (var, v)
+            fun new () =
+               let val v = Value.fromType ty
+               in set v; v
+               end
+            val new' = ignore o new
+         in
+            case exp of
+               Sxml.PrimExp.App {func, arg} =>
+                  let
+                     val arg = varExpValue arg
+                     val result = new ()
+                     val _ =
+                        Value.addHandler
+                        (varExpValue func, fn lambda =>
+                         let
+                            val {arg = formal, body, ...} =
+                               Sxml.Lambda.dest lambda
+                         in
+                            Value.coerce {from = arg,
+                                          to = varValue formal};
+                            Value.coerce {from = expValue body,
+                                          to = result}
+                         end)
+                  in ()
+                  end
+             | Sxml.PrimExp.Case {cases, default, ...} =>
+                  let
+                     val result = new ()
+                     fun branch e =
+                        Value.coerce {from = loopExp e, to = result}
+                     fun handlePat (Sxml.Pat.T {con, arg, ...}) =
+                        case (arg, conArgValue con) of
+                           (NONE, NONE) => ()
+                         | (SOME (x, _), SOME v) => newVar (x, v)
+                         | _ => Error.bug "OrigCFA.loopBind: Case"
+                     val _ = Sxml.Cases.foreach' (cases, branch, handlePat)
+                     val _ = Option.app (default, branch o #1)
+                  in ()
+                  end
+             | Sxml.PrimExp.ConApp {con, arg, ...} =>
+                  let
+                     val _ =
+                        case (arg, conArgValue con) of
+                           (NONE, NONE) => ()
+                         | (SOME x, SOME v) =>
+                              Value.coerce {from = varExpValue x, to = v}
+                         | _ => Error.bug "OrigCFA.loopBind: ConApp"
+                  in
+                     new' ()
+                  end
+             | Sxml.PrimExp.Const _ => new' ()
+             | Sxml.PrimExp.Handle {try, catch = (x, t), handler} =>
+                  let
+                     val result = new ()
+                  in
+                     Value.coerce {from = loopExp try, to = result};
+                     newVar (x, Value.fromType t);
+                     Value.coerce {from = loopExp handler, to = result}
+                  end
+             | Sxml.PrimExp.Lambda lambda => set (loopLambda (lambda, ty))
+             | Sxml.PrimExp.PrimApp {prim, args, ...} =>
+                  set (Value.primApply {prim = prim,
+                                        args = varExpValues args,
+                                        resultTy = ty})
+             | Sxml.PrimExp.Profile _ => new' ()
+             | Sxml.PrimExp.Raise _ => new' ()
+             | Sxml.PrimExp.Select {tuple, offset} =>
+                  set (Value.select (varExpValue tuple, offset))
+             | Sxml.PrimExp.Tuple xs =>
+                  if Value.typeIsFirstOrder ty
+                     then new' ()
+                     else set (Value.tuple (Vector.map (xs, varExpValue)))
+             | Sxml.PrimExp.Var x => set (varExpValue x)
+         end
+      and loopLambda (lambda: Sxml.Lambda.t, ty: Sxml.Type.t): Value.t =
+         let
+            val {arg, argType, body, ...} = Sxml.Lambda.dest lambda
+            val _ = newVar (arg, Value.fromType argType)
+            val _ = loopExp body
+         in
+            Value.lambda (lambda, ty)
+         end
+      val _ = loopExp body
 
       val cfa : {arg: Sxml.Var.t,
                  argTy: Sxml.Type.t,
@@ -190,7 +171,7 @@ fun cfa (_: {config: Config.t}): t =
                  resTy: Sxml.Type.t} ->
                 Sxml.Lambda.t list =
          fn {func, ...} =>
-         case Value.dest (value func) of
+         case Value.dest (varValue func) of
             Value.Lambdas lambdas => lambdas
           | _ => Error.bug "OrigCFA.cfa: non-lambda"
 
@@ -200,8 +181,8 @@ fun cfa (_: {config: Config.t}): t =
           (datatypes, fn {cons, ...} =>
            Vector.foreach
            (cons, fn {con, ...} =>
-            remConArg con));
-          Sexp.foreachBoundVar
+            remConInfo con));
+          Sxml.Exp.foreachBoundVar
           (body, fn (var, _, _) =>
            remVarInfo var))
    in
