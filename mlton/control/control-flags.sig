@@ -342,6 +342,9 @@ signature CONTROL_FLAGS =
       (* Should types be printed in ILs. *)
       val showTypes: bool ref
 
+      (* List of passes after which to stop. *)
+      val stopPasses: Regexp.Compiled.t list ref
+
       datatype target =
          Cross of string
        | Self

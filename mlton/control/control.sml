@@ -1,4 +1,4 @@
-(* Copyright (C) 2009 Matthew Fluet.
+(* Copyright (C) 2009,2016 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -347,6 +347,12 @@ val wrapProfiling =
                 end
    else thunk
 
+fun maybeStop ({name: string}): unit =
+   if not (List.exists (!stopPasses, fn re =>
+                        Regexp.Compiled.matchesAll (re, name)))
+      then ()
+   else OS.Process.exit OS.Process.success
+
 fun pass {display: 'a display,
           name: string,
           suffix: string,
@@ -368,6 +374,7 @@ fun pass {display: 'a display,
       val _ = checkForErrors name
       val _ = maybeSaveToFile ({name = name, suffix = suffix},
                                style, result, display)
+      val _ = maybeStop {name = name}
    in
       result
    end

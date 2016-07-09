@@ -1027,6 +1027,13 @@ val showTypes = control {name = "show types",
                          default = true,
                          toString = Bool.toString}
 
+val stopPasses =
+   control {name = "stop passes",
+            default = [],
+            toString = List.toString
+                       (Layout.toString o
+                        Regexp.Compiled.layout)}
+
 structure Target =
    struct
       datatype t =
