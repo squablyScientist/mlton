@@ -216,7 +216,11 @@ fun cfa (_: {config: Config.t}): t =
              | Sxml.PrimExp.Profile _ => new' ()
              | Sxml.PrimExp.Raise _ => new' ()
              | Sxml.PrimExp.Select {tuple, offset} =>
-                  set (Value.select (varExpValue tuple, offset))
+                  if Value.typeIsFirstOrder ty
+                     then new' ()
+                     else (case Value.dest (varExpValue tuple) of
+                              Value.Tuple vs => set (Vector.sub (vs, offset))
+                            | _ => Error.bug "OrigCFA.loopPrimExp: non-tuple")
              | Sxml.PrimExp.Tuple xs =>
                   if Value.typeIsFirstOrder ty
                      then new' ()
