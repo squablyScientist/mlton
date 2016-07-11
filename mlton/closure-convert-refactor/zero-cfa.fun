@@ -255,30 +255,46 @@ fun cfa {config: Config.t}: t =
                                    {con = con, arg = arg})
                             in
                                if firstOrderOpt
-                                  then Vector.foreach
-                                       (cases, fn {con, arg} =>
-                                        if Order.isFirstOrder (conOrder con)
-                                           then Option.foreach
-                                                (arg, fn (arg, ty) =>
-                                                 AbsVal.flow {from = typeValue ty,
-                                                              to = varValue arg})
-                                           else ())
-                                  else ();
-                               AbsVal.addHandler
-                               (varExpValue test, varValue, fn v' =>
-                                case v' of
-                                   AbsVal.ConApp {con = con', arg = arg'} =>
-                                      (case Vector.peek (cases, fn {con, ...} =>
-                                                         Sxml.Con.equals (con, con')) of
-                                          SOME {arg = arg, ...} =>
-                                             (case (arg', arg) of
-                                                 (NONE, NONE) => ()
-                                               | (SOME arg', SOME (arg, _)) =>
-                                                    AbsVal.flow {from = arg', to = varValue arg}
-                                               | _ => Error.bug "ZeroCFA.loopPrimExp: Case")
-                                        | NONE => ())
-                                 | AbsVal.Base _ => ()
-                                 | _ => Error.bug "ZeroCFA.loopPrimExp: non-con")
+                                  then AbsVal.addHandler
+                                       (varExpValue test, varValue, fn v' =>
+                                        case v' of
+                                           AbsVal.ConApp {con = con', arg = arg'} =>
+                                              (case Vector.peek (cases, fn {con, ...} =>
+                                                                 Sxml.Con.equals (con, con')) of
+                                                  SOME {arg = arg, ...} =>
+                                                     (case (arg', arg) of
+                                                         (NONE, NONE) => ()
+                                                       | (SOME arg', SOME (arg, _)) =>
+                                                            AbsVal.flow {from = arg',
+                                                                         to = varValue arg}
+                                                       | (NONE, SOME (arg, ty)) =>
+                                                            AbsVal.flow  {from = typeValue ty,
+                                                                          to = varValue arg}
+                                                       | _ => Error.bug "ZeroCFA.loopPrimExp: Case")
+                                                | NONE => ())
+                                         | AbsVal.Base _ =>
+                                              Vector.foreach
+                                              (cases, fn {con, arg} =>
+                                               Option.foreach
+                                               (arg, fn (arg, ty) =>
+                                                AbsVal.flow {from = typeValue ty,
+                                                             to = varValue arg}))
+                                         | _ => Error.bug "ZeroCFA.loopPrimExp: non-con")
+                                  else AbsVal.addHandler
+                                       (varExpValue test, varValue, fn v' =>
+                                        case v' of
+                                           AbsVal.ConApp {con = con', arg = arg'} =>
+                                              (case Vector.peek (cases, fn {con, ...} =>
+                                                                 Sxml.Con.equals (con, con')) of
+                                                  SOME {arg = arg, ...} =>
+                                                     (case (arg', arg) of
+                                                         (NONE, NONE) => ()
+                                                       | (SOME arg', SOME (arg, _)) =>
+                                                            AbsVal.flow {from = arg',
+                                                                         to = varValue arg}
+                                                       | _ => Error.bug "ZeroCFA.loopPrimExp: Case")
+                                                | NONE => ())
+                                         | _ => Error.bug "ZeroCFA.loopPrimExp: non-con")
                             end
                        | Sxml.Cases.Word _ => ()
                    val _ =
@@ -293,9 +309,20 @@ fun cfa {config: Config.t}: t =
                    res
                 end
            | Sxml.PrimExp.ConApp {con, arg, ...} =>
-                if firstOrderOpt andalso Order.isFirstOrder (conOrder con)
-                   then typeValue ty
-                   else AbsVal.fromConApp ({con = con, arg = Option.map (arg, Sxml.VarExp.var)}, varValue)
+                let
+                   fun mk arg =
+                      AbsVal.fromConApp
+                      ({con = con, arg = Option.map (arg, Sxml.VarExp.var)},
+                       varValue)
+                in
+                   if firstOrderOpt
+                      then if Order.isFirstOrder (typeOrder ty)
+                              then typeValue ty
+                              else if Order.isFirstOrder (conOrder con)
+                                      then mk NONE
+                                      else mk arg
+                      else mk arg
+                end
            | Sxml.PrimExp.Const c =>
                 typeValue (Sxml.Type.ofConst c)
            | Sxml.PrimExp.Handle {try, catch = (var, _), handler} =>
