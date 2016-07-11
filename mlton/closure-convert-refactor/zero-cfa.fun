@@ -140,6 +140,10 @@ fun cfa {config: Config.t}: t =
          Property.get
          (Sxml.Var.plist,
           Property.initFun (fn _ => {value = AbsVal.new ()}))
+      fun destroyVarInfo () =
+         Sxml.Exp.foreachBoundVar
+         (body, fn (var, _, _) =>
+          remVarInfo var)
       val varValue = #value o varInfo
       val varExpValue = varValue o Sxml.VarExp.var
 
@@ -517,9 +521,7 @@ fun cfa {config: Config.t}: t =
          (destroyConOrder ();
           destroyTyconOrder ();
           destroyTypeOrder ();
-          Sxml.Exp.foreachBoundVar
-          (body, fn (var, _, _) =>
-           remVarInfo var);
+          destroyVarInfo ();
           destroyTypeInfo ();
           destroyLambdaInfo ())
    in
