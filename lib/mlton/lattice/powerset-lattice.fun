@@ -4,7 +4,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor PowerSetLattice (S: POWERSET_LATTICE_STRUCTS): POWERSET_LATTICE =
+functor PowerSetLattice_ListSet (S: POWERSET_LATTICE_STRUCTS): POWERSET_LATTICE =
 struct
 
 open S

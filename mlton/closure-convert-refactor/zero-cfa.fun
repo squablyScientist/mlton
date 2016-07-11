@@ -781,7 +781,7 @@ structure ZeroCFA_PS = MkZeroCFA_PS(struct
                                        structure Proxy = Proxy
                                        structure Element = Element
                                        structure ElementSet =
-                                          PowerSetLattice(structure Element = Element)
+                                          PowerSetLattice_ListSet(structure Element = Element)
                                  end)
 end
 

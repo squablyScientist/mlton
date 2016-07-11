@@ -140,7 +140,7 @@ ann "forceUsed" in
       functor OrderedField
       functor OrderedUniqueSet
       functor PolyEnv
-      functor PowerSetLattice
+      functor PowerSetLattice_ListSet
       functor Ring
       functor RingWithIdentity
       functor ThreePointLattice

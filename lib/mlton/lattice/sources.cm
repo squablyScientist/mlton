@@ -14,7 +14,7 @@ signature TWO_POINT_LATTICE
 
 functor FlatLattice
 functor NPointLattice
-functor PowerSetLattice
+functor PowerSetLattice_ListSet
 functor ThreePointLattice
 functor TwoPointLattice
 

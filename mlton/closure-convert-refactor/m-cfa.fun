@@ -132,7 +132,7 @@ structure AbstractValue =
    end
 structure AbsVal = AbstractValue
 
-structure AbstractValueSet = PowerSetLattice(structure Element = AbstractValue)
+structure AbstractValueSet = PowerSetLattice_ListSet(structure Element = AbstractValue)
 structure AbsValSet = AbstractValueSet
 
 
