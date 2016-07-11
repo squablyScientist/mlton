@@ -52,7 +52,7 @@ fun transform {config: Config.t}: t =
       val Sxml.Program.T {datatypes, body, overflow} = program
       val overflow = valOf overflow
 
-      val {freeVars, destroy = destroyLambdaFree, ...} =
+      val {freeVars, freeRecVars, destroy = destroyLambdaFree, ...} =
          LambdaFree.lambdaFree {program = program}
 
       val {isGlobal, destroy = destroyGlobalize, ...} =
@@ -293,27 +293,32 @@ fun transform {config: Config.t}: t =
                       else cdecs
                 end
            | Sxml.Dec.Fun {decs, ...} =>
-                let
-                   val cdecs =
-                      Vector.toListMap
-                      (Vector.map (decs,
-                                   fn {var, ty, lambda} =>
-                                   let
-                                      val (cvar, _) = convertBoundVar (var, ty)
-                                   in
-                                      {cvar = cvar,
-                                       lambda = lambda}
-                                   end),
-                       fn {cvar, lambda} =>
-                       {var = cvar,
-                        exp = convertLambda {lambda = lambda, recs = decs}})
-                   val global =
-                      not (Vector.isEmpty decs) andalso isGlobal (#var (Vector.sub (decs, 0)))
-                in
-                   if global
-                      then (List.push (globals, cdecs); [])
-                      else cdecs
-                end
+                if Vector.isEmpty decs
+                   then []
+                   else let
+                           val global = isGlobal (#var (Vector.sub (decs, 0)))
+                           val {var = envVar, ty = envTy, exp = envExp} =
+                              makeLambdaEnv (#lambda (Vector.sub (decs, 0)))
+                           val env = Ssa.DirectExp.var (envVar, envTy)
+                           val cdecs =
+                              {var = envVar, exp = envExp} ::
+                              (Vector.toListMap
+                               (decs, fn {var, ty, lambda} =>
+                                let
+                                   val (cvar, _) = convertBoundVar (var, ty)
+                                in
+                                   {var = cvar,
+                                    exp = makeLambdaClos {lambda = lambda, env = env}}
+                                end))
+                           val _ =
+                              Vector.foreach
+                              (decs, fn {lambda, ...} =>
+                               convertLambda {lambda = lambda, recs = decs})
+                        in
+                           if global
+                              then (List.push (globals, cdecs); [])
+                              else cdecs
+                        end
            | _ => Error.bug "TyTransform.convertDec: strange dec")
       and convertPrimExp {var: Var.t, oty: Sxml.Type.t, cty: Ssa.Type.t, exp: Sxml.PrimExp.t}: Ssa.DirectExp.t =
          (case exp of
@@ -391,7 +396,15 @@ fun transform {config: Config.t}: t =
                  handler = convertExp handler,
                  ty = cty}
            | Sxml.PrimExp.Lambda lambda =>
-                convertLambda {lambda = lambda, recs = Vector.new0 ()}
+                let
+                   val _ = convertLambda {lambda = lambda, recs = Vector.new0 ()}
+                   val {var, ty, exp} = makeLambdaEnv lambda
+                in
+                   Ssa.DirectExp.lett
+                   {decs = [{var = var, exp = exp}],
+                    body = makeLambdaClos {lambda = lambda,
+                                           env = Ssa.DirectExp.var (var, ty)}}
+                end
            | Sxml.PrimExp.PrimApp {prim, targs, args} =>
                 let
                    val prim = Prim.map (prim, convertType)
@@ -425,64 +438,66 @@ fun transform {config: Config.t}: t =
                  ty = cty}
            | Sxml.PrimExp.Var x =>
                 convertVarExp x)
-      and convertLambda {lambda, recs} =
+      and makeLambdaClos {lambda, env} =
          let
-            fun mkClos {lambda, env} =
-               let
-                  val {con, cty, ...} = lambdaInfo lambda
-               in
-                  Ssa.DirectExp.conApp
-                  {con = con,
-                   args = Vector.new1 env,
-                   ty = cty}
-               end
-
-            val recs = Vector.keepAll (recs, not o isGlobal o #var)
-            val {arg, argType, body, mayInline, ...} = Sxml.Lambda.dest lambda
-            val {envVars, envTy, func, ...} = lambdaInfo lambda
-
-            val () =
-               newScope
-               (envVars, fn envVars =>
-                newScope
-                (Vector.map (recs, #var), fn recs' =>
-                 let
-                    val env = Var.newString "env"
-                    val args = Vector.new2 ((env, envTy), convertBoundVar (arg, argType))
-                    val resTy = #cty (varInfo (Sxml.VarExp.var (Sxml.Exp.result body)))
-
-                    val body =
-                       Ssa.DirectExp.lett
-                       {decs = ((Vector.toList o Vector.map2)
-                                (recs, recs', fn ({lambda, ...}, cvar) =>
-                                 {var = cvar,
-                                  exp = mkClos {lambda = lambda,
-                                                env = Ssa.DirectExp.var (env, envTy)}})),
-                        body = convertExp body}
-                    val body =
-                       Ssa.DirectExp.detupleBind
-                       {tuple = env,
-                        tupleTy = envTy,
-                        components = envVars,
-                        body = body}
-                 in
-                    addFunction {args = args,
-                                 body = body,
-                                 isMain = false,
-                                 mayInline = mayInline,
-                                 name = func,
-                                 resTy = resTy}
-                 end))
-
+            val {con, cty, ...} = lambdaInfo lambda
+         in
+            Ssa.DirectExp.conApp
+            {con = con,
+             args = Vector.new1 env,
+             ty = cty}
+         end
+      and makeLambdaEnv lambda =
+         let
+            val {envVars, envTy, ...} = lambdaInfo lambda
             val env = Var.newString "env"
          in
-            Ssa.DirectExp.lett
-            {decs = [{var = env,
-                      exp = Ssa.DirectExp.tuple
-                            {exps = convertVars envVars,
-                             ty = envTy}}],
-             body = mkClos {lambda = lambda,
-                            env = Ssa.DirectExp.var (env, envTy)}}
+            {var = env,
+             ty = envTy,
+             exp = Ssa.DirectExp.tuple
+                   {exps = convertVars envVars,
+                    ty = envTy}}
+         end
+      and convertLambda {lambda, recs} =
+         let
+            val {arg, argType, body, mayInline, ...} = Sxml.Lambda.dest lambda
+            val {envVars, envTy, func, ...} = lambdaInfo lambda
+            val freeRecVars = freeRecVars lambda
+            val recs = Vector.keepAll (recs, fn {var, ...} =>
+                                       not (isGlobal var)
+                                       andalso
+                                       Vector.contains (freeRecVars, var, Sxml.Var.equals))
+         in
+            newScope
+            (envVars, fn envVars =>
+             newScope
+             (Vector.map (recs, #var), fn recs' =>
+              let
+                 val env = Var.newString "env"
+                 val args = Vector.new2 ((env, envTy), convertBoundVar (arg, argType))
+                 val resTy = #cty (varInfo (Sxml.VarExp.var (Sxml.Exp.result body)))
+                 val body =
+                    Ssa.DirectExp.lett
+                    {decs = ((Vector.toList o Vector.map2)
+                             (recs, recs', fn ({lambda, ...}, cvar) =>
+                              {var = cvar,
+                               exp = makeLambdaClos {lambda = lambda,
+                                                     env = Ssa.DirectExp.var (env, envTy)}})),
+                     body = convertExp body}
+                 val body =
+                    Ssa.DirectExp.detupleBind
+                    {tuple = env,
+                     tupleTy = envTy,
+                     components = envVars,
+                     body = body}
+              in
+                 addFunction {args = args,
+                              body = body,
+                              isMain = false,
+                              mayInline = mayInline,
+                              name = func,
+                              resTy = resTy}
+              end))
          end
 
       val main = Ssa.Func.newString "main"
