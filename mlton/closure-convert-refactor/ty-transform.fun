@@ -21,13 +21,18 @@ open S
 open Sxml.Atoms
 
 structure LambdaFree = LambdaFree(S)
+structure Globalize = Globalize(S)
 
 structure Config =
    struct
-      datatype t = T of {shrinkOpt: bool}
-      val init = T {shrinkOpt = true}
-      fun updateShrinkOpt (T {...}: t, shrinkOpt) =
-         T {shrinkOpt = shrinkOpt}
+      datatype t = T of {globalizeOpt: bool, shrinkOpt: bool}
+      val init = T {globalizeOpt = true, shrinkOpt = true}
+      fun updateGlobalizeOpt (T {shrinkOpt, ...}: t, globalizeOpt) =
+         T {globalizeOpt = globalizeOpt,
+            shrinkOpt = shrinkOpt}
+      fun updateShrinkOpt (T {globalizeOpt, ...}: t, shrinkOpt) =
+         T {globalizeOpt = globalizeOpt,
+            shrinkOpt = shrinkOpt}
    end
 
 type t = {program: Sxml.Program.t,
@@ -43,12 +48,17 @@ type t = {program: Sxml.Program.t,
 fun transform {config: Config.t}: t =
    fn {program: Sxml.Program.t, cfa} =>
    let
-      val Config.T {shrinkOpt} = config
+      val Config.T {globalizeOpt, shrinkOpt} = config
       val Sxml.Program.T {datatypes, body, overflow} = program
       val overflow = valOf overflow
 
       val {freeVars, destroy = destroyLambdaFree, ...} =
          LambdaFree.lambdaFree {program = program}
+
+      val {isGlobal, destroy = destroyGlobalize, ...} =
+         if globalizeOpt
+            then Globalize.globalize {program = program, freeVars = freeVars}
+            else {isGlobal = fn _ => false, destroy = fn () => ()}
 
       val arrowInfos = ref []
       val {get = arrowInfo: Sxml.Type.t -> {lambdas: Sxml.Lambda.t list ref,
@@ -107,14 +117,21 @@ fun transform {config: Config.t}: t =
          end
       fun convertTypes tys = Vector.map (tys, convertType)
 
-      val {get = varInfo : Var.t -> {oty: Sxml.Type.t, cvar: Var.t ref, cty: Ssa.Type.t},
+      val {get = varInfo: Var.t -> {oty: Sxml.Type.t, cvar: Var.t ref, cty: Ssa.Type.t},
            set = setVarInfo, rem = remVarInfo} =
          Property.getSetOnce
          (Var.plist,
           Property.initRaise ("TyTransform.varInfo", Var.layout))
       fun newVar x =
-         let val x' = Var.new x
-         in #cvar (varInfo x) := x' ; x'
+         let
+            val x' =
+               if isGlobal x
+                  then x
+                  else Var.new x
+            val _ =
+               #cvar (varInfo x) := x'
+         in
+            x'
          end
       fun newScope (xs: Var.t vector, f: Var.t vector -> 'a): 'a =
          let
@@ -151,7 +168,7 @@ fun transform {config: Config.t}: t =
                                               [String.toUpper (String.prefix (f, 1)),
                                                String.dropFirst f,
                                                "Env"]
-                                    val envVars = freeVars lambda
+                                    val envVars = Vector.keepAll (freeVars lambda, not o isGlobal)
                                     val envTy = Ssa.Type.tuple (Vector.map (envVars, #cty o varInfo))
                                     val func = Func.newString f
                                  in
@@ -199,6 +216,7 @@ fun transform {config: Config.t}: t =
                     end))})
 
 
+      val globals = ref []
       val functions = ref []
       val raises: Ssa.Type.t vector option =
          Exn.withEscape
@@ -266,19 +284,36 @@ fun transform {config: Config.t}: t =
              Sxml.Dec.MonoVal {var, ty, exp} =>
                 let
                    val (cvar, cty) = convertBoundVar (var, ty)
+                   val cdecs =
+                      [{var = cvar,
+                        exp = convertPrimExp {var = var, oty = ty, cty = cty, exp = exp}}]
                 in
-                   [{var = cvar,
-                     exp = convertPrimExp {var = var, oty = ty, cty = cty, exp = exp}}]
+                   if isGlobal var
+                      then (List.push (globals, cdecs); [])
+                      else cdecs
                 end
            | Sxml.Dec.Fun {decs, ...} =>
-                Vector.toListMap
-                (Vector.map (decs,
-                             fn {var, ty, lambda} =>
-                             {cvar = #1 (convertBoundVar (var, ty)),
-                              lambda = lambda}),
-                 fn {cvar, lambda} =>
-                 {var = cvar,
-                  exp = convertLambda {lambda = lambda, recs = decs}})
+                let
+                   val cdecs =
+                      Vector.toListMap
+                      (Vector.map (decs,
+                                   fn {var, ty, lambda} =>
+                                   let
+                                      val (cvar, _) = convertBoundVar (var, ty)
+                                   in
+                                      {cvar = cvar,
+                                       lambda = lambda}
+                                   end),
+                       fn {cvar, lambda} =>
+                       {var = cvar,
+                        exp = convertLambda {lambda = lambda, recs = decs}})
+                   val global =
+                      not (Vector.isEmpty decs) andalso isGlobal (#var (Vector.sub (decs, 0)))
+                in
+                   if global
+                      then (List.push (globals, cdecs); [])
+                      else cdecs
+                end
            | _ => Error.bug "TyTransform.convertDec: strange dec")
       and convertPrimExp {var: Var.t, oty: Sxml.Type.t, cty: Ssa.Type.t, exp: Sxml.PrimExp.t}: Ssa.DirectExp.t =
          (case exp of
@@ -402,6 +437,7 @@ fun transform {config: Config.t}: t =
                    ty = cty}
                end
 
+            val recs = Vector.keepAll (recs, not o isGlobal o #var)
             val {arg, argType, body, mayInline, ...} = Sxml.Lambda.dest lambda
             val {envVars, envTy, func, ...} = lambdaInfo lambda
 
@@ -449,7 +485,6 @@ fun transform {config: Config.t}: t =
                             env = Ssa.DirectExp.var (env, envTy)}}
          end
 
-      val globals = Vector.new0 ()
       val main = Ssa.Func.newString "main"
       val () =
          addFunction {args = Vector.new0 (),
@@ -458,6 +493,21 @@ fun transform {config: Config.t}: t =
                       mayInline = false,
                       name = main,
                       resTy = Ssa.Type.unit}
+      val globals =
+         let
+            val (_, blocks) =
+               Ssa.DirectExp.linearize
+               (Ssa.DirectExp.lett
+                {decs = List.concatRev (!globals),
+                 body = Ssa.DirectExp.unit},
+                Ssa.Handler.Dead)
+            val globals =
+               case blocks of
+                  [Ssa.Block.T {statements, ...}] => statements
+                | _ => Error.bug "TyTransform.globals"
+         in
+            globals
+         end
       val program =
          Ssa.Program.T {datatypes = Vector.concat [datatypes, lambdaDatatypes],
                         globals = globals,
@@ -486,7 +536,8 @@ fun scan _ charRdr strm0 =
                  | _ => NONE)
           | _ => NONE
       val nameArgScans =
-         (mkNameArgScan ("shrink", Bool.scan charRdr, Config.updateShrinkOpt))::
+         (mkNameArgScan ("g", Bool.scan charRdr, Config.updateGlobalizeOpt))::
+         (mkNameArgScan ("s", Bool.scan charRdr, Config.updateShrinkOpt))::
          nil
 
       fun scanNameArgs (nameArgScans, config) strm =
