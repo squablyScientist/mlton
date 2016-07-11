@@ -18,6 +18,7 @@ signature TRANSFORM =
       structure Config:
          sig
             type t
+            val init: t
          end
 
       type t = {program: Sxml.Program.t,

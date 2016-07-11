@@ -60,8 +60,8 @@ val _ = List.push (Control.indirectFlags, {flag = "cc-cfa", get = cfaGet, set = 
 
 (* Transforms *)
 structure TyTransform = TyTransform(S)
-val transRef = ref (TyTransform.transform {config = ()})
-val transString = ref "tytrans"
+val transRef = ref (TyTransform.transform {config = TyTransform.Config.init})
+val transString = ref "tytrans(shrink=true)"
 val transGet = fn () => !transString
 val transSet =
    let

@@ -22,7 +22,13 @@ open Sxml.Atoms
 
 structure LambdaFree = LambdaFree(S)
 
-structure Config = struct type t = unit end
+structure Config =
+   struct
+      datatype t = T of {shrinkOpt: bool}
+      val init = T {shrinkOpt = true}
+      fun updateShrinkOpt (T {...}: t, shrinkOpt) =
+         T {shrinkOpt = shrinkOpt}
+   end
 
 type t = {program: Sxml.Program.t,
           cfa: {arg: Sxml.Var.t,
@@ -34,9 +40,10 @@ type t = {program: Sxml.Program.t,
          {program: Ssa.Program.t,
           destroy: unit -> unit}
 
-fun transform (_: {config: Config.t}): t =
+fun transform {config: Config.t}: t =
    fn {program: Sxml.Program.t, cfa} =>
    let
+      val Config.T {shrinkOpt} = config
       val Sxml.Program.T {datatypes, body, overflow} = program
       val overflow = valOf overflow
 
@@ -204,7 +211,7 @@ fun transform (_: {config: Config.t}): t =
                | _ => ())
              ; NONE))
       val shrinkFunction =
-         if !Control.closureConvertShrink
+         if shrinkOpt
             then Ssa.shrinkFunction {globals = Vector.new0 ()}
             else fn f => f
       fun addFunction {args, body, isMain, mayInline, name, resTy} =
@@ -469,8 +476,41 @@ val transform = fn config =>
    (transform config)
 
 fun scan _ charRdr strm0 =
-   case Scan.string "tyxform" charRdr strm0 of
-      SOME ((), strm1) => SOME (transform {config = ()}, strm1)
-    | _ => NONE
+   let
+      fun mkNameArgScan (name, scanArg, updateConfig) (config: Config.t) strm0 =
+         case Scan.string (name ^ ":") charRdr strm0 of
+            SOME ((), strm1) =>
+               (case scanArg strm1 of
+                   SOME (arg, strm2) =>
+                      SOME (updateConfig (config, arg), strm2)
+                 | _ => NONE)
+          | _ => NONE
+      val nameArgScans =
+         (mkNameArgScan ("shrink", Bool.scan charRdr, Config.updateShrinkOpt))::
+         nil
+
+      fun scanNameArgs (nameArgScans, config) strm =
+         case nameArgScans of
+            nameArgScan::nameArgScans =>
+               (case nameArgScan config strm of
+                   SOME (config', strm') =>
+                      (case nameArgScans of
+                          [] => (case charRdr strm' of
+                                    SOME (#")", strm'') =>
+                                       SOME (transform {config = config'}, strm'')
+                                  | _ => NONE)
+                        | _ => (case charRdr strm' of
+                                   SOME (#",", strm'') => scanNameArgs (nameArgScans, config') strm''
+                                 | _ => NONE))
+                 | _ => NONE)
+          | _ => NONE
+   in
+      case Scan.string "tytrans" charRdr strm0 of
+         SOME ((), strm1) =>
+            (case charRdr strm1 of
+                SOME (#"(", strm2) => scanNameArgs (nameArgScans, Config.init) strm2
+              | _ => NONE)
+       | _ => NONE
+   end
 
 end
