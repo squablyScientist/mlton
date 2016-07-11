@@ -17,6 +17,9 @@ local
    lambda-free.sig
    lambda-free.fun
 
+   globalize.sig
+   globalize.fun
+
    cfa.sig
    ty-cfa.fun
    synknown-cfa.fun
