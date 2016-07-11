@@ -533,43 +533,43 @@ val cfa = fn config =>
 
 end
 
-functor MkZeroCFA_PS (S:
-                      sig
-                         include CFA_STRUCTS
-                         structure Proxy:
-                            sig
-                               type t
-                               val all: unit -> t list
-                               val equals: t * t -> bool
-                               val hash: t -> Word.t
-                               val layout: t -> Layout.t
-                               val new: unit -> t
-                               val plist: t -> PropertyList.t
-                            end
-                         structure Element:
-                            sig
-                               datatype t =
-                                  Array of Proxy.t
-                                | Base of Sxml.Type.t
-                                | ConApp of {con: Sxml.Con.t, arg: Sxml.Var.t option}
-                                | Lambda of Sxml.Lambda.t
-                                | Ref of Proxy.t
-                                | Tuple of Sxml.Var.t vector
-                                | Vector of Proxy.t
-                                | Weak of Proxy.t
-                               val equals: t * t -> bool
-                               val layout: t -> Layout.t
-                               val hash: t -> word
-                               val unit: t
-                               val truee: t
-                               val falsee: t
-                            end
-                         structure ElementSet: POWERSET_LATTICE
-                         sharing Element = ElementSet.Element
-                      end) =
+functor MkZeroCFA_PSL (S:
+                       sig
+                          include CFA_STRUCTS
+                          structure Proxy:
+                             sig
+                                type t
+                                val all: unit -> t list
+                                val equals: t * t -> bool
+                                val hash: t -> Word.t
+                                val layout: t -> Layout.t
+                                val new: unit -> t
+                                val plist: t -> PropertyList.t
+                             end
+                          structure Element:
+                             sig
+                                datatype t =
+                                   Array of Proxy.t
+                                 | Base of Sxml.Type.t
+                                 | ConApp of {con: Sxml.Con.t, arg: Sxml.Var.t option}
+                                 | Lambda of Sxml.Lambda.t
+                                 | Ref of Proxy.t
+                                 | Tuple of Sxml.Var.t vector
+                                 | Vector of Proxy.t
+                                 | Weak of Proxy.t
+                                val equals: t * t -> bool
+                                val layout: t -> Layout.t
+                                val hash: t -> word
+                                val unit: t
+                                val truee: t
+                                val falsee: t
+                             end
+                          structure ElementSet: POWERSET_LATTICE
+                          sharing Element = ElementSet.Element
+                       end) =
 struct
 open S
-structure PowerSetAbstractValue =
+structure AbstractValue_PowerSetLattice =
    struct
       type t = ElementSet.t
       datatype elt =
@@ -650,11 +650,11 @@ structure PowerSetAbstractValue =
          val newWeak = mkNew Element.Weak
       end
    end
-structure ZeroCFA_PS = MkZeroCFA(struct
-                                    open S
-                                    structure AbstractValue = PowerSetAbstractValue
-                                 end)
-open ZeroCFA_PS
+structure ZeroCFA_PSL = MkZeroCFA(struct
+                                     open S
+                                     structure AbstractValue = AbstractValue_PowerSetLattice
+                                  end)
+open ZeroCFA_PSL
 end
 
 functor ZeroCFA (S: CFA_STRUCTS): CFA =
@@ -664,18 +664,18 @@ open S
 
 structure AbstractValueRep =
    struct
-      datatype t = PowerSet
-      fun scan charRdr strm0 =
-         case Scan.string "ps" charRdr strm0 of
-            SOME ((), strm1) => SOME (PowerSet, strm1)
-          | _ => NONE
+      datatype t = PowerSetLattice_ListSet | PowerSetLattice_UniqueSet
+      fun scan charRdr strm =
+         Scan.first [Scan.stringAs ("psl_ls", PowerSetLattice_ListSet),
+                     Scan.stringAs ("psl_us", PowerSetLattice_UniqueSet)]
+                    charRdr strm
    end
 structure Config =
    struct
       datatype t = T of {abstractValueRep: AbstractValueRep.t,
                          firstOrderOpt: bool,
                          reachabilityExt: bool}
-      val init = T {abstractValueRep = AbstractValueRep.PowerSet,
+      val init = T {abstractValueRep = AbstractValueRep.PowerSetLattice_ListSet,
                     firstOrderOpt = true,
                     reachabilityExt = true}
       fun updateAbstractValueRep (T {firstOrderOpt, reachabilityExt, ...}: t, abstractValueRep) =
@@ -776,13 +776,20 @@ structure Element =
       val falsee = ConApp {con = Sxml.Con.falsee, arg = NONE}
    end
 in
-structure ZeroCFA_PS = MkZeroCFA_PS(struct
-                                       open S
-                                       structure Proxy = Proxy
-                                       structure Element = Element
-                                       structure ElementSet =
-                                          PowerSetLattice_ListSet(structure Element = Element)
-                                 end)
+structure ZeroCFA_PSL_LS = MkZeroCFA_PSL(struct
+                                            open S
+                                            structure Proxy = Proxy
+                                            structure Element = Element
+                                            structure ElementSet =
+                                               PowerSetLattice_ListSet(structure Element = Element)
+                                         end)
+structure ZeroCFA_PSL_US = MkZeroCFA_PSL(struct
+                                            open S
+                                            structure Proxy = Proxy
+                                            structure Element = Element
+                                            structure ElementSet =
+                                               PowerSetLattice_UniqueSet(structure Element = Element)
+                                         end)
 end
 
 fun cfa {config: Config.t}: t =
@@ -790,14 +797,23 @@ fun cfa {config: Config.t}: t =
       val Config.T {abstractValueRep, firstOrderOpt, reachabilityExt} = config
    in
       case abstractValueRep of
-         AbstractValueRep.PowerSet =>
+         AbstractValueRep.PowerSetLattice_ListSet =>
             let
                val config =
-                  ZeroCFA_PS.Config.T
+                  ZeroCFA_PSL_LS.Config.T
                   {firstOrderOpt = firstOrderOpt,
                    reachabilityExt = reachabilityExt}
             in
-               ZeroCFA_PS.cfa {config = config}
+               ZeroCFA_PSL_LS.cfa {config = config}
+            end
+       | AbstractValueRep.PowerSetLattice_UniqueSet =>
+            let
+               val config =
+                  ZeroCFA_PSL_US.Config.T
+                  {firstOrderOpt = firstOrderOpt,
+                   reachabilityExt = reachabilityExt}
+            in
+               ZeroCFA_PSL_US.cfa {config = config}
             end
    end
 
