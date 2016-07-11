@@ -88,6 +88,8 @@ fun tuple (r as {exps, ...}) =
       then Vector.sub (exps, 0)
    else Tuple r
 
+val unit = tuple {exps = Vector.new0 (), ty = Type.unit}
+
 val var = Var
 
 fun primApp {args, prim, targs, ty} =
