@@ -769,7 +769,22 @@ structure Element =
              | Weak p => seq [str "Weak ", Proxy.layout p]
          end
 
-      fun hash _ = 0wx0
+      fun hash e =
+         case e of
+            Array p => Proxy.hash p
+          | Base ty => Sxml.Type.hash ty
+          | ConApp {con, arg} =>
+               Option.fold
+               (arg, Sxml.Con.hash con, fn (arg, hash) =>
+                Word.xorb (Sxml.Var.hash arg, hash))
+          | Lambda lam => Sxml.Var.hash (Sxml.Lambda.arg lam)
+          | Ref p => Proxy.hash p
+          | Tuple xs =>
+               Vector.fold
+               (xs, 0wx0, fn (x, hash) =>
+                Word.xorb (Sxml.Var.hash x, hash))
+          | Vector p => Proxy.hash p
+          | Weak p => Proxy.hash p
 
       val unit = Tuple (Vector.new0 ())
       val truee = ConApp {con = Sxml.Con.truee, arg = NONE}
