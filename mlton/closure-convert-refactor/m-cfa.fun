@@ -133,13 +133,6 @@ structure AbstractValue =
 structure AbsVal = AbstractValue
 
 structure AbstractValueSet = PowerSetLattice(structure Element = AbstractValue)
-structure AbstractValueSet =
-   struct
-      open AbstractValueSet
-      val freeze = fn es => (freeze es; es)
-      val frozenSingleton = freeze o singleton
-      fun frozenSingletonBase ty = frozenSingleton (AbsVal.Base ty)
-   end
 structure AbsValSet = AbstractValueSet
 
 
@@ -214,7 +207,7 @@ fun cfa {config = Config.T {m}: Config.t} : t =
            destroy = destroyTypeInfo} =
          Property.destGet
          (Sxml.Type.plist,
-          Property.initFun AbsValSet.frozenSingletonBase)
+          Property.initFun (AbsValSet.singleton o AbsVal.Base))
 
       val {get = lambdaInfo: Sxml.Lambda.t -> Context.t list ref,
            destroy = destroyLambdaInfo} =
@@ -337,7 +330,7 @@ fun cfa {config = Config.T {m}: Config.t} : t =
            | Sxml.PrimExp.ConApp {con, arg, ...} =>
                 if Order.isFirstOrder (conOrder con)
                    then typeInfo ty
-                   else AbsValSet.frozenSingleton (AbsVal.ConApp (ctxt, {con = con, arg = Option.map (arg, Sxml.VarExp.var)}))
+                   else AbsValSet.singleton (AbsVal.ConApp (ctxt, {con = con, arg = Option.map (arg, Sxml.VarExp.var)}))
            | Sxml.PrimExp.Const c =>
                 typeInfo ty
            | Sxml.PrimExp.Handle {try, catch = (var, _), handler} =>
@@ -350,7 +343,7 @@ fun cfa {config = Config.T {m}: Config.t} : t =
                    res
                 end
            | Sxml.PrimExp.Lambda lambda =>
-                AbsValSet.frozenSingleton (AbsVal.Lambda (ctxt, lambda))
+                AbsValSet.singleton (AbsVal.Lambda (ctxt, lambda))
            | Sxml.PrimExp.PrimApp {prim, targs, args, ...} =>
                 if Vector.forall (targs, fn ty => Order.isFirstOrder (typeOrder ty))
                    then typeInfo ty
@@ -471,7 +464,7 @@ fun cfa {config = Config.T {m}: Config.t} : t =
            | Sxml.PrimExp.Tuple xs =>
                 if Order.isFirstOrder (typeOrder ty)
                    then typeInfo ty
-                   else AbsValSet.frozenSingleton (AbsVal.Tuple (ctxt, Vector.map (xs, Sxml.VarExp.var)))
+                   else AbsValSet.singleton (AbsVal.Tuple (ctxt, Vector.map (xs, Sxml.VarExp.var)))
            | Sxml.PrimExp.Var x =>
                 varExpValue (ctxt, x))
 

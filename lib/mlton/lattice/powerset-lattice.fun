@@ -38,37 +38,30 @@ structure EltSet :>
    end
 
 datatype t = T of {elements: EltSet.t ref,
-                   frozen: bool ref,
                    handlers: (Elt.t -> unit) list ref}
 
 fun layout (T {elements, ...}) =
    EltSet.layout (!elements)
 
 fun new es = T {elements = ref es,
-                frozen = ref false,
                 handlers = ref []}
 
 fun empty () = new EltSet.empty
 fun singleton e = new (EltSet.singleton e)
 fun fromList es = new (EltSet.fromList es)
 
-fun freeze (T {frozen, handlers, ...}) =
-   (frozen := true; handlers := [])
-
 fun getElements (es as T {elements, ...}) =
-   (freeze es; EltSet.toList (!elements))
+   EltSet.toList (!elements)
 
-fun addHandler (T {elements, frozen, handlers, ...}, h) =
-   (if !frozen then () else List.push (handlers, h);
+fun addHandler (T {elements, handlers, ...}, h) =
+   (List.push (handlers, h);
     EltSet.foreach (!elements, fn e => h e))
 
-fun op<< (e, T {elements, frozen, handlers, ...}) =
+fun op<< (e, T {elements, handlers, ...}) =
    if EltSet.contains (!elements, e)
       then ()
-      else if !frozen
-              then Error.bug "PowerSetLattice.contains: frozen"
-              else (elements := EltSet.add (!elements, e);
-                    List.foreach (!handlers, fn h => h e))
+      else (elements := EltSet.add (!elements, e);
+            List.foreach (!handlers, fn h => h e))
 
 fun op<= (es, es') =
    addHandler(es, fn e => << (e, es'))
