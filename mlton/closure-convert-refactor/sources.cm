@@ -37,6 +37,7 @@ m-cfa.fun
 
 transform.sig
 ty-transform.fun
+unif-transform.fun
 
 closure-convert.sig
 closure-convert.fun

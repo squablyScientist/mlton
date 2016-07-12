@@ -60,6 +60,7 @@ val _ = List.push (Control.indirectFlags, {flag = "cc-cfa", get = cfaGet, set = 
 
 (* Transforms *)
 structure TyTransform = TyTransform(S)
+structure UnifTransform = UnifTransform(S)
 val transRef = ref (TyTransform.transform {config = TyTransform.Config.init})
 val transString = ref "tytrans(shrink=true)"
 val transGet = fn () => !transString
@@ -67,6 +68,7 @@ val transSet =
    let
       val transRdrs =
          TyTransform.scan ::
+         UnifTransform.scan ::
          nil
 
       fun transRdrRec charRdr strm0 =
