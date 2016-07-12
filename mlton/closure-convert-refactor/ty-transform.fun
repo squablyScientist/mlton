@@ -531,6 +531,7 @@ fun transform {config: Config.t}: t =
    in
       {program = program,
        destroy = fn () => (destroyLambdaFree ();
+                           destroyGlobalize ();
                            destroyArrowInfo ();
                            destroyConvertType ();
                            Sxml.Exp.foreachBoundVar (body, remVarInfo o #1);

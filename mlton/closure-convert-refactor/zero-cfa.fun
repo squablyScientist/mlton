@@ -278,7 +278,7 @@ fun cfa {config: Config.t}: t =
                                                 | NONE => ())
                                          | AbsVal.Base _ =>
                                               Vector.foreach
-                                              (cases, fn {con, arg} =>
+                                              (cases, fn {arg, ...} =>
                                                Option.foreach
                                                (arg, fn (arg, ty) =>
                                                 AbsVal.flow {from = typeValue ty,
