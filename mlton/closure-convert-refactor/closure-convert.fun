@@ -19,8 +19,8 @@ structure SynKnownCFA = SynKnownCFA(S)
 structure TyCFA = TyCFA(S)
 structure ZeroCFA = ZeroCFA(S)
 structure mCFA = mCFA(S)
-val cfaRef = ref (TyCFA.cfa {config = ()})
-val cfaString = ref "tycfa"
+val cfaRef = ref (fn _ => Error.bug "ClosureConvert.cfa unset")
+val cfaString = ref "<cfa>"
 val cfaGet = fn () => !cfaString
 val cfaSet =
    let
@@ -57,12 +57,13 @@ val cfaSet =
                else Result.No s
    end
 val _ = List.push (Control.indirectFlags, {flag = "cc-cfa", get = cfaGet, set = cfaSet})
+val _ = cfaSet "synkwn(tycfa)"
 
 (* Transforms *)
 structure TyTransform = TyTransform(S)
 structure UnifTransform = UnifTransform(S)
-val transRef = ref (TyTransform.transform {config = TyTransform.Config.init})
-val transString = ref "tytrans(g:true,s:true)"
+val transRef = ref (fn _ => Error.bug "ClosureConvert.trans unset")
+val transString = ref "<trans>"
 val transGet = fn () => !transString
 val transSet =
    let
@@ -95,6 +96,7 @@ val transSet =
                else Result.No s
    end
 val _ = List.push (Control.indirectFlags, {flag = "cc-trans", get = transGet, set = transSet})
+val _ = transSet "tytrans(g:true,s:true)"
 
 fun closureConvert (program: Sxml.Program.t): Ssa.Program.t =
    let
