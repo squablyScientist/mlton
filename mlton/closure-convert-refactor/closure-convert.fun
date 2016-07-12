@@ -62,7 +62,7 @@ val _ = List.push (Control.indirectFlags, {flag = "cc-cfa", get = cfaGet, set = 
 structure TyTransform = TyTransform(S)
 structure UnifTransform = UnifTransform(S)
 val transRef = ref (TyTransform.transform {config = TyTransform.Config.init})
-val transString = ref "tytrans(shrink=true)"
+val transString = ref "tytrans(g:true,s:true)"
 val transGet = fn () => !transString
 val transSet =
    let
@@ -171,7 +171,7 @@ fun closureConvert (program: Sxml.Program.t): Ssa.Program.t =
           end)
 
       val transform =
-         Control.trace (Control.Pass, "trans: " ^ !cfaString) (!transRef)
+         Control.trace (Control.Pass, "trans: " ^ !transString) (!transRef)
 
       val {program, destroy = destroyTransform, ...} =
          transform {program = program, cfa = cfa}
