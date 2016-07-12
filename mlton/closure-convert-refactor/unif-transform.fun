@@ -481,6 +481,7 @@ fun transform {config: Config.t}: t =
       val _ =
          Control.trace (Control.Pass, "loopExp")
          loopExp body
+(*
       val _ =
          Control.diagnostics
          (fn display =>
@@ -490,7 +491,7 @@ fun transform {config: Config.t}: t =
                                                   str ": ",
                                                   AbsVal.layout (varValue x)]
                                           end)))
-
+*)
 
       val (convertType, destroyConvertType) =
          let
