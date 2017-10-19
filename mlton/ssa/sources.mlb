@@ -14,8 +14,6 @@ local
 
    equatable.sig
    equatable.sml
-   handler.sig
-   return.sig
    ssa-tree.sig
    ssa-tree2.sig
    ssa-tree.fun
