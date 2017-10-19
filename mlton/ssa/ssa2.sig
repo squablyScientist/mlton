@@ -8,7 +8,7 @@
 
 signature ME_SSA2_STRUCTS =
    sig
-      include SSA_TREE2_STRUCTS
+      include ME_SSA_TREE2_STRUCTS
    end
 
 signature ME_SSA2 =

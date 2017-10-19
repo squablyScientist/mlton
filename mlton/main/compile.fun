@@ -70,12 +70,10 @@ structure CoreML = CoreML (open Atoms
                               end)
 structure Xml = Xml (open Atoms)
 structure Sxml = Sxml (open Xml)
-structure Ssa = Ssa (open Atoms)
 structure MeSsa = MeSsa (open Atoms)
-structure Ssa2 = Ssa2 (open Atoms)
 structure MeSsa2 = MeSsa2 (open Atoms)
 structure Machine = Machine (open Atoms
-                             structure Label = Ssa.Label)
+                             structure Label = MeSsa.Label)
 local
    open Machine
 in
@@ -105,17 +103,10 @@ structure LookupConstant = LookupConstant (structure Const = Const
                                            structure Ffi = Ffi)
 structure Monomorphise = Monomorphise (structure Xml = Xml
                                        structure Sxml = Sxml)
-structure ClosureConvert = ClosureConvert (structure Ssa = Ssa
-                                           structure Sxml = Sxml)
 structure MeClosureConvert = MeClosureConvert (structure Ssa = MeSsa
                                                structure Sxml = Sxml)
-structure SsaToSsa2 = SsaToSsa2 (structure Ssa = Ssa
-                                 structure Ssa2 = Ssa2)
 structure MeSsaToSsa2 = MeSsaToSsa2 (structure Ssa = MeSsa
                                      structure Ssa2 = MeSsa2)
-structure Backend = Backend (structure Ssa = Ssa2
-                             structure Machine = Machine
-                             fun funcToLabel f = f)
 structure MeBackend = MeBackend (structure Ssa = MeSsa2
                                  structure Machine = Machine
                                  fun funcToLabel f = f)
@@ -634,149 +625,58 @@ fun preCodegen {input: MLBString.t}: Machine.Program.t =
                                 Layouts Sxml.Program.layouts)
             else ()
          end
-      val machine =
-         if !Control.checkMultiEntry
-            then let
-                    val ssa =
-                       Control.passTypeCheck
-                       {display = Control.Layouts MeSsa.Program.layouts,
-                        name = "closureConvert",
-                        stats = MeSsa.Program.layoutStats,
-                        style = Control.No,
-                        suffix = "ssa",
-                        thunk = fn () => MeClosureConvert.closureConvert sxml,
-                        typeCheck = MeSsa.typeCheck}
-                    val ssa =
-                       Control.passTypeCheck
-                       {display = Control.Layouts MeSsa.Program.layouts,
-                        name = "ssaSimplify",
-                        stats = MeSsa.Program.layoutStats,
-                        style = Control.No,
-                        suffix = "ssa",
-                        thunk = fn () => MeSsa.simplify ssa,
-                        typeCheck = MeSsa.typeCheck}
-                    val _ =
-                       let
-                          open Control
-                       in
-                          if !keepSSA
-                             then saveToFile ({suffix = "ssa"}, No, ssa,
-                                              Layouts MeSsa.Program.layouts)
-                          else ()
-                       end
-                    val ssa2 =
-                       Control.passTypeCheck
-                       {display = Control.Layouts MeSsa2.Program.layouts,
-                        name = "toSsa2",
-                        stats = MeSsa2.Program.layoutStats,
-                        style = Control.No,
-                        suffix = "ssa2",
-                        thunk = fn () => MeSsaToSsa2.convert ssa,
-                        typeCheck = MeSsa2.typeCheck}
-                    val ssa2 =
-                       Control.passTypeCheck
-                       {display = Control.Layouts MeSsa2.Program.layouts,
-                        name = "ssa2Simplify",
-                        stats = MeSsa2.Program.layoutStats,
-                        style = Control.No,
-                        suffix = "ssa2",
-                        thunk = fn () => MeSsa2.simplify ssa2,
-                        typeCheck = MeSsa2.typeCheck}
-                    val _ =
-                       let
-                          open Control
-                       in
-                          if !keepSSA2
-                             then saveToFile ({suffix = "ssa2"}, No, ssa2,
-                                              Layouts MeSsa2.Program.layouts)
-                          else ()
-                       end
-                     val codegenImplementsPrim =
-                        case !Control.codegen of
-                           Control.CCodegen => CCodegen.implementsPrim
-                         | Control.x86Codegen => x86Codegen.implementsPrim
-                         | Control.amd64Codegen => amd64Codegen.implementsPrim
-                     val machine =
-                        Control.passTypeCheck
-                        {display = Control.Layouts Machine.Program.layouts,
-                         name = "backend",
-                         stats = fn _ => Layout.empty,
-                         style = Control.No,
-                         suffix = "machine",
-                         thunk = fn () =>
-                                 (MeBackend.toMachine
-                                  (ssa2,
-                                   {codegenImplementsPrim = codegenImplementsPrim})),
-                         typeCheck = fn machine =>
-                                     (* For now, machine type check is too slow to run. *)
-                                     (if !Control.typeCheck
-                                         then Machine.Program.typeCheck machine
-                                      else ())}
-                     val _ =
-                        let
-                           open Control
-                        in
-                           if !keepMachine
-                              then saveToFile ({suffix = "machine"}, No, machine,
-                                               Layouts Machine.Program.layouts)
-                           else ()
-                        end
-                 in
-                    machine
-                 end
-         else let
       val ssa =
          Control.passTypeCheck
-         {display = Control.Layouts Ssa.Program.layouts,
+         {display = Control.Layouts MeSsa.Program.layouts,
           name = "closureConvert",
-          stats = Ssa.Program.layoutStats,
+          stats = MeSsa.Program.layoutStats,
           style = Control.No,
           suffix = "ssa",
-          thunk = fn () => ClosureConvert.closureConvert sxml,
-          typeCheck = Ssa.typeCheck}
+          thunk = fn () => MeClosureConvert.closureConvert sxml,
+          typeCheck = MeSsa.typeCheck}
       val ssa =
          Control.passTypeCheck
-         {display = Control.Layouts Ssa.Program.layouts,
+         {display = Control.Layouts MeSsa.Program.layouts,
           name = "ssaSimplify",
-          stats = Ssa.Program.layoutStats,
+          stats = MeSsa.Program.layoutStats,
           style = Control.No,
           suffix = "ssa",
-          thunk = fn () => Ssa.simplify ssa,
-          typeCheck = Ssa.typeCheck}
+          thunk = fn () => MeSsa.simplify ssa,
+          typeCheck = MeSsa.typeCheck}
       val _ =
          let
             open Control
          in
             if !keepSSA
                then saveToFile ({suffix = "ssa"}, No, ssa,
-                                Layouts Ssa.Program.layouts)
+                                Layouts MeSsa.Program.layouts)
             else ()
          end
       val ssa2 =
          Control.passTypeCheck
-         {display = Control.Layouts Ssa2.Program.layouts,
+         {display = Control.Layouts MeSsa2.Program.layouts,
           name = "toSsa2",
-          stats = Ssa2.Program.layoutStats,
+          stats = MeSsa2.Program.layoutStats,
           style = Control.No,
           suffix = "ssa2",
-          thunk = fn () => SsaToSsa2.convert ssa,
-          typeCheck = Ssa2.typeCheck}
+          thunk = fn () => MeSsaToSsa2.convert ssa,
+          typeCheck = MeSsa2.typeCheck}
       val ssa2 =
          Control.passTypeCheck
-         {display = Control.Layouts Ssa2.Program.layouts,
+         {display = Control.Layouts MeSsa2.Program.layouts,
           name = "ssa2Simplify",
-          stats = Ssa2.Program.layoutStats,
+          stats = MeSsa2.Program.layoutStats,
           style = Control.No,
           suffix = "ssa2",
-          thunk = fn () => Ssa2.simplify ssa2,
-          typeCheck = Ssa2.typeCheck}
+          thunk = fn () => MeSsa2.simplify ssa2,
+          typeCheck = MeSsa2.typeCheck}
       val _ =
          let
             open Control
          in
             if !keepSSA2
                then saveToFile ({suffix = "ssa2"}, No, ssa2,
-                                Layouts Ssa2.Program.layouts)
+                                Layouts MeSsa2.Program.layouts)
             else ()
          end
       val codegenImplementsPrim =
@@ -792,7 +692,7 @@ fun preCodegen {input: MLBString.t}: Machine.Program.t =
           style = Control.No,
           suffix = "machine",
           thunk = fn () =>
-                  (Backend.toMachine
+                  (MeBackend.toMachine
                    (ssa2,
                     {codegenImplementsPrim = codegenImplementsPrim})),
           typeCheck = fn machine =>
@@ -800,9 +700,6 @@ fun preCodegen {input: MLBString.t}: Machine.Program.t =
                       (if !Control.typeCheck
                           then Machine.Program.typeCheck machine
                        else ())}
-      in
-         machine
-      end
       val _ =
          let
             open Control
