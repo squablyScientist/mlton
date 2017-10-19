@@ -8,14 +8,14 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature ME_SSA_TREE_STRUCTS =
+signature SSA_TREE_STRUCTS =
    sig
       include ATOMS
    end
 
-signature ME_SSA_TREE =
+signature SSA_TREE =
    sig
-      include ME_SSA_TREE_STRUCTS
+      include SSA_TREE_STRUCTS
 
       structure Type:
          sig

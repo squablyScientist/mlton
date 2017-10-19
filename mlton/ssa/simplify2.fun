@@ -7,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor MeSimplify2 (S: ME_SIMPLIFY2_STRUCTS): ME_SIMPLIFY2 =
+functor Simplify2 (S: SIMPLIFY2_STRUCTS): SIMPLIFY2 =
 struct
 
 open S
@@ -17,7 +17,7 @@ open S
 (* structure CommonSubexp = CommonSubexp (S) *)
 (* structure ConstantPropagation = ConstantPropagation (S) *)
 (* structure Contify = Contify (S) *)
-structure DeepFlatten = MeDeepFlatten (S)
+structure DeepFlatten = DeepFlatten (S)
 (* structure Flatten = Flatten (S) *)
 (* structure Inline = Inline (S) *)
 (* structure IntroduceLoops = IntroduceLoops (S) *)
@@ -26,14 +26,14 @@ structure DeepFlatten = MeDeepFlatten (S)
 (* structure LocalRef = LocalRef (S) *)
 (* structure LoopInvariant = LoopInvariant (S) *)
 (* structure PolyEqual = PolyEqual (S) *)
-structure Profile2 = MeProfile2 (S)
+structure Profile2 = Profile2 (S)
 (* structure Redundant = Redundant (S) *)
 (* structure RedundantTests = RedundantTests (S) *)
-structure RefFlatten = MeRefFlatten (S)
-structure RemoveUnused2 = MeRemoveUnused2 (S)
+structure RefFlatten = RefFlatten (S)
+structure RemoveUnused2 = RemoveUnused2 (S)
 (* structure SimplifyTypes = SimplifyTypes (S) *)
 (* structure Useless = Useless (S) *)
-structure Zone = MeZone (S)
+structure Zone = Zone (S)
 
 type pass = {name: string,
              doit: Program.t -> Program.t}

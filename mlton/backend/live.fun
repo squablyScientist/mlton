@@ -30,7 +30,7 @@
  * list for a particular block is constant time -- the variable is either at the
  * head of the list or it's not there.
  *)
-functor MeLive (S: ME_LIVE_STRUCTS): ME_LIVE =
+functor Live (S: LIVE_STRUCTS): LIVE =
 struct
 
 open S

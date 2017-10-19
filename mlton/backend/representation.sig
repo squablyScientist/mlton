@@ -7,17 +7,17 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature ME_REPRESENTATION_STRUCTS =
+signature REPRESENTATION_STRUCTS =
    sig
-      structure Rssa: ME_RSSA
-      structure Ssa: ME_SSA2
+      structure Rssa: RSSA
+      structure Ssa: SSA2
       sharing Rssa.RealSize = Ssa.RealSize
       sharing Rssa.WordSize = Ssa.WordSize
    end
 
-signature ME_REPRESENTATION =
+signature REPRESENTATION =
    sig
-      include ME_REPRESENTATION_STRUCTS
+      include REPRESENTATION_STRUCTS
 
       val compute:
          Ssa.Program.t

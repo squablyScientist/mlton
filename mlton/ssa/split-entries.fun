@@ -4,7 +4,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor MeSplitEntries (S: ME_SSA_TRANSFORM_STRUCTS): ME_SSA_TRANSFORM =
+functor SplitEntries (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM =
 struct
 
 open S

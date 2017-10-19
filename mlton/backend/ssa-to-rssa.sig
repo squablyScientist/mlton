@@ -8,10 +8,10 @@
  *)
 
 
-signature ME_SSA_TO_RSSA_STRUCTS =
+signature SSA_TO_RSSA_STRUCTS =
    sig
-      structure Rssa: ME_RSSA
-      structure Ssa: ME_SSA2
+      structure Rssa: RSSA
+      structure Ssa: SSA2
       sharing Rssa.CFunction = Ssa.CFunction
       sharing Rssa.Const = Ssa.Const
       sharing Rssa.Func = Ssa.Func
@@ -23,9 +23,9 @@ signature ME_SSA_TO_RSSA_STRUCTS =
       sharing Rssa.Var = Ssa.Var
    end
 
-signature ME_SSA_TO_RSSA =
+signature SSA_TO_RSSA =
    sig
-      include ME_SSA_TO_RSSA_STRUCTS
+      include SSA_TO_RSSA_STRUCTS
 
       val convert:
          Ssa.Program.t

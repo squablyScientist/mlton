@@ -8,7 +8,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor MeSsaTree2 (S: ME_SSA_TREE2_STRUCTS): ME_SSA_TREE2 =
+functor SsaTree2 (S: SSA_TREE2_STRUCTS): SSA_TREE2 =
 struct
 
 open S

@@ -8,7 +8,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor MeUseless (S: ME_SSA_TRANSFORM_STRUCTS): ME_SSA_TRANSFORM =
+functor Useless (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM =
 struct
 
 open S

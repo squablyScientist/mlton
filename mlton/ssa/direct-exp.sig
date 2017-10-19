@@ -8,14 +8,14 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature ME_DIRECT_EXP_STRUCTS =
+signature DIRECT_EXP_STRUCTS =
   sig
-     include ME_SSA_TREE
+     include SSA_TREE
   end
 
-signature ME_DIRECT_EXP =
+signature DIRECT_EXP =
   sig
-     include ME_DIRECT_EXP_STRUCTS
+     include DIRECT_EXP_STRUCTS
 
      structure DirectExp:
         sig

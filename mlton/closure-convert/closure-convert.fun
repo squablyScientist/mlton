@@ -17,7 +17,7 @@
  * with "getNewVar".  "newScope" also handles resetting the variable to its
  * old value once the processing of the lambda is done.
  *)
-functor MeClosureConvert (S: ME_CLOSURE_CONVERT_STRUCTS): ME_CLOSURE_CONVERT =
+functor ClosureConvert (S: CLOSURE_CONVERT_STRUCTS): CLOSURE_CONVERT =
 struct
 
 open S
@@ -51,7 +51,7 @@ in
    structure Type = Type
 end
 
-structure Value = MeAbstractValue (structure Ssa = Ssa
+structure Value = AbstractValue (structure Ssa = Ssa
                                  structure Sxml = Sxml)
 local open Value
 in structure Lambdas = Lambdas

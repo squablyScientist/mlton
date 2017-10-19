@@ -7,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor MeBackend (S: ME_BACKEND_STRUCTS): ME_BACKEND =
+functor Backend (S: BACKEND_STRUCTS): BACKEND =
 struct
 
 open S
@@ -34,7 +34,7 @@ in
    structure GCField = GCField
 end
 
-structure Rssa = MeRssa (open Ssa Machine)
+structure Rssa = Rssa (open Ssa Machine)
 structure R = Rssa
 local
    open Rssa
@@ -49,16 +49,16 @@ in
    structure Var = Var
 end 
 
-structure AllocateRegisters = MeAllocateRegisters (structure Machine = Machine
+structure AllocateRegisters = AllocateRegisters (structure Machine = Machine
                                                    structure Rssa = Rssa)
-structure Chunkify = MeChunkify (Rssa)
-structure ImplementHandlers = MeImplementHandlers (structure Rssa = Rssa)
-structure ImplementProfiling = MeImplementProfiling (structure Machine = Machine
+structure Chunkify = Chunkify (Rssa)
+structure ImplementHandlers = ImplementHandlers (structure Rssa = Rssa)
+structure ImplementProfiling = ImplementProfiling (structure Machine = Machine
                                                      structure Rssa = Rssa)
-structure LimitCheck = MeLimitCheck (structure Rssa = Rssa)
+structure LimitCheck = LimitCheck (structure Rssa = Rssa)
 structure ParallelMove = ParallelMove ()
-structure SignalCheck = MeSignalCheck(structure Rssa = Rssa)
-structure SsaToRssa = MeSsaToRssa (structure Rssa = Rssa
+structure SignalCheck = SignalCheck(structure Rssa = Rssa)
+structure SsaToRssa = SsaToRssa (structure Rssa = Rssa
                                    structure Ssa = Ssa)
 
 nonfix ^

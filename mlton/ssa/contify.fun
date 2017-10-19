@@ -12,7 +12,7 @@
  * Contification Using Dominators, by Fluet and Weeks.  ICFP 2001.
  *)
 
-functor MeContify (S: ME_SSA_TRANSFORM_STRUCTS): ME_SSA_TRANSFORM =
+functor Contify (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM =
 struct
 
 open S

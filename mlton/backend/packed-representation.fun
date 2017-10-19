@@ -10,7 +10,7 @@
  * and false is represented as 0.
  *)
 
-functor MePackedRepresentation (S: ME_REPRESENTATION_STRUCTS): ME_REPRESENTATION =
+functor PackedRepresentation (S: REPRESENTATION_STRUCTS): REPRESENTATION =
 struct
 
 open S

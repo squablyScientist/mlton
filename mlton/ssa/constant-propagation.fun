@@ -19,13 +19,13 @@
  * they are global in order to avoid infinite loops.
  *)
 
-functor MeConstantPropagation (S: ME_SSA_TRANSFORM_STRUCTS) : ME_SSA_TRANSFORM =
+functor ConstantPropagation (S: SSA_TRANSFORM_STRUCTS) : SSA_TRANSFORM =
 struct
 
 open S
 
-structure Multi = MeMulti (S)
-structure Global = MeGlobal (S)
+structure Multi = Multi (S)
+structure Global = Global (S)
 
 structure Type =
    struct

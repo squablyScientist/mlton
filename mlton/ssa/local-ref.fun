@@ -7,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor MeLocalRef (S: ME_SSA_TRANSFORM_STRUCTS): ME_SSA_TRANSFORM =
+functor LocalRef (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM =
 struct
 
 open S
@@ -138,7 +138,7 @@ structure LabelInfo =
                        visited = ref false}
   end
 
-structure Multi = MeMulti (S)
+structure Multi = Multi (S)
 
 fun transform (program: Program.t): Program.t =
    let

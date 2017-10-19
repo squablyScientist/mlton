@@ -9,7 +9,7 @@
  * This (diagnostic) pass duplicates all of the existing entries of a function,
  * to exercise the mutli-entry pipeline.
  *)
-functor MeDuplicateEntries (S: ME_SSA_TRANSFORM_STRUCTS): ME_SSA_TRANSFORM =
+functor DuplicateEntries (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM =
 struct
 
 open S

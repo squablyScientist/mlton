@@ -6,14 +6,14 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature ME_RSSA_TRANSFORM_STRUCTS =
+signature RSSA_TRANSFORM_STRUCTS =
    sig
-      structure Rssa: ME_RSSA
+      structure Rssa: RSSA
    end
 
-signature ME_RSSA_TRANSFORM =
+signature RSSA_TRANSFORM =
    sig
-      include ME_RSSA_TRANSFORM_STRUCTS
+      include RSSA_TRANSFORM_STRUCTS
 
       val transform: Rssa.Program.t -> Rssa.Program.t
    end

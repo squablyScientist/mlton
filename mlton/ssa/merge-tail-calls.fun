@@ -5,10 +5,10 @@
  *)
 
 
-functor MeMergeTailCalls (S: ME_SSA_TRANSFORM_STRUCTS):
+functor MergeTailCalls (S: SSA_TRANSFORM_STRUCTS):
    sig
-      structure MergeAllTailCalls: ME_SSA_TRANSFORM
-      structure MergeRecTailCalls: ME_SSA_TRANSFORM
+      structure MergeAllTailCalls: SSA_TRANSFORM
+      structure MergeRecTailCalls: SSA_TRANSFORM
    end =
 struct
 

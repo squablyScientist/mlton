@@ -8,14 +8,14 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature ME_ANALYZE2_STRUCTS = 
+signature ANALYZE2_STRUCTS = 
    sig
-      include ME_SSA_TREE2
+      include SSA_TREE2
    end
 
-signature ME_ANALYZE2 = 
+signature ANALYZE2 = 
    sig
-      include ME_ANALYZE2_STRUCTS
+      include ANALYZE2_STRUCTS
 
       val analyze:
          {base: 'a Base.t -> 'a,

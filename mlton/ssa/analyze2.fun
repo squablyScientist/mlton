@@ -8,7 +8,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor MeAnalyze2 (S: ME_ANALYZE2_STRUCTS): ME_ANALYZE2 =
+functor Analyze2 (S: ANALYZE2_STRUCTS): ANALYZE2 =
 struct
 
 open S

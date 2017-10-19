@@ -7,14 +7,14 @@
  *)
 
 
-signature ME_PROFILE2_STRUCTS =
+signature PROFILE2_STRUCTS =
    sig
-      include ME_SHRINK2
+      include SHRINK2
    end
 
-signature ME_PROFILE2 =
+signature PROFILE2 =
    sig
-      include ME_PROFILE2_STRUCTS
+      include PROFILE2_STRUCTS
 
       val addProfile: Program.t -> Program.t
       val dropProfile: Program.t -> Program.t

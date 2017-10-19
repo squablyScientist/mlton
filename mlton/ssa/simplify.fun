@@ -8,37 +8,37 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor MeSimplify (S: ME_SIMPLIFY_STRUCTS): ME_SIMPLIFY =
+functor Simplify (S: SIMPLIFY_STRUCTS): SIMPLIFY =
 struct
 
 open S
 
-structure CommonArg = MeCommonArg (S)
-structure CommonBlock = MeCommonBlock (S)
-structure CommonSubexp = MeCommonSubexp (S)
-structure CombineConversions = MeCombineConversions (S)
-structure ConstantPropagation = MeConstantPropagation (S)
-structure Contify = MeContify (S)
-structure Flatten = MeFlatten (S)
-structure DuplicateEntries = MeDuplicateEntries (S)
-structure Inline = MeInline (S)
-structure IntroduceLoops = MeIntroduceLoops (S)
-structure KnownCase = MeKnownCase (S)
-structure LocalFlatten = MeLocalFlatten (S)
-structure LocalRef = MeLocalRef (S)
-structure LoopInvariant = MeLoopInvariant (S)
-structure MergeTailCalls = MeMergeTailCalls (S)
+structure CommonArg = CommonArg (S)
+structure CommonBlock = CommonBlock (S)
+structure CommonSubexp = CommonSubexp (S)
+structure CombineConversions = CombineConversions (S)
+structure ConstantPropagation = ConstantPropagation (S)
+structure Contify = Contify (S)
+structure Flatten = Flatten (S)
+structure DuplicateEntries = DuplicateEntries (S)
+structure Inline = Inline (S)
+structure IntroduceLoops = IntroduceLoops (S)
+structure KnownCase = KnownCase (S)
+structure LocalFlatten = LocalFlatten (S)
+structure LocalRef = LocalRef (S)
+structure LoopInvariant = LoopInvariant (S)
+structure MergeTailCalls = MergeTailCalls (S)
 structure MergeAllTailCalls = MergeTailCalls.MergeAllTailCalls
 structure MergeRecTailCalls = MergeTailCalls.MergeRecTailCalls
-structure PolyEqual = MePolyEqual (S)
-structure PolyHash = MePolyHash (S)
-structure Profile = MeProfile (S)
-structure Redundant = MeRedundant (S)
-structure RedundantTests = MeRedundantTests (S)
-structure RemoveUnused = MeRemoveUnused (S)
-structure SimplifyTypes = MeSimplifyTypes (S)
-structure SplitEntries = MeSplitEntries (S)
-structure Useless = MeUseless (S)
+structure PolyEqual = PolyEqual (S)
+structure PolyHash = PolyHash (S)
+structure Profile = Profile (S)
+structure Redundant = Redundant (S)
+structure RedundantTests = RedundantTests (S)
+structure RemoveUnused = RemoveUnused (S)
+structure SimplifyTypes = SimplifyTypes (S)
+structure SplitEntries = SplitEntries (S)
+structure Useless = Useless (S)
 
 type pass = {name: string,
              doit: Program.t -> Program.t}

@@ -100,11 +100,11 @@ local
 in
    signature HANDLER
    signature RETURN
-   signature ME_SSA
-   signature ME_SSA2
+   signature SSA
+   signature SSA2
 
    functor FlatLattice
-   functor MeSsa
-   functor MeSsa2
-   functor MeSsaToSsa2
+   functor Ssa
+   functor Ssa2
+   functor SsaToSsa2
 end

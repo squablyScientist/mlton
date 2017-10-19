@@ -7,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor MeRefFlatten (S: ME_SSA2_TRANSFORM_STRUCTS): ME_SSA2_TRANSFORM =
+functor RefFlatten (S: SSA2_TRANSFORM_STRUCTS): SSA2_TRANSFORM =
 struct
 
 open S

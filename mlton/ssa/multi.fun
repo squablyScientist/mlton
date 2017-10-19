@@ -18,7 +18,7 @@ A label is actually-multi-used if it may be executed more than once
 during the execution of the program.
 *)
 
-functor MeMulti (S: ME_MULTI_STRUCTS): ME_MULTI =
+functor Multi (S: MULTI_STRUCTS): MULTI =
 struct
 
 open S

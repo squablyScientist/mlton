@@ -8,7 +8,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor MeSsaToRssa (S: ME_SSA_TO_RSSA_STRUCTS): ME_SSA_TO_RSSA =
+functor SsaToRssa (S: SSA_TO_RSSA_STRUCTS): SSA_TO_RSSA =
 struct
 
 open S
@@ -562,7 +562,7 @@ datatype z = datatype Operand.t
 datatype z = datatype Statement.t
 datatype z = datatype Transfer.t
 
-structure PackedRepresentation = MePackedRepresentation (structure Rssa = Rssa
+structure PackedRepresentation = PackedRepresentation (structure Rssa = Rssa
                                                        structure Ssa = Ssa)
 
 structure Type =

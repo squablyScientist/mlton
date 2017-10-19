@@ -21,7 +21,7 @@
  *   - The tuple is reconstructed at each Case target.
  *)
 
-functor MeFlatten (S: ME_SSA_TRANSFORM_STRUCTS): ME_SSA_TRANSFORM =
+functor Flatten (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM =
 struct
 
 open S

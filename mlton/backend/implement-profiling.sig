@@ -7,16 +7,16 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature ME_IMPLEMENT_PROFILING_STRUCTS =
+signature IMPLEMENT_PROFILING_STRUCTS =
    sig
       structure Machine: MACHINE
-      structure Rssa: ME_RSSA
+      structure Rssa: RSSA
       sharing Machine.ProfileLabel = Rssa.ProfileLabel
    end
 
-signature ME_IMPLEMENT_PROFILING =
+signature IMPLEMENT_PROFILING =
    sig
-      include ME_IMPLEMENT_PROFILING_STRUCTS
+      include IMPLEMENT_PROFILING_STRUCTS
 
       val doit:
          Rssa.Program.t

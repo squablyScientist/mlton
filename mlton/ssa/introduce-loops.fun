@@ -10,7 +10,7 @@
 (* Change any toplevel function that calls itself in tail position
  * into one with a local loop and no self tail-calls.
  *)
-functor MeIntroduceLoops (S: ME_SSA_TRANSFORM_STRUCTS): ME_SSA_TRANSFORM =
+functor IntroduceLoops (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM =
 struct
 
 open S

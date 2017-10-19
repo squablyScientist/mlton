@@ -8,7 +8,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor MeInline (S: ME_INLINE_STRUCTS): ME_INLINE =
+functor Inline (S: INLINE_STRUCTS): INLINE =
 struct
 
 open S

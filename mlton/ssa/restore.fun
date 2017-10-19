@@ -24,7 +24,7 @@
  * Requirements: no violation in globals; this is checked.
  *)
 
-functor MeRestore (S: ME_RESTORE_STRUCTS): ME_RESTORE =
+functor Restore (S: RESTORE_STRUCTS): RESTORE =
 struct
 
 open S

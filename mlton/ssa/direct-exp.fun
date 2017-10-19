@@ -7,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor MeDirectExp (S: ME_DIRECT_EXP_STRUCTS): ME_DIRECT_EXP =
+functor DirectExp (S: DIRECT_EXP_STRUCTS): DIRECT_EXP =
 struct
 
 open S

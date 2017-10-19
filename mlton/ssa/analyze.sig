@@ -8,14 +8,14 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature ME_ANALYZE_STRUCTS =
+signature ANALYZE_STRUCTS =
    sig
-      include ME_DIRECT_EXP
+      include DIRECT_EXP
    end
 
-signature ME_ANALYZE =
+signature ANALYZE =
    sig
-      include ME_ANALYZE_STRUCTS
+      include ANALYZE_STRUCTS
 
       val analyze:
          {coerce: {from: 'a,

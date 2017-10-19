@@ -8,7 +8,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor MeSignalCheck (S: ME_RSSA_TRANSFORM_STRUCTS): ME_RSSA_TRANSFORM =
+functor SignalCheck (S: RSSA_TRANSFORM_STRUCTS): RSSA_TRANSFORM =
 struct
 
 open S

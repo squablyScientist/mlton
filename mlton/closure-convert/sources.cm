@@ -9,7 +9,7 @@
 
 Group
 
-functor MeClosureConvert
+functor ClosureConvert
 
 is
 

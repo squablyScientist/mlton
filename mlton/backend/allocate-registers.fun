@@ -7,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor MeAllocateRegisters (S: ME_ALLOCATE_REGISTERS_STRUCTS): ME_ALLOCATE_REGISTERS =
+functor AllocateRegisters (S: ALLOCATE_REGISTERS_STRUCTS): ALLOCATE_REGISTERS =
 struct
 
 open S
@@ -36,7 +36,7 @@ in
    structure StackOffset = StackOffset
 end
 
-structure Live = MeLive (Rssa)
+structure Live = Live (Rssa)
 
 structure Allocation:
    sig

@@ -6,7 +6,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor MeChunkify (S: ME_CHUNKIFY_STRUCTS): ME_CHUNKIFY =
+functor Chunkify (S: CHUNKIFY_STRUCTS): CHUNKIFY =
 struct
 
 open S

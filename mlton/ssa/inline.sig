@@ -7,14 +7,14 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature ME_INLINE_STRUCTS =
+signature INLINE_STRUCTS =
    sig
-      include ME_SHRINK
+      include SHRINK
    end
 
-signature ME_INLINE =
+signature INLINE =
    sig
-      include ME_INLINE_STRUCTS
+      include INLINE_STRUCTS
 
       val inlineLeaf: 
          Program.t * {loops: bool, repeat: bool, size: int option} -> Program.t

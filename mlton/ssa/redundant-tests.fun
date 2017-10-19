@@ -8,7 +8,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor MeRedundantTests (S: ME_SSA_TRANSFORM_STRUCTS): ME_SSA_TRANSFORM =
+functor RedundantTests (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM =
 struct
 
 open S

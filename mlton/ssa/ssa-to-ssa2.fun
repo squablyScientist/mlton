@@ -6,7 +6,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor MeSsaToSsa2 (S: ME_SSA_TO_SSA2_STRUCTS): ME_SSA_TO_SSA2 =
+functor SsaToSsa2 (S: SSA_TO_SSA2_STRUCTS): SSA_TO_SSA2 =
 struct
 
 open S

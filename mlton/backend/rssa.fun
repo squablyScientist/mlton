@@ -8,7 +8,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor MeRssa (S: ME_RSSA_STRUCTS): ME_RSSA =
+functor Rssa (S: RSSA_STRUCTS): RSSA =
 struct
 
 open S

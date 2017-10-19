@@ -57,6 +57,6 @@ in
    signature REP_TYPE
    signature RUNTIME
 
-   functor MeBackend
+   functor Backend
    functor Machine
 end

@@ -6,7 +6,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor MeImplementProfiling (S: ME_IMPLEMENT_PROFILING_STRUCTS): ME_IMPLEMENT_PROFILING =
+functor ImplementProfiling (S: IMPLEMENT_PROFILING_STRUCTS): IMPLEMENT_PROFILING =
 struct
 
 open S

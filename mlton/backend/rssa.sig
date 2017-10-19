@@ -8,7 +8,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature ME_RSSA_STRUCTS =
+signature RSSA_STRUCTS =
    sig
       include ATOMS
 
@@ -29,9 +29,9 @@ signature ME_RSSA_STRUCTS =
       sharing Scale = Type.Scale
    end
 
-signature ME_RSSA =
+signature RSSA =
    sig
-      include ME_RSSA_STRUCTS
+      include RSSA_STRUCTS
 
       structure Switch: SWITCH
       sharing Atoms = Switch

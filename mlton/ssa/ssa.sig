@@ -7,12 +7,12 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature ME_SSA_STRUCTS =
+signature SSA_STRUCTS =
    sig
-      include ME_SSA_TREE_STRUCTS
+      include SSA_TREE_STRUCTS
    end
 
-signature ME_SSA = 
+signature SSA = 
    sig
-      include ME_SIMPLIFY
+      include SIMPLIFY
    end

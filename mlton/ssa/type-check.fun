@@ -8,7 +8,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor MeTypeCheck (S: ME_TYPE_CHECK_STRUCTS): ME_TYPE_CHECK =
+functor TypeCheck (S: TYPE_CHECK_STRUCTS): TYPE_CHECK =
 struct
 
 open S

@@ -63,7 +63,7 @@
  * Stack limit checks are completely orthogonal to heap checks, and are simply
  * inserted at the start of each function.
  *)
-functor MeLimitCheck (S: ME_RSSA_TRANSFORM_STRUCTS): ME_RSSA_TRANSFORM =
+functor LimitCheck (S: RSSA_TRANSFORM_STRUCTS): RSSA_TRANSFORM =
 struct
 
 open S

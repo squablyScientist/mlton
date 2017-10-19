@@ -23,5 +23,5 @@ local
    closure-convert.sig
    closure-convert.fun
 in
-   functor MeClosureConvert
+   functor ClosureConvert
 end
