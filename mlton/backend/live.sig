@@ -6,12 +6,12 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature LIVE_STRUCTS =
+signature LIVE_STRUCTS = 
    sig
       include RSSA
    end
 
-signature LIVE =
+signature LIVE = 
    sig
       include LIVE_STRUCTS
 

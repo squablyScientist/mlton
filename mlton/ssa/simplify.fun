@@ -8,7 +8,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor Simplify (S: SIMPLIFY_STRUCTS): SIMPLIFY =
+functor Simplify (S: SIMPLIFY_STRUCTS): SIMPLIFY = 
 struct
 
 open S
@@ -101,9 +101,6 @@ val ssaPassesDefault =
    nil
 
 val ssaPassesMinimal =
-   {name = "inlineLeaf1", doit = fn p =>
-    Inline.inlineLeaf (p, !Control.inlineLeafA)} ::
-   {name = "constantPropagation", doit = ConstantPropagation.transform} ::
    (* polyEqual cannot be omitted.  It implements MLton_equal. *)
    {name = "polyEqual", doit = PolyEqual.transform} ::
    (* polyHash cannot be omitted.  It implements MLton_hash. *)
@@ -166,8 +163,8 @@ local
                                             Int.toString product, ",",
                                             Int.toString small, ")#",
                                             Int.toString (Counter.next count)],
-                             doit = (fn p =>
-                                     Inline.inlineNonRecursive
+                             doit = (fn p => 
+                                     Inline.inlineNonRecursive 
                                      (p, {small = small, product = product}))}
                     val s = String.dropPrefix (s, String.size "inlineNonRecursive")
                  in
@@ -184,7 +181,7 @@ local
                                             Bool.toString repeat, ",",
                                             Option.toString Int.toString size, ")#",
                                             Int.toString (Counter.next count)],
-                             doit = (fn p =>
+                             doit = (fn p => 
                                      Inline.inlineLeaf
                                      (p, {loops = loops, repeat = repeat, size = size}))}
                     val s = String.dropPrefix (s, String.size "inlineLeaf")
@@ -228,7 +225,7 @@ local
                  ("eliminateDeadBlocks",S.eliminateDeadBlocks),
                  ("orderFunctions",S.orderFunctions),
                  ("reverseFunctions",S.reverseFunctions),
-                 ("shrink", S.shrink)],
+                 ("shrink", S.shrink)], 
                 mkSimplePassGen))
 in
    fun ssaPassesSetCustom s =

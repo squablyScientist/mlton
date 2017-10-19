@@ -6,12 +6,12 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature SIMPLIFY_STRUCTS =
+signature SIMPLIFY_STRUCTS = 
    sig
       include RESTORE
    end
 
-signature SIMPLIFY =
+signature SIMPLIFY = 
    sig
       include SIMPLIFY_STRUCTS
 

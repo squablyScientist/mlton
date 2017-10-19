@@ -6,14 +6,14 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature CLOSURE_CONVERT_STRUCTS =
+signature CLOSURE_CONVERT_STRUCTS = 
    sig
       structure Ssa: SSA
       structure Sxml: SXML
       sharing Sxml.Atoms = Ssa.Atoms
    end
 
-signature CLOSURE_CONVERT =
+signature CLOSURE_CONVERT = 
    sig
       include CLOSURE_CONVERT_STRUCTS
 

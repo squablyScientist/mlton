@@ -8,12 +8,12 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature ANALYZE_STRUCTS =
+signature ANALYZE_STRUCTS = 
    sig
       include DIRECT_EXP
    end
 
-signature ANALYZE =
+signature ANALYZE = 
    sig
       include ANALYZE_STRUCTS
 

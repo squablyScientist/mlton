@@ -51,7 +51,7 @@
  * where all uses of t are replaced by u array.
  *)
 
-functor SimplifyTypes (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM =
+functor SimplifyTypes (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM = 
 struct
 
 open S

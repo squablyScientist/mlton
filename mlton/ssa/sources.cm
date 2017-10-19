@@ -40,8 +40,8 @@ analyze2.sig
 analyze.fun
 analyze2.fun
 type-check.sig
-type-check.fun
 type-check2.sig
+type-check.fun
 type-check2.fun
 prepasses.sig
 prepasses2.sig

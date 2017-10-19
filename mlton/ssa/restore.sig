@@ -6,12 +6,12 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature RESTORE_STRUCTS =
+signature RESTORE_STRUCTS = 
    sig
       include SHRINK
    end
 
-signature RESTORE =
+signature RESTORE = 
    sig
       include RESTORE_STRUCTS
 

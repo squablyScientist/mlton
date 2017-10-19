@@ -6,7 +6,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor AbstractValue (S: ABSTRACT_VALUE_STRUCTS): ABSTRACT_VALUE =
+functor AbstractValue (S: ABSTRACT_VALUE_STRUCTS): ABSTRACT_VALUE = 
 struct
 
 open S

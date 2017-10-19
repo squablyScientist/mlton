@@ -6,12 +6,12 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature SHRINK2_STRUCTS =
+signature SHRINK2_STRUCTS = 
    sig
       include PREPASSES2
    end
 
-signature SHRINK2 =
+signature SHRINK2 = 
    sig
       include SHRINK2_STRUCTS
 

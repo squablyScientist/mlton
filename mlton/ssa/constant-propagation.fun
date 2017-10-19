@@ -19,7 +19,7 @@
  * they are global in order to avoid infinite loops.
  *)
 
-functor ConstantPropagation (S: SSA_TRANSFORM_STRUCTS) : SSA_TRANSFORM =
+functor ConstantPropagation (S: SSA_TRANSFORM_STRUCTS) : SSA_TRANSFORM = 
 struct
 
 open S

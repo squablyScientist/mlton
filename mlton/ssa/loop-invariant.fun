@@ -19,7 +19,7 @@
  *     end
  *)
 
-functor LoopInvariant (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM =
+functor LoopInvariant (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM = 
 struct
 
 open S

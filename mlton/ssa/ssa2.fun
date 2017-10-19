@@ -6,10 +6,6 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor Ssa2 (S: SSA2_STRUCTS): SSA2 =
-   Simplify2
-   (Shrink2
-   (PrePasses2
-   (TypeCheck2
-   (Analyze2
-   (SsaTree2 (S))))))
+functor Ssa2 (S: SSA2_STRUCTS): SSA2 = 
+   Simplify2 (Shrink2 (PrePasses2 (
+   TypeCheck2 (Analyze2 (SsaTree2 (S))))))

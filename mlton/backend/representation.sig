@@ -7,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature REPRESENTATION_STRUCTS =
+signature REPRESENTATION_STRUCTS = 
    sig
       structure Rssa: RSSA
       structure Ssa: SSA2
@@ -15,7 +15,7 @@ signature REPRESENTATION_STRUCTS =
       sharing Rssa.WordSize = Ssa.WordSize
    end
 
-signature REPRESENTATION =
+signature REPRESENTATION = 
    sig
       include REPRESENTATION_STRUCTS
 

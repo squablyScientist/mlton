@@ -7,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor CommonArg (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM =
+functor CommonArg (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM = 
 struct
 
 open S

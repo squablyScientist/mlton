@@ -6,12 +6,12 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature TYPE_CHECK_STRUCTS =
+signature TYPE_CHECK_STRUCTS = 
    sig
       include ANALYZE
    end
 
-signature TYPE_CHECK =
+signature TYPE_CHECK = 
    sig
       include TYPE_CHECK_STRUCTS
 

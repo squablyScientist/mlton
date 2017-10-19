@@ -6,12 +6,12 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature RSSA_TRANSFORM_STRUCTS =
+signature RSSA_TRANSFORM_STRUCTS = 
    sig
       structure Rssa: RSSA
    end
 
-signature RSSA_TRANSFORM =
+signature RSSA_TRANSFORM = 
    sig
       include RSSA_TRANSFORM_STRUCTS
 

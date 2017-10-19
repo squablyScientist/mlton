@@ -1,5 +1,4 @@
-(* Copyright (C) 2013 Matthew Fluet, David Larsen.
- * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
+(* Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
@@ -7,7 +6,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor Simplify2 (S: SIMPLIFY2_STRUCTS): SIMPLIFY2 =
+functor Simplify2 (S: SIMPLIFY2_STRUCTS): SIMPLIFY2 = 
 struct
 
 open S
@@ -68,7 +67,7 @@ local
                 ("deepFlatten", DeepFlatten.transform2),
                 ("dropProfile", Profile2.dropProfile),
                 ("refFlatten", RefFlatten.transform2),
-                ("removeUnused", RemoveUnused2.transform2),
+                ("removeUnused", RemoveUnused2.transform2), 
                 ("zone", Zone.transform2),
                 ("eliminateDeadBlocks",S.eliminateDeadBlocks),
                 ("orderFunctions",S.orderFunctions),

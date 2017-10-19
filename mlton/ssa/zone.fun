@@ -7,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor Zone (S: SSA2_TRANSFORM_STRUCTS): SSA2_TRANSFORM =
+functor Zone (S: SSA2_TRANSFORM_STRUCTS): SSA2_TRANSFORM = 
 struct
 
 open S

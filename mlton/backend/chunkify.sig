@@ -7,12 +7,12 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature CHUNKIFY_STRUCTS =
+signature CHUNKIFY_STRUCTS = 
    sig
       include RSSA
    end
 
-signature CHUNKIFY =
+signature CHUNKIFY = 
    sig
       include CHUNKIFY_STRUCTS
 

@@ -6,7 +6,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor Profile (S: PROFILE_STRUCTS): PROFILE =
+functor Profile (S: PROFILE_STRUCTS): PROFILE = 
 struct
 
 open S

@@ -5,12 +5,12 @@
  *)
 
 
-signature SSA_TRANSFORM_STRUCTS =
+signature SSA_TRANSFORM_STRUCTS = 
    sig
       include RESTORE
    end
 
-signature SSA_TRANSFORM =
+signature SSA_TRANSFORM = 
    sig
       include SSA_TRANSFORM_STRUCTS
 

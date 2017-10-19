@@ -17,7 +17,7 @@
  * with "getNewVar".  "newScope" also handles resetting the variable to its
  * old value once the processing of the lambda is done.
  *)
-functor ClosureConvert (S: CLOSURE_CONVERT_STRUCTS): CLOSURE_CONVERT =
+functor ClosureConvert (S: CLOSURE_CONVERT_STRUCTS): CLOSURE_CONVERT = 
 struct
 
 open S

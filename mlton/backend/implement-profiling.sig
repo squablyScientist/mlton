@@ -1,5 +1,4 @@
-(* Copyright (C) 2013 Matthew Fluet.
- * Copyright (C) 2009 Matthew Fluet.
+(* Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 2002-2007 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  *
@@ -7,14 +6,14 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature IMPLEMENT_PROFILING_STRUCTS =
+signature IMPLEMENT_PROFILING_STRUCTS = 
    sig
       structure Machine: MACHINE
       structure Rssa: RSSA
       sharing Machine.ProfileLabel = Rssa.ProfileLabel
    end
 
-signature IMPLEMENT_PROFILING =
+signature IMPLEMENT_PROFILING = 
    sig
       include IMPLEMENT_PROFILING_STRUCTS
 

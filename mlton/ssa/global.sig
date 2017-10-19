@@ -7,12 +7,12 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature GLOBAL_STRUCTS =
+signature GLOBAL_STRUCTS = 
    sig
       include SSA_TREE
    end
 
-signature GLOBAL =
+signature GLOBAL = 
    sig
       include GLOBAL_STRUCTS
 

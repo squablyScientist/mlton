@@ -7,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor LocalFlatten (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM =
+functor LocalFlatten (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM = 
 struct
 
 open S

@@ -8,12 +8,12 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature SSA_TREE_STRUCTS =
+signature SSA_TREE_STRUCTS = 
    sig
       include ATOMS
    end
 
-signature SSA_TREE =
+signature SSA_TREE = 
    sig
       include SSA_TREE_STRUCTS
 

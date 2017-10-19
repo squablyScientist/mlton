@@ -8,7 +8,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor Shrink (S: SHRINK_STRUCTS): SHRINK =
+functor Shrink (S: SHRINK_STRUCTS): SHRINK = 
 struct
 
 open S

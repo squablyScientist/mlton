@@ -6,7 +6,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor Global (S: GLOBAL_STRUCTS): GLOBAL =
+functor Global (S: GLOBAL_STRUCTS): GLOBAL = 
 struct
 
 open S

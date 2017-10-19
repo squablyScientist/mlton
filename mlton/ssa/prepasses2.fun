@@ -5,7 +5,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor PrePasses2 (S: PREPASSES2_STRUCTS): PREPASSES2 =
+functor PrePasses2 (S: PREPASSES2_STRUCTS): PREPASSES2 = 
 struct
 
 open S

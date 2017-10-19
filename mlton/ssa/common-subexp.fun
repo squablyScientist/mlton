@@ -8,7 +8,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor CommonSubexp (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM =
+functor CommonSubexp (S: SSA_TRANSFORM_STRUCTS): SSA_TRANSFORM = 
 struct
 
 open S

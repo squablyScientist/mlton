@@ -5,12 +5,12 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature PREPASSES2_STRUCTS =
+signature PREPASSES2_STRUCTS = 
    sig
       include TYPE_CHECK2
    end
 
-signature PREPASSES2 =
+signature PREPASSES2 = 
    sig
       include PREPASSES2_STRUCTS
 

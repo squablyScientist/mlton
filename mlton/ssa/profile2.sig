@@ -1,5 +1,4 @@
-(* Copyright (C) 2013 Matthew Fluet.
- * Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
+(* Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  *
  * MLton is released under a BSD-style license.
@@ -7,12 +6,12 @@
  *)
 
 
-signature PROFILE2_STRUCTS =
+signature PROFILE2_STRUCTS = 
    sig
       include SHRINK2
    end
 
-signature PROFILE2 =
+signature PROFILE2 = 
    sig
       include PROFILE2_STRUCTS
 

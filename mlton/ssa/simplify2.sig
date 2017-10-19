@@ -6,12 +6,12 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature SIMPLIFY2_STRUCTS =
+signature SIMPLIFY2_STRUCTS = 
    sig
       include SHRINK2
    end
 
-signature SIMPLIFY2 =
+signature SIMPLIFY2 = 
    sig
       include SIMPLIFY2_STRUCTS
 

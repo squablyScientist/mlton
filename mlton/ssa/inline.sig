@@ -7,12 +7,12 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature INLINE_STRUCTS =
+signature INLINE_STRUCTS = 
    sig
       include SHRINK
    end
 
-signature INLINE =
+signature INLINE = 
    sig
       include INLINE_STRUCTS
 

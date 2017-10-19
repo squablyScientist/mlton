@@ -7,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature BACKEND_STRUCTS =
+signature BACKEND_STRUCTS = 
    sig
       structure Machine: MACHINE
       structure Ssa: SSA2
@@ -16,7 +16,7 @@ signature BACKEND_STRUCTS =
       val funcToLabel: Ssa.FuncEntry.t -> Machine.Label.t
    end
 
-signature BACKEND =
+signature BACKEND = 
    sig
       include BACKEND_STRUCTS
 

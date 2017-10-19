@@ -5,14 +5,14 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature SSA_TO_SSA2_STRUCTS =
+signature SSA_TO_SSA2_STRUCTS = 
    sig
       structure Ssa: SSA
       structure Ssa2: SSA2
       sharing Ssa.Atoms = Ssa2.Atoms
    end
 
-signature SSA_TO_SSA2 =
+signature SSA_TO_SSA2 = 
    sig
       include SSA_TO_SSA2_STRUCTS
 

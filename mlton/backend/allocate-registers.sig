@@ -7,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature ALLOCATE_REGISTERS_STRUCTS =
+signature ALLOCATE_REGISTERS_STRUCTS = 
    sig
       structure Rssa: RSSA
       structure Machine: MACHINE
@@ -15,7 +15,7 @@ signature ALLOCATE_REGISTERS_STRUCTS =
       sharing Rssa.Type = Machine.Type
    end
 
-signature ALLOCATE_REGISTERS =
+signature ALLOCATE_REGISTERS = 
    sig
       include ALLOCATE_REGISTERS_STRUCTS
 

@@ -6,12 +6,12 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature SSA2_STRUCTS =
+signature SSA2_STRUCTS = 
    sig
       include SSA_TREE2_STRUCTS
    end
 
-signature SSA2 =
+signature SSA2 = 
    sig
       include SIMPLIFY2
    end

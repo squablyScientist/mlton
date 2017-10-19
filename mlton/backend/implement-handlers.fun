@@ -7,7 +7,7 @@
  * See the file MLton-LICENSE for details.
  *)
 
-functor ImplementHandlers (S: RSSA_TRANSFORM_STRUCTS): RSSA_TRANSFORM =
+functor ImplementHandlers (S: RSSA_TRANSFORM_STRUCTS): RSSA_TRANSFORM = 
 struct
 
 open S

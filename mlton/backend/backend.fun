@@ -50,16 +50,16 @@ in
 end 
 
 structure AllocateRegisters = AllocateRegisters (structure Machine = Machine
-                                                   structure Rssa = Rssa)
+                                                 structure Rssa = Rssa)
 structure Chunkify = Chunkify (Rssa)
 structure ImplementHandlers = ImplementHandlers (structure Rssa = Rssa)
 structure ImplementProfiling = ImplementProfiling (structure Machine = Machine
-                                                     structure Rssa = Rssa)
+                                                   structure Rssa = Rssa)
 structure LimitCheck = LimitCheck (structure Rssa = Rssa)
 structure ParallelMove = ParallelMove ()
 structure SignalCheck = SignalCheck(structure Rssa = Rssa)
 structure SsaToRssa = SsaToRssa (structure Rssa = Rssa
-                                   structure Ssa = Ssa)
+                                 structure Ssa = Ssa)
 
 nonfix ^
 fun ^ r = valOf (!r)
@@ -214,7 +214,7 @@ fun toMachine (program: Ssa.Program.t, codegen) =
           name = "rssaSimplify",
           stats = fn (program,_) => Rssa.Program.layoutStats program,
           style = Control.No,
-          suffix = "merssa",
+          suffix = "rssa",
           thunk = fn () => rssaSimplify program,
           typeCheck = R.Program.typeCheck o #1}
       val _ =
@@ -222,7 +222,7 @@ fun toMachine (program: Ssa.Program.t, codegen) =
             open Control
          in
             if !keepRSSA
-               then saveToFile ({suffix = "merssa"},
+               then saveToFile ({suffix = "rssa"},
                                 No,
                                 program,
                                 Layouts Rssa.Program.layouts)

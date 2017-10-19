@@ -6,12 +6,12 @@
  * See the file MLton-LICENSE for details.
  *)
 
-signature MULTI_STRUCTS =
+signature MULTI_STRUCTS = 
    sig
       include SSA_TREE
    end
 
-signature MULTI =
+signature MULTI = 
    sig
       include MULTI_STRUCTS
 
