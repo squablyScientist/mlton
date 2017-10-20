@@ -207,7 +207,7 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
           let
              val cons = Vector.keepAll (cons, conIsUseful o #con)
           in
-             if 0 = Vector.length cons
+             if Vector.isEmpty cons
                 then (setTyconReplacement (tycon, Type.unit)
                       ; NONE)
              else (#cons (tyconInfo tycon) := cons
@@ -385,7 +385,7 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                     ; (datatypes, unary))
            | 1 =>
                 let
-                   val {con, args} = Vector.sub (cons, 0)
+                   val {con, args} = Vector.first cons
                 in
                    if Vector.exists (args, containsArrayOrVector)
                       then (datatypes,
@@ -501,7 +501,7 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
          let
             val xs = removeUselessVars xs
          in if 1 = Vector.length xs
-               then Var (Vector.sub (xs, 0))
+               then Var (Vector.first xs)
             else Tuple xs
          end
       fun simplifyFormals xts =
@@ -533,7 +533,7 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                    fun equal () =
                       if 2 = Vector.length args
                          then
-                            if varIsUseless (Vector.sub (args, 0))
+                            if varIsUseless (Vector.first args)
                                then ConApp {con = Con.truee,
                                             args = Vector.new0 ()}
                             else normal ()
@@ -608,7 +608,7 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                      (Vector.new0 (), Goto {dst = l, args = Vector.new0 ()})
                 | (1, NONE)   =>
                      let
-                        val (con, l) = Vector.sub (cases, 0)
+                        val (con, l) = Vector.first cases
                      in
                         if ConRep.isUseful (conRep con)
                            then

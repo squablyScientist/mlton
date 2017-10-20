@@ -1,4 +1,90 @@
-Here are the changes from version 2010608 to version YYYYMMDD.
+Here are the changes from version 20130715 to version YYYYMMDD.
+
+* 2015-06-22
+  - Introduce an MLB annotation to control elaboration of 'val rec'
+    and 'fun' declarations that redefine identifiers that previously
+    had constructor status: "valrecConstr {warn|error|ignore}".
+
+* 2015-06-10
+  - Hide equality status of poly (and mono) vector and array slices.
+  - Hide type equality of mono and poly Word8.word arrays and vectors.
+
+* 2015-06-08
+  - Added "reentrant" attribute to _import.  An _import-ed C function
+    that (directly or indirectly) calls an _export-ed SML function
+    should be attributed "reentrant".
+
+* 2014-11-21
+   - Fixed bug in MLton.IntInf.fromRep that could yield values that
+     violate the IntInf representation invariants.
+     Thanks to Rob Simmons for the bug report.
+
+* 2014-11-14
+   - Reorganized runtime support for IntInf operations so that
+     programs that do not use IntInf compile to executables with no
+     residual dependency on GMP.
+
+* 2014-10-24
+  - Added "pure" and "impure" attributes to _import.  An unattributed
+    _import is treated as "impure".  A "pure" _import may be subject
+    to more aggressive optimizations (common subexpression
+    elimination, dead-code elimiation).
+
+* 2014-07-01
+   - Merged Brian Leibig's llvm code generator.
+
+--------------------------------------------------------------------------------
+
+Here are the changes from version 20100608 to version 20130715.
+
+Summary:
+  + Compiler.
+   o Cosmetic improvements to type-error messages.
+   o Removed features:
+    * Bytecode codegen: The bytecode codegen had not seen significant
+        use and it was not well understood by any of the active
+        developers.
+    * Support for .cm files as input: The ML Basis system provides
+        much better infrastructure for "programming in the very large"
+        than the (very) limited support for CM.  The cm2mlb tool
+        (available in the source distribution) can be used to convert
+        CM projects to MLB projects, preserving the CM scoping of
+        module identifiers.
+   o Bug fixes: see changelog
+  + Runtime.
+   o Bug fixes: see changelog
+  + Language.
+   o Interpret (*#line line:col "file" *) directives as relative file
+       names.
+   o ML Basis annotations.
+    * Added: resolveScope
+  + Libraries.
+   o Basis Library.
+    * Improved performance of String.concatWith.
+    * Use bit operations for REAL.class and other low-level operations.
+    * Support additional variables with Posix.ProcEnv.sysconf.
+    * Bug fixes: see changelog
+   o MLton structure.
+    * Removed: MLton.Socket
+   o Other libraries.
+    * Updated: ckit library, MLRISC library, SML/NJ library
+    * Added: MLLPT library
+  + Tools.
+   o mllex
+    * Generate (*#line line:col "file.lex" *) directives with simple
+        (relative) file names, rather than absolute paths.
+   o mlyacc
+    * Generate `(*#line line:col "file.grm" *)` directives with simple
+        (relative) file names, rather than absolute paths.
+    * Fixed bug in comment-handling in lexer.
+
+* 2013-07-06
+   - Update SML/NJ libraries to SML/NJ 110.76.
+
+* 2013-06-19
+   - Upgrade gdtoa.tgz; fixed bug in
+     'Real32.{fmt,toDecimal,toString}', which in some cases produced
+     too many digits
 
 * 2013-06-18
    - Removed MLton.Socket structure (deprecated in last release).
@@ -25,7 +111,7 @@ Here are the changes from version 2010608 to version YYYYMMDD.
    - Simplify use of 'getsockopt' and 'setsockopt'in Basis Library.
    - Direct implementation of Socket.Ctl.{getATMARK,getNREAD} in
      runtime system, rather than indirect implementation in Basis
-     Library via 'io ctl'.
+     Library via 'ioctl'.
    - Replace use of casting through a union with memcpy in runtime.
 
 * 2012-06-11
@@ -67,6 +153,7 @@ Here are the changes from version 2010608 to version YYYYMMDD.
      words.
 
 * 2011-06-04
+   - Upgrade gdtoa.tgz.
    - Remove bytecode codegen.
    - Remove support for .cm files as input.
 

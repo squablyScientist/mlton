@@ -69,6 +69,8 @@ local
    local-flatten.fun
    local-ref.fun
    loop-invariant.fun
+   loop-unroll.fun
+   loop-unswitch.fun
    merge-tail-calls.fun
    poly-equal.fun
    poly-hash.fun

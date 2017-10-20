@@ -1,4 +1,4 @@
-(* Copyright (C) 2013 Henry Cejtin, Matthew Fluet, Suresh
+(* Copyright (C) 2013-2014,2017 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -27,20 +27,8 @@ signature PRIM_INT_INF =
       val rep: int -> rep
       val fromRep: rep -> int option
 
-      structure Prim : 
-         sig
-            val isSmall: int -> bool
-            val areSmall: int * int -> bool
-            val dropTag: ObjptrWord.word -> ObjptrWord.word
-            val dropTagCoerce: int -> ObjptrWord.word
-            val dropTagCoerceInt: int -> ObjptrInt.int
-            val addTag: ObjptrWord.word -> ObjptrWord.word
-            val addTagCoerce: ObjptrWord.word -> int
-            val addTagCoerceInt: ObjptrInt.int -> int
-            val zeroTag: ObjptrWord.word -> ObjptrWord.word
-            val oneTag: ObjptrWord.word -> ObjptrWord.word
-            val oneTagCoerce: ObjptrWord.word -> int
-         end
+      val isSmall: int -> bool
+      val areSmall: int * int -> bool
 
       val abs: int -> int
       val +! : int * int -> int
@@ -74,7 +62,6 @@ signature PRIM_INT_INF =
       val leu: int * int -> bool
       val gtu: int * int -> bool
       val geu: int * int -> bool
-      val isNeg: int -> bool
 
       val andb: int * int -> int
       val <<? : int * Primitive.Word32.word -> int
@@ -345,31 +332,54 @@ structure IntInf =
       structure A = Primitive.Array
       structure V = Primitive.Vector
       structure S = SeqIndex
-      structure W = struct
-                       open ObjptrWord
-                       local
-                          structure S =
-                             ObjptrInt_ChooseIntN
-                             (type 'a t = 'a -> ObjptrWord.word
-                              val fInt8 = ObjptrWord.zextdFromInt8
-                              val fInt16 = ObjptrWord.zextdFromInt16
-                              val fInt32 = ObjptrWord.zextdFromInt32
-                              val fInt64 = ObjptrWord.zextdFromInt64)
-                       in
-                          val idFromObjptrInt = S.f
-                       end
-                       local
-                          structure S =
-                             ObjptrInt_ChooseIntN
-                             (type 'a t = ObjptrWord.word -> 'a
-                              val fInt8 = ObjptrWord.zextdToInt8
-                              val fInt16 = ObjptrWord.zextdToInt16
-                              val fInt32 = ObjptrWord.zextdToInt32
-                              val fInt64 = ObjptrWord.zextdToInt64)
-                       in
-                          val idToObjptrInt = S.f
-                       end
+      structure ObjptrWord = struct
+                                open ObjptrWord
+                                local
+                                   structure S =
+                                      ObjptrInt_ChooseIntN
+                                      (type 'a t = 'a -> ObjptrWord.word
+                                       val fInt8 = ObjptrWord.zextdFromInt8
+                                       val fInt16 = ObjptrWord.zextdFromInt16
+                                       val fInt32 = ObjptrWord.zextdFromInt32
+                                       val fInt64 = ObjptrWord.zextdFromInt64)
+                                in
+                                   val idFromObjptrInt = S.f
+                                end
+                                local
+                                   structure S =
+                                      ObjptrInt_ChooseIntN
+                                      (type 'a t = ObjptrWord.word -> 'a
+                                       val fInt8 = ObjptrWord.zextdToInt8
+                                       val fInt16 = ObjptrWord.zextdToInt16
+                                       val fInt32 = ObjptrWord.zextdToInt32
+                                       val fInt64 = ObjptrWord.zextdToInt64)
+                                in
+                                   val idToObjptrInt = S.f
+                                end
+                                local
+                                   structure S =
+                                      C_MPLimb_ChooseWordN
+                                      (type 'a t = 'a -> ObjptrWord.word
+                                       val fWord8 = ObjptrWord.castFromWord8
+                                       val fWord16 = ObjptrWord.castFromWord16
+                                       val fWord32 = ObjptrWord.castFromWord32
+                                       val fWord64 = ObjptrWord.castFromWord64)
+                                in
+                                   val castFromMPLimb = S.f
+                                end
+                                local
+                                   structure S =
+                                      C_MPLimb_ChooseWordN
+                                      (type 'a t = ObjptrWord.word -> 'a
+                                       val fWord8 = ObjptrWord.castToWord8
+                                       val fWord16 = ObjptrWord.castToWord16
+                                       val fWord32 = ObjptrWord.castToWord32
+                                       val fWord64 = ObjptrWord.castToWord64)
+                                in
+                                   val castToMPLimb = S.f
+                                end
                     end
+      structure W = ObjptrWord
       structure I = ObjptrInt
       structure MPLimb = C_MPLimb
       structure Sz = struct 
@@ -388,9 +398,6 @@ structure IntInf =
                      end
 
       type bigInt = Prim.int
-      datatype rep =
-         Big of MPLimb.t V.vector
-       | Small of ObjptrInt.int
 
       val zero: bigInt = 0
       val one: bigInt = 1
@@ -421,28 +428,75 @@ structure IntInf =
       fun oneTag (w: W.word): W.word = W.orb (w, 0w1)
       fun oneTagCoerce (w: W.word): bigInt = Prim.fromWord (oneTag w)
 
+
+      datatype rep =
+         Big of MPLimb.t V.vector
+       | Small of ObjptrInt.int
+
       fun rep i =
          if isSmall i
             then Small (dropTagCoerceInt i)
             else Big (Prim.toVector i)
-      
+
       fun fromRep r =
          case r of
-            Big v => 
+            Big v =>
                let
+                  val limbsPerObjptr =
+                     if Int32.>= (MPLimb.sizeInBits, ObjptrWord.sizeInBits)
+                        then 1
+                     else S.sextdFromInt32 (Int32.quot (ObjptrWord.sizeInBits, MPLimb.sizeInBits))
+
+                  val l = V.length v
                   val ok =
-                     SeqIndex.> (Vector.length v, 1) andalso
-                     MPLimb.<= (V.subUnsafe (v, 0), 0w1)
+                     (* sign limb + magnitude limb(s) *)
+                     S.>= (l, 2) andalso
+                     (* sign limb is 0w0 (positive) or 0w1 (negative) *)
+                     MPLimb.<= (V.subUnsafe (v, 0), 0w1) andalso
+                     (* most-significant magnitude limb is non-zero *)
+                     MPLimb.> (V.subUnsafe (v, S.- (l, 1)), 0w0) andalso
+                     (* value exceeds Small representation;
+                      * if positive, then mag in [1, 2^(ObjptrWord.sizeInBits - 2)].
+                      * if negative, then mag in [0, 2^(ObjptrWord.sizeInBits - 2) - 1].
+                      *)
+                     (S.> (l, S.+ (1, limbsPerObjptr)) orelse
+                      if Int32.<= (ObjptrWord.sizeInBits, MPLimb.sizeInBits)
+                         then let
+                                 val mag = V.subUnsafe (v, 1)
+                              in
+                                 MPLimb.>=
+                                 (if MPLimb.>= (V.subUnsafe (v, 0), 0w1) then MPLimb.- (mag, 0w1) else mag,
+                                  MPLimb.<<? (0w1, Word32.- (ObjptrWord.sizeInBitsWord, 0w2)))
+                              end
+                      else let
+                              fun loop (i, mag) =
+                                 if S.< (i, l)
+                                    then ObjptrWord.andb
+                                         (ObjptrWord.<<? (mag, MPLimb.sizeInBitsWord),
+                                          W.castFromMPLimb (V.subUnsafe (v, i)))
+                                 else mag
+                              val mag = loop (2, W.castFromMPLimb (V.subUnsafe (v, 1)))
+                           in
+                              ObjptrWord.>=
+                              (if MPLimb.>= (V.subUnsafe (v, 0), 0w1) then ObjptrWord.- (mag, 0w1) else mag,
+                               ObjptrWord.<<? (0w1, Word32.- (ObjptrWord.sizeInBitsWord, 0w2)))
+                           end)
                in
-                  if ok then SOME (Prim.fromVector v) else NONE
+                  if ok
+                     then SOME (Prim.fromVector v)
+                  else NONE
                end
-          | Small i => 
-                let
-                   val out = addTagCoerceInt i
-                   val undo = dropTagCoerceInt out
-                in
-                   if i = undo then SOME out else NONE
-                end
+          | Small i =>
+               let
+                  val w = ObjptrWord.idFromObjptrInt i
+                  val wt = addTag w
+                  val ok = w = dropTag wt
+               in
+                  if ok
+                     then SOME (Prim.fromWord wt)
+                  else NONE
+               end
+
 
       local
          fun 'a make {zextdToMPLimb: 'a -> MPLimb.word,
@@ -488,7 +542,7 @@ structure IntInf =
                           if sextd andalso (#isNeg other) w
                              then loop ((#neg other) w, 1, [(0,0w1)])
                              else loop (w, 1, [(0,0w0)])
-                       val a = A.arrayUnsafe n
+                       val a = A.uninitUnsafe n
                        fun loop acc =
                           case acc of
                              [] => ()
@@ -1276,21 +1330,6 @@ structure IntInf =
       val maxInt = NONE
       val minInt = NONE
 
-      structure Prim = 
-         struct
-            val isSmall = isSmall
-            val areSmall = areSmall
-            val dropTag = dropTag
-            val dropTagCoerce = dropTagCoerce
-            val dropTagCoerceInt = dropTagCoerceInt
-            val addTag = addTag
-            val addTagCoerce = addTagCoerce
-            val addTagCoerceInt = addTagCoerceInt
-            val zeroTag = zeroTag
-            val oneTag = oneTag
-            val oneTagCoerce = oneTagCoerce
-        end
-
       val abs = bigAbs
       val op +! = bigAdd
       val op +? = bigAdd
@@ -1323,7 +1362,6 @@ structure IntInf =
       val leu = bigLEU
       val gtu = bigGTU
       val geu = bigGEU
-      val isNeg = bigIsNeg
 
       val andb = bigAndb
       val <<? = bigLshift

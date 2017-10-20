@@ -1,13 +1,13 @@
 #!/bin/sh
 
-pages=$(echo $@ | sort -f)
+pages=$(for page in $@; do echo $page; done | LC_ALL=C sort -f)
 
 xform () {
     page=$1
     echo ":mlton-guide-page: ${page}"
     echo "[[${page}]]"
-    # echo "include::${page}.txt[]"
-    cat txt/${page}.txt |
+    # echo "include::${page}.adoc[]"
+    cat src/${page}.adoc |
     # sed -e '1 { s/\(.*\)/[['${page}']]\1/; h; N; g; s/./=/g; x; G; }' |
     sed -e '/^:toc:$/ { d; }' |
     cat

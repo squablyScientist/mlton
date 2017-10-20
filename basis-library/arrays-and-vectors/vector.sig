@@ -34,8 +34,11 @@ signature VECTOR_EXTRA =
       include VECTOR
       structure VectorSlice: VECTOR_SLICE_EXTRA 
 
+      val copy: {dst: 'a Array.array, di: int, src: 'a vector} -> unit
+
       val unsafeFromArray: 'a array -> 'a vector
       val unsafeSub: 'a vector * int -> 'a
+      val unsafeCopy: {dst: 'a Array.array, di: int, src: 'a vector} -> unit
 
       (* Used to implement Substring/String functions *)
       val concatWith: 'a vector -> 'a vector list -> 'a vector
@@ -51,8 +54,8 @@ signature VECTOR_EXTRA =
                           sub: int -> 'a,
                           update: int * 'a -> unit}
       val duplicate: 'a vector -> 'a vector
-      val tabulate': SeqIndex.int * (SeqIndex.int -> 'a) -> 'a vector 
       val toList: 'a vector -> 'a list
       val unfoldi: int * 'b * (int * 'b -> 'a * 'b) -> 'a vector * 'b
+      val unfold: int * 'b * ('b -> 'a * 'b) -> 'a vector * 'b
       val vector: int * 'a -> 'a vector
    end

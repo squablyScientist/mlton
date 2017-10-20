@@ -1,4 +1,5 @@
-(* Copyright (C) 2013 Matthew Fluet, David Larsen.
+(* Copyright (C) 2017 Matthew Fluet.
+ * Copyright (C) 2013 Matthew Fluet, David Larsen.
  * Copyright (C) 2011 Matthew Fluet.
  * Copyright (C) 1999-2006 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
@@ -16,9 +17,7 @@ datatype z = datatype Exp.t
 datatype z = datatype Transfer.t
 
 fun 'a analyze
-   {coerce, conApp, const,
-    filter, filterWord,
-    fromType, layout, primApp,
+   {coerce, conApp, const, filter, filterWord, fromType, layout, primApp,
     program = Program.T {main, globals, functions, ...},
     select, tuple, useFromTypeOnBinds} =
    let
@@ -27,22 +26,22 @@ fun 'a analyze
          if Vector.length from = Vector.length to
             then Vector.foreach2 (from, to, fn (from, to) =>
                                   coerce {from = from, to = to})
-         else Error.bug (concat ["Analyze.coerces length mismatch: ", msg])
+         else Error.bug (concat ["Analyze.coerces (length mismatch: ", msg, ")"])
       val {get = value: Var.t -> 'a, set = setValue, ...} =
          Property.getSetOnce
          (Var.plist,
-          Property.initRaise ("analyze var value", Var.layout))
+          Property.initRaise ("Analyze.value", Var.layout))
       val value = Trace.trace ("Analyze.value", Var.layout, layout) value
       fun values xs = Vector.map (xs, value)
-      val {get = func, set = setFunc, ...} =
+      val {get = funcInfo, set = setFuncInfo, ...} =
          Property.getSetOnce
-         (Func.plist, Property.initRaise ("analyze func name", Func.layout))
-      val {get = entry, set = setEntry, ...} =
+         (Func.plist, Property.initRaise ("Analyze.funcInfo", Func.layout))
+      val {get = entryInfo, set = setEntryInfo, ...} =
          Property.getSetOnce
-         (FuncEntry.plist, Property.initRaise ("analyze entry name", FuncEntry.layout))
+         (FuncEntry.plist, Property.initRaise ("Analyze.EntryInfo", FuncEntry.layout))
       val {get = labelInfo, set = setLabelInfo, ...} =
          Property.getSetOnce
-         (Label.plist, Property.initRaise ("analyze label", Label.layout))
+         (Label.plist, Property.initRaise ("Analyze.labelInfo", Label.layout))
       val labelArgs = #args o labelInfo
       val labelValues = #values o labelInfo
       fun loopArgs args =
@@ -57,19 +56,19 @@ fun 'a analyze
           let
              val {entries, name, raises, returns, ...} = Function.dest f
           in
-             setFunc (name, {raises = Option.map (raises, fn ts =>
-                                                  Vector.map (ts, fromType)),
-                             returns = Option.map (returns, fn ts =>
-                                                   Vector.map (ts, fromType))})
+             setFuncInfo (name, {raises = Option.map (raises, fn ts =>
+                                                      Vector.map (ts, fromType)),
+                                 returns = Option.map (returns, fn ts =>
+                                                       Vector.map (ts, fromType))})
              ; Vector.foreach (entries, fn FunctionEntry.T {args, name, ...} =>
-                               setEntry (name, loopArgs args))
+                               setEntryInfo (name, loopArgs args))
           end)
       fun loopTransfer (t: Transfer.t,
                         shouldReturns: 'a vector option,
                         shouldRaises: 'a vector option): unit =
         (case t of
             Arith {prim, args, overflow, success, ty} =>
-               (coerces ("arith", Vector.new0 (), labelValues overflow)
+               (coerces ("arith overflow", Vector.new0 (), labelValues overflow)
                 ; coerce {from = primApp {prim = prim,
                                           targs = Vector.new0 (),
                                           args = values args,
@@ -77,33 +76,33 @@ fun 'a analyze
                                           resultVar = NONE},
                           to = Vector.sub (labelValues success, 0)})
           | Bug => ()
-          | Call {func = f, entry = e, args, return, ...} =>
+          | Call {func, entry, args, return, ...} =>
                let
-                  val {raises, returns} = func f
-                  val formals = entry e
-                  val _ = coerces ("formals", values args, formals)
+                  val {raises, returns} = funcInfo func
+                  val formals = entryInfo entry
+                  val _ = coerces ("call args/formals", values args, formals)
                   fun noHandler () =
                      case (raises, shouldRaises) of
                         (NONE, NONE) => ()
                       | (NONE, SOME _) => ()
                       | (SOME _, NONE) => 
-                           Error.bug "Analyze.loopTransfer: raise mismatch"
-                      | (SOME vs, SOME vs') => coerces ("noHandler", vs, vs')
+                           Error.bug "Analyze.loopTransfer (raise mismatch)"
+                      | (SOME vs, SOME vs') => coerces ("call caller/raises", vs, vs')
                   datatype z = datatype Return.t
                in
                   case return of
                      Dead =>
                         if isSome returns orelse isSome raises
-                           then Error.bug "Analyze.loopTransfer: return mismatch at Dead"
+                           then Error.bug "Analyze.loopTransfer (return mismatch at Dead)"
                         else ()
                    | NonTail {cont, handler} => 
                         (Option.app (returns, fn vs =>
-                                     coerces ("returns", vs, labelValues cont))
+                                     coerces ("call non-tail/returns", vs, labelValues cont))
                          ; (case handler of
                                Handler.Caller => noHandler ()
                              | Handler.Dead =>
                                   if isSome raises
-                                     then Error.bug "Analyze.loopTransfer: raise mismatch at NonTail"
+                                     then Error.bug "Analyze.loopTransfer (raise mismatch at NonTail/Dead)"
                                   else ()
                              | Handler.Handle h =>
                                   let
@@ -111,8 +110,7 @@ fun 'a analyze
                                         case raises of
                                            NONE => ()
                                          | SOME vs =>
-                                              coerces ("handle", vs,
-                                                       labelValues h)
+                                              coerces ("call handle/raises", vs, labelValues h)
                                   in
                                      ()
                                   end))
@@ -124,9 +122,9 @@ fun 'a analyze
                                  (NONE, NONE) => ()
                                | (NONE, SOME _) => ()
                                | (SOME _, NONE) =>
-                                    Error.bug "Analyze.loopTransfer: return mismatch at Tail"
+                                    Error.bug "Analyze.loopTransfer (return mismatch at Tail)"
                                | (SOME vs, SOME vs') =>
-                                    coerces ("tail", vs, vs')
+                                    coerces ("call tail/returns", vs, vs')
                         in
                            ()
                         end
@@ -136,18 +134,19 @@ fun 'a analyze
                let
                   val test = value test
                   fun ensureNullary j =
-                     if 0 = Vector.length (labelValues j)
+                     if Vector.isEmpty (labelValues j)
                         then ()
-                     else Error.bug (concat ["Analyze.loopTransfer: Case:",
+                     else Error.bug (concat ["Analyze.loopTransfer (case ",
                                              Label.toString j,
-                                             " must be nullary"])
+                                             " must be nullary)"])
                   fun ensureSize (w, s) =
                      if WordSize.equals (s, WordX.size w)
                         then ()
-                     else Error.bug (concat ["Analyze.loopTransfer: Case:",
+                     else Error.bug (concat ["Analyze.loopTransfer (case ",
                                              WordX.toString w,
                                              " must be size ",
-                                             WordSize.toString s])
+                                             WordSize.toString s,
+                                             ")"])
                   fun doitWord (s, cs) =
                      (ignore (filterWord (test, s))
                       ; Vector.foreach (cs, fn (w, j) =>
@@ -167,21 +166,21 @@ fun 'a analyze
           | Goto {dst, args} => coerces ("goto", values args, labelValues dst)
           | Raise xs =>
                (case shouldRaises of
-                   NONE => Error.bug "Analyze.loopTransfer: raise mismatch at Raise"
+                   NONE => Error.bug "Analyze.loopTransfer (raise mismatch at Raise)"
                  | SOME vs => coerces ("raise", values xs, vs))
           | Return xs =>
                (case shouldReturns of
-                   NONE => Error.bug "Analyze.loopTransfer: return mismatch at Return"
+                   NONE => Error.bug "Analyze.loopTransfer (return mismatch at Return)"
                  | SOME vs => coerces ("return", values xs, vs))
           | Runtime {prim, args, return} =>
                let
                   val xts = labelArgs return
                   val (resultVar, resultType) =
-                     if 0 = Vector.length xts
+                     if Vector.isEmpty xts
                         then (NONE, Type.unit)
                      else
                         let
-                           val (x, t) = Vector.sub (xts, 0)
+                           val (x, t) = Vector.first xts
                         in
                            (SOME x, t)
                         end
@@ -194,6 +193,7 @@ fun 'a analyze
                in 
                   ()
                end)
+        handle exn => Error.reraiseSuffix (exn, concat [" in ", Layout.toString (Transfer.layout t)])
       val loopTransfer =
          Trace.trace3
          ("Analyze.loopTransfer",
@@ -202,7 +202,7 @@ fun 'a analyze
           Option.layout (Vector.layout layout),
           Layout.ignore)
          loopTransfer
-      fun loopStatement (Statement.T {var, exp, ty}): unit =
+      fun loopStatement (s as Statement.T {var, exp, ty}): unit =
          let
             val v =
                case exp of
@@ -221,7 +221,7 @@ fun 'a analyze
                              resultType = ty}
                 | Tuple xs =>
                      if 1 = Vector.length xs
-                        then Error.bug "Analyze.loopStatement: unary tuple"
+                        then Error.bug "Analyze.loopStatement (unary tuple)"
                      else tuple (values xs)
                 | Var x => value x
          in
@@ -237,11 +237,13 @@ fun 'a analyze
                      end
              else setValue (var, v))
          end
+         handle exn => Error.reraiseSuffix (exn, concat [" in ", Layout.toString (Statement.layout s)])
       val loopStatement =
          Trace.trace ("Analyze.loopStatement", Statement.layout, Unit.layout)
          loopStatement
-      val _ = coerces ("main entry", Vector.new0 (), entry (#entry main))
+      val _ = coerces ("main entry", Vector.new0 (), entryInfo (#entry main))
       val _ = Vector.foreach (globals, loopStatement)
+              handle exn => Error.reraiseSuffix (exn, concat [" in Globals"])
       val _ =
          List.foreach
          (functions, fn f =>
@@ -254,7 +256,7 @@ fun 'a analyze
                                        block = b,
                                        values = loopArgs args,
                                        visited = ref false}))
-             val {returns, raises, ...} = func name
+             val {returns, raises, ...} = funcInfo name
              fun visit (l: Label.t) =
                 let
                    val {block, visited, ...} = labelInfo l
@@ -265,19 +267,21 @@ fun 'a analyze
                       let
                          val _ = visited := true
                          val Block.T {statements, transfer, ...} = block
+                         val _ = (Vector.foreach (statements, loopStatement)
+                                  ; loopTransfer (transfer, returns, raises))
+                                 handle exn => Error.reraiseSuffix (exn, concat [" in ", Label.toString l])
                       in
-                         Vector.foreach (statements, loopStatement)
-                         ; loopTransfer (transfer, returns, raises)
-                         ; Transfer.foreachLabel (transfer, visit)
+                         Transfer.foreachLabel (transfer, visit)
                       end
                 end
              val _ = Vector.foreach (entries, visit o FunctionEntry.start)
           in
              ()
-          end)
+          end
+          handle exn => Error.reraiseSuffix (exn, concat [" in ", Func.toString (Function.name f)]))
    in
-      {func = func,
-       entry = entry,
+      {func = funcInfo,
+       entry = entryInfo,
        label = labelValues,
        value = value}
    end

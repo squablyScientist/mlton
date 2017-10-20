@@ -1,4 +1,4 @@
-(* Copyright (C) 2009-2010 Matthew Fluet.
+(* Copyright (C) 2009-2010,2014,2016-2017 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -34,12 +34,13 @@ structure Kind =
    end
 
 datatype 'a t =
-   Array_array (* backend *)
- | Array_array0Const (* constant propagation *)
+   Array_copyArray (* backend *)
+ | Array_copyVector (* backend *)
  | Array_length (* ssa to rssa *)
- | Array_sub (* backend *)
+ | Array_sub (* ssa to ssa2 *)
  | Array_toVector (* backend *)
- | Array_update (* backend *)
+ | Array_uninit (* backend *)
+ | Array_update (* ssa to ssa2 *)
  | CPointer_add (* codegen *)
  | CPointer_diff (* codegen *)
  | CPointer_equal (* codegen *)
@@ -67,7 +68,6 @@ datatype 'a t =
  | IntInf_andb (* ssa to rssa *)
  | IntInf_arshift (* ssa to rssa *)
  | IntInf_compare (* ssa to rssa *)
- | IntInf_equal (* ssa to rssa *)
  | IntInf_gcd (* ssa to rssa *)
  | IntInf_lshift (* ssa to rssa *)
  | IntInf_mul (* ssa to rssa *)
@@ -156,8 +156,9 @@ datatype 'a t =
  | TopLevel_getSuffix (* implement suffix *)
  | TopLevel_setHandler (* implement exceptions *)
  | TopLevel_setSuffix (* implement suffix *)
- | Vector_length (* ssa to rssa *)
- | Vector_sub (* ssa to rssa *)
+ | Vector_length (* ssa to ssa2 *)
+ | Vector_sub (* ssa to ssa2 *)
+ | Vector_vector (* ssa to ssa2 *)
  | Weak_canGet (* ssa to rssa *)
  | Weak_get (* ssa to rssa *)
  | Weak_new (* ssa to rssa *)
@@ -186,9 +187,9 @@ datatype 'a t =
  | Word_toIntInf (* ssa to rssa *)
  | Word_xorb of WordSize.t (* codegen *)
  | WordVector_toIntInf (* ssa to rssa *)
- | Word8Array_subWord of WordSize.t (* ssa to rssa *)
- | Word8Array_updateWord of WordSize.t  (* ssa to rssa *)
- | Word8Vector_subWord of WordSize.t  (* ssa to rssa *)
+ | WordArray_subWord of {seqSize:WordSize.t, eleSize:WordSize.t} (* ssa to rssa *)
+ | WordArray_updateWord of {seqSize: WordSize.t, eleSize: WordSize.t}  (* ssa to rssa *)
+ | WordVector_subWord of {seqSize: WordSize.t, eleSize: WordSize.t}  (* ssa to rssa *)
  | Word8Vector_toString (* defunctorize *)
  | World_save (* ssa to rssa *)
 
@@ -204,8 +205,8 @@ fun toString (n: 'a t): string =
       fun sign {signed} = if signed then "WordS" else "WordU"
       fun word (s: WordSize.t, str: string): string =
          concat ["Word", WordSize.toString s, "_", str]
-      fun word8Seq (seq: string, oper: string, s: WordSize.t): string =
-         concat ["Word8", seq, "_", oper, "Word", WordSize.toString s]
+      fun wordSeq (seqSize: WordSize.t, seqKind: string, oper: string, eleSize: WordSize.t): string =
+         concat ["Word", WordSize.toString seqSize, seqKind, "_", oper, "Word", WordSize.toString eleSize]
       fun wordS (s: WordSize.t, sg, str: string): string =
          concat [sign sg, WordSize.toString s, "_", str]
       val realC = ("Real", RealSize.toString)
@@ -220,11 +221,12 @@ fun toString (n: 'a t): string =
       fun cpointerSet (ty, s) = concat ["CPointer_set", ty, s]
    in
       case n of
-         Array_array => "Array_array"
-       | Array_array0Const => "Array_array0Const"
+         Array_copyArray => "Array_copyArray"
+       | Array_copyVector => "Array_copyVector"
        | Array_length => "Array_length"
        | Array_sub => "Array_sub"
        | Array_toVector => "Array_toVector"
+       | Array_uninit => "Array_uninit"
        | Array_update => "Array_update"
        | CPointer_add => "CPointer_add"
        | CPointer_diff => "CPointer_diff"
@@ -251,7 +253,6 @@ fun toString (n: 'a t): string =
        | IntInf_andb => "IntInf_andb"
        | IntInf_arshift => "IntInf_arshift"
        | IntInf_compare => "IntInf_compare"
-       | IntInf_equal => "IntInf_equal"
        | IntInf_gcd => "IntInf_gcd"
        | IntInf_lshift => "IntInf_lshift"
        | IntInf_mul => "IntInf_mul"
@@ -323,12 +324,16 @@ fun toString (n: 'a t): string =
        | TopLevel_setSuffix => "TopLevel_setSuffix"
        | Vector_length => "Vector_length"
        | Vector_sub => "Vector_sub"
+       | Vector_vector => "Vector_vector"
        | Weak_canGet => "Weak_canGet"
        | Weak_get => "Weak_get"
        | Weak_new => "Weak_new"
-       | Word8Array_subWord w => word8Seq ("Array", "sub", w)
-       | Word8Array_updateWord w => word8Seq ("Array", "update", w)
-       | Word8Vector_subWord w => word8Seq ("Vector", "sub", w)
+       | WordArray_subWord {seqSize, eleSize} =>
+            wordSeq (seqSize, "Array", "sub", eleSize)
+       | WordArray_updateWord {seqSize, eleSize} =>
+            wordSeq (seqSize, "Array", "update", eleSize)
+       | WordVector_subWord {seqSize, eleSize} =>
+            wordSeq (seqSize, "Vector", "sub", eleSize)
        | Word8Vector_toString => "Word8Vector_toString"
        | WordVector_toIntInf => "WordVector_toIntInf"
        | Word_add s => word (s, "add")
@@ -359,13 +364,22 @@ fun toString (n: 'a t): string =
    end
 
 fun layout p = Layout.str (toString p)
+fun layoutFull (p, layoutX) =
+   case p of
+      FFI f => Layout.seq [Layout.str "FFI ", CFunction.layout (f, layoutX)]
+    | FFI_Symbol {name, cty, symbolScope} =>
+         Layout.seq [Layout.str "FFI_Symbol ",
+                     Layout.record
+                     [("name", Layout.str name),
+                      ("cty", Option.layout CType.layout cty),
+                      ("symbolScope", CFunction.SymbolScope.layout symbolScope)]]
+    | p => layout p
 
 val equals: 'a t * 'a t -> bool =
-   fn (Array_array, Array_array) => true
-    | (Array_array0Const, Array_array0Const) => true
-    | (Array_length, Array_length) => true
+   fn (Array_length, Array_length) => true
     | (Array_sub, Array_sub) => true
     | (Array_toVector, Array_toVector) => true
+    | (Array_uninit, Array_uninit) => true
     | (Array_update, Array_update) => true
     | (CPointer_add, CPointer_add) => true
     | (CPointer_diff, CPointer_diff) => true
@@ -392,7 +406,6 @@ val equals: 'a t * 'a t -> bool =
     | (IntInf_andb, IntInf_andb) => true
     | (IntInf_arshift, IntInf_arshift) => true
     | (IntInf_compare, IntInf_compare) => true
-    | (IntInf_equal, IntInf_equal) => true
     | (IntInf_gcd, IntInf_gcd) => true
     | (IntInf_lshift, IntInf_lshift) => true
     | (IntInf_mul, IntInf_mul) => true
@@ -470,6 +483,7 @@ val equals: 'a t * 'a t -> bool =
     | (TopLevel_setSuffix, TopLevel_setSuffix) => true
     | (Vector_length, Vector_length) => true
     | (Vector_sub, Vector_sub) => true
+    | (Vector_vector, Vector_vector) => true
     | (Weak_canGet, Weak_canGet) => true
     | (Weak_get, Weak_get) => true
     | (Weak_new, Weak_new) => true
@@ -514,9 +528,18 @@ val equals: 'a t * 'a t -> bool =
     | (Word_toIntInf, Word_toIntInf) => true
     | (Word_xorb s, Word_xorb s') => WordSize.equals (s, s')
     | (WordVector_toIntInf, WordVector_toIntInf) => true
-    | (Word8Array_subWord s, Word8Array_subWord s') => WordSize.equals (s, s')
-    | (Word8Array_updateWord s, Word8Array_updateWord s') => WordSize.equals (s, s')
-    | (Word8Vector_subWord s, Word8Vector_subWord s') => WordSize.equals (s, s')
+    | (WordArray_subWord {seqSize = seqSize, eleSize = eleSize},
+       WordArray_subWord {seqSize = seqSize', eleSize = eleSize'}) =>
+         WordSize.equals (seqSize, seqSize')
+         andalso WordSize.equals (eleSize, eleSize')
+    | (WordArray_updateWord {seqSize = seqSize, eleSize = eleSize},
+       WordArray_updateWord {seqSize = seqSize', eleSize = eleSize'}) =>
+         WordSize.equals (seqSize, seqSize')
+         andalso WordSize.equals (eleSize, eleSize')
+    | (WordVector_subWord {seqSize = seqSize, eleSize = eleSize},
+       WordVector_subWord {seqSize = seqSize', eleSize = eleSize'}) =>
+         WordSize.equals (seqSize, seqSize')
+         andalso WordSize.equals (eleSize, eleSize')
     | (Word8Vector_toString, Word8Vector_toString) => true
     | (World_save, World_save) => true
     | _ => false
@@ -524,11 +547,12 @@ val equals: 'a t * 'a t -> bool =
 val map: 'a t * ('a -> 'b) -> 'b t =
    fn (p, f) =>
    case p of
-      Array_array => Array_array
-    | Array_array0Const => Array_array0Const
+      Array_copyArray => Array_copyArray
+    | Array_copyVector => Array_copyVector
     | Array_length => Array_length
     | Array_sub => Array_sub
     | Array_toVector => Array_toVector
+    | Array_uninit => Array_uninit
     | Array_update => Array_update
     | CPointer_add => CPointer_add
     | CPointer_diff => CPointer_diff
@@ -556,7 +580,6 @@ val map: 'a t * ('a -> 'b) -> 'b t =
     | IntInf_andb => IntInf_andb
     | IntInf_arshift => IntInf_arshift
     | IntInf_compare => IntInf_compare
-    | IntInf_equal => IntInf_equal
     | IntInf_gcd => IntInf_gcd
     | IntInf_lshift => IntInf_lshift
     | IntInf_mul => IntInf_mul
@@ -628,6 +651,7 @@ val map: 'a t * ('a -> 'b) -> 'b t =
     | TopLevel_setSuffix => TopLevel_setSuffix
     | Vector_length => Vector_length
     | Vector_sub => Vector_sub
+    | Vector_vector => Vector_vector
     | Weak_canGet => Weak_canGet
     | Weak_get => Weak_get
     | Weak_new => Weak_new
@@ -656,16 +680,18 @@ val map: 'a t * ('a -> 'b) -> 'b t =
     | Word_toIntInf => Word_toIntInf
     | Word_xorb z => Word_xorb z
     | WordVector_toIntInf => WordVector_toIntInf
-    | Word8Array_subWord z => Word8Array_subWord z
-    | Word8Array_updateWord z => Word8Array_updateWord z
-    | Word8Vector_subWord z => Word8Vector_subWord z
+    | WordArray_subWord z => WordArray_subWord z
+    | WordArray_updateWord z => WordArray_updateWord z
+    | WordVector_subWord z => WordVector_subWord z
     | Word8Vector_toString => Word8Vector_toString
     | World_save => World_save
 
 val cast: 'a t -> 'b t = fn p => map (p, fn _ => Error.bug "Prim.cast")
 
-val array = Array_array
 val arrayLength = Array_length
+val arrayToVector = Array_toVector
+val arrayUninit = Array_uninit
+val arrayUpdate = Array_update
 val assign = Ref_assign
 val bogus = MLton_bogus
 val bug = MLton_bug
@@ -715,7 +741,6 @@ val equal = MLton_equal
 val ffi = FFI
 val ffiSymbol = FFI_Symbol
 val hash = MLton_hash
-val intInfEqual = IntInf_equal
 val intInfToVector = IntInf_toVector
 val intInfToWord = IntInf_toWord
 val intInfNeg = IntInf_neg
@@ -723,6 +748,7 @@ val intInfNotb = IntInf_notb
 val realCastToWord = Real_castToWord
 val reff = Ref_ref
 val touch = MLton_touch
+val vector = Vector_vector
 val vectorLength = Vector_length
 val vectorSub = Vector_sub
 val wordAdd = Word_add
@@ -744,8 +770,7 @@ val wordSub = Word_sub
 val wordXorb = Word_xorb
 
 val isCommutative =
-   fn IntInf_equal => true
-    | MLton_eq => true
+   fn MLton_eq => true
     | MLton_equal => true
     | Real_add _ => true
     | Real_mul _ => true
@@ -774,11 +799,12 @@ val kind: 'a t -> Kind.t =
       datatype z = datatype Kind.t
    in
       case p of
-         Array_array => Moveable
-       | Array_array0Const => Moveable
+         Array_copyArray => SideEffect
+       | Array_copyVector => SideEffect
        | Array_length => Functional
        | Array_sub => DependsOnState
        | Array_toVector => DependsOnState
+       | Array_uninit => Moveable
        | Array_update => SideEffect
        | CPointer_add => Functional
        | CPointer_diff => Functional
@@ -798,14 +824,16 @@ val kind: 'a t -> Kind.t =
        | Exn_extra => Functional
        | Exn_name => Functional
        | Exn_setExtendExtra => SideEffect
-       | FFI _ => Kind.SideEffect
+       | FFI (CFunction.T {kind, ...}) => (case kind of
+                                              CFunction.Kind.Impure => SideEffect
+                                            | CFunction.Kind.Pure => Functional
+                                            | CFunction.Kind.Runtime _ => SideEffect)
        | FFI_Symbol _ => Functional
        | GC_collect => SideEffect
        | IntInf_add => Functional
        | IntInf_andb => Functional
        | IntInf_arshift => Functional
        | IntInf_compare => Functional
-       | IntInf_equal => Functional
        | IntInf_gcd => Functional
        | IntInf_lshift => Functional
        | IntInf_mul => Functional
@@ -877,12 +905,13 @@ val kind: 'a t -> Kind.t =
        | TopLevel_setSuffix => SideEffect
        | Vector_length => Functional
        | Vector_sub => Functional
+       | Vector_vector => Functional
        | Weak_canGet => DependsOnState
        | Weak_get => DependsOnState
        | Weak_new => Moveable
-       | Word8Array_subWord _ => DependsOnState
-       | Word8Array_updateWord _ => SideEffect
-       | Word8Vector_subWord _ => Functional
+       | WordArray_subWord _ => DependsOnState
+       | WordArray_updateWord _ => SideEffect
+       | WordVector_subWord _ => Functional
        | Word8Vector_toString => Functional
        | WordVector_toIntInf => Functional
        | Word_add _ => Functional
@@ -974,17 +1003,14 @@ local
        (Word_xorb s)]
       @ wordSigns (s, true)
       @ wordSigns (s, false)
-   fun word8Seqs (s: WordSize.t) =
-      [(Word8Array_subWord s),
-       (Word8Array_updateWord s),
-       (Word8Vector_subWord s)]
 in
    val all: unit t list =
-      [Array_array,
-       Array_array0Const,
+      [Array_copyArray,
+       Array_copyVector,
        Array_length,
        Array_sub,
        Array_toVector,
+       Array_uninit,
        Array_update,
        CPointer_add,
        CPointer_diff,
@@ -1005,7 +1031,6 @@ in
        IntInf_andb,
        IntInf_arshift,
        IntInf_compare,
-       IntInf_equal,
        IntInf_gcd,
        IntInf_lshift,
        IntInf_mul,
@@ -1049,6 +1074,7 @@ in
        TopLevel_setSuffix,
        Vector_length,
        Vector_sub,
+       Vector_vector,
        Weak_canGet,
        Weak_get,
        Weak_new,
@@ -1060,7 +1086,10 @@ in
                      List.concatMap (WordSize.prims, words)]
       @ let
            val real = RealSize.all
-           val word = WordSize.all
+           val word = WordSize.prims
+           val wordNonPrim =
+              List.keepAll
+              (WordSize.all, fn s => not (List.contains (word, s, WordSize.equals)))
            fun coerces (name, sizes, sizes', ac) =
               List.fold
               (sizes, ac, fn (s, ac) =>
@@ -1074,15 +1103,28 @@ in
                         sizes, sizes', ac))
            fun casts (name, sizes, ac) =
               List.fold (sizes, ac, fn (s, ac) => name s :: ac)
+           fun castsS (name, sizes, ac) =
+              List.fold
+              ([false, true], ac, fn (signed, ac) =>
+               casts (fn s => name (s, {signed = signed}),
+                      sizes, ac))
         in
            casts (fn rs => Real_castToWord (rs, WordSize.fromBits (RealSize.bits rs)), real, 
            coerces (Real_rndToReal, real, real,
            coercesS (Real_rndToWord, real, word,
            casts (fn rs => Word_castToReal (WordSize.fromBits (RealSize.bits rs), rs), real,
            coercesS (Word_extdToWord, word, word,
-           coercesS (Word_rndToReal, word, real, []))))))
+           castsS (fn (s, signed) => Word_extdToWord (s, WordSize.roundUpToPrim s, signed), wordNonPrim,
+           castsS (fn (s, signed) => Word_extdToWord (WordSize.roundUpToPrim s, s, signed), wordNonPrim,
+           coercesS (Word_rndToReal, word, real, []))))))))
         end
-     @ List.concatMap (WordSize.prims, word8Seqs)
+     @ List.concatMap
+       (WordSize.prims, fn seqSize =>
+        List.concatMap
+        (WordSize.prims, fn eleSize =>
+         List.map
+         ([WordArray_subWord, WordArray_updateWord, WordVector_subWord], fn p =>
+          p {seqSize = seqSize, eleSize = eleSize})))
      @ let
           fun doit (all, get, set) =
              List.concatMap (all, fn s => [get s, set s])
@@ -1154,6 +1196,13 @@ fun 'a checkApp (prim: 'a t,
          andalso equals (arg0', arg 0)
          andalso equals (arg1', arg 1)
          andalso equals (arg2', arg 2)
+      fun fiveArgs (arg0', arg1', arg2', arg3', arg4') () =
+         5 = Vector.length args
+         andalso equals (arg0', arg 0)
+         andalso equals (arg1', arg 1)
+         andalso equals (arg2', arg 2)
+         andalso equals (arg3', arg 3)
+         andalso equals (arg4', arg 4)
       fun nArgs args' () =
          Vector.equals (args', args, equals)
       fun done (args, result') =
@@ -1208,18 +1257,20 @@ fun 'a checkApp (prim: 'a t,
          noTargs (fn () => (twoArgs (intInf, csize), intInf))
       fun realTernary s =
          noTargs (fn () => (threeArgs (real s, real s, real s), real s))
-      val word8Array = array word8
+      fun wordArray seqSize = array (word seqSize)
       fun wordShift s =
          noTargs (fn () => (twoArgs (word s, shiftArg), word s))
       val word8Vector = vector word8
+      fun wordVector seqSize = vector (word seqSize)
       val string = word8Vector
   in
       case prim of
-         Array_array => oneTarg (fn targ => (oneArg seqIndex, array targ))
-       | Array_array0Const => oneTarg (fn targ => (noArgs, array targ))
+         Array_copyArray => oneTarg (fn t => (fiveArgs (array t, seqIndex, array t, seqIndex, seqIndex), unit))
+       | Array_copyVector => oneTarg (fn t => (fiveArgs (array t, seqIndex, vector t, seqIndex, seqIndex), unit))
        | Array_length => oneTarg (fn t => (oneArg (array t), seqIndex))
        | Array_sub => oneTarg (fn t => (twoArgs (array t, seqIndex), t))
        | Array_toVector => oneTarg (fn t => (oneArg (array t), vector t))
+       | Array_uninit => oneTarg (fn targ => (oneArg seqIndex, array targ))
        | Array_update =>
             oneTarg (fn t => (threeArgs (array t, seqIndex, t), unit))
        | CPointer_add =>
@@ -1263,7 +1314,6 @@ fun 'a checkApp (prim: 'a t,
        | IntInf_arshift => intInfShift ()
        | IntInf_compare =>
             noTargs (fn () => (twoArgs (intInf, intInf), compareRes))
-       | IntInf_equal => noTargs (fn () => (twoArgs (intInf, intInf), bool))
        | IntInf_gcd => intInfBinary ()
        | IntInf_lshift => intInfShift ()
        | IntInf_mul => intInfBinary ()
@@ -1343,15 +1393,16 @@ fun 'a checkApp (prim: 'a t,
             noTargs (fn () => (oneArg string, word8Vector))
        | Vector_length => oneTarg (fn t => (oneArg (vector t), seqIndex))
        | Vector_sub => oneTarg (fn t => (twoArgs (vector t, seqIndex), t))
+       | Vector_vector => oneTarg (fn targ => (nArgs (Vector.map (args, fn _ => targ)), vector targ))
        | Weak_canGet => oneTarg (fn t => (oneArg (weak t), bool))
        | Weak_get => oneTarg (fn t => (oneArg (weak t), t))
        | Weak_new => oneTarg (fn t => (oneArg t, weak t))
-       | Word8Array_subWord s =>
-            noTargs (fn () => (twoArgs (word8Array, seqIndex), word s))
-       | Word8Array_updateWord s =>
-            noTargs (fn () => (threeArgs (word8Array, seqIndex, word s), unit))
-       | Word8Vector_subWord s =>
-            noTargs (fn () => (twoArgs (word8Vector, seqIndex), word s))
+       | WordArray_subWord {seqSize, eleSize} =>
+            noTargs (fn () => (twoArgs (wordArray seqSize, seqIndex), word eleSize))
+       | WordArray_updateWord {seqSize, eleSize} =>
+            noTargs (fn () => (threeArgs (wordArray seqSize, seqIndex, word eleSize), unit))
+       | WordVector_subWord {seqSize, eleSize} =>
+            noTargs (fn () => (twoArgs (wordVector seqSize, seqIndex), word eleSize))
        | Word8Vector_toString =>
             noTargs (fn () => (oneArg (word8Vector), string))
        | WordVector_toIntInf =>
@@ -1404,11 +1455,12 @@ fun ('a, 'b) extractTargs (prim: 'b t,
       datatype z = datatype t
    in
       case prim of
-         Array_array => one (deArray result)
-       | Array_array0Const => one (deArray result)
+         Array_copyArray => one (deArray (arg 0))
+       | Array_copyVector => one (deArray (arg 0))
        | Array_length => one (deArray (arg 0))
        | Array_sub => one (deArray (arg 0))
        | Array_toVector => one (deArray (arg 0))
+       | Array_uninit => one (deArray result)
        | Array_update => one (deArray (arg 0))
        | CPointer_getObjptr => one result
        | CPointer_setObjptr => one (arg 2)
@@ -1428,6 +1480,7 @@ fun ('a, 'b) extractTargs (prim: 'b t,
        | Ref_ref => one (deRef result)
        | Vector_length => one (deVector (arg 0))
        | Vector_sub => one (deVector (arg 0))
+       | Vector_vector => one (deVector result)
        | Weak_canGet => one (deWeak (arg 0))
        | Weak_get => one result
        | Weak_new => one (arg 0)
@@ -1438,7 +1491,7 @@ val extractTargs =
    fn z =>
    Trace.trace ("Prim.extractTargs", layout o #1, Layout.ignore) extractTargs z
 
-structure SmallIntInf = Const.SmallIntInf
+structure IntInfRep = Const.IntInfRep
 
 structure ApplyArg =
    struct
@@ -1550,6 +1603,8 @@ fun ('a, 'b) apply (p: 'a t,
       fun word (w: WordX.t): ('a, 'b) ApplyResult.t =
          ApplyResult.Const (Const.word w)
       val wordOpt = fn NONE => ApplyResult.Unknown | SOME w => word w
+      fun wordVector (v: WordXVector.t): ('a, 'b) ApplyResult.t =
+         ApplyResult.Const (Const.wordVector v)
       fun iio (f, c1, c2) = intInf (f (c1, c2))
       fun wordS (f: WordX.t * WordX.t * {signed: bool} -> WordX.t,
                  (_: WordSize.t, sg),
@@ -1638,6 +1693,7 @@ fun ('a, 'b) apply (p: 'a t,
          (case (p, cs) of
              (MLton_eq, [c1, c2]) => eq (c1, c2)
            | (MLton_equal, [c1, c2]) => equal (c1, c2)
+           | (CPointer_equal, [Null, Null]) => bool true
            | (CPointer_fromWord, [Word w]) =>
                  if WordX.isZero w
                     then null
@@ -1653,11 +1709,14 @@ fun ('a, 'b) apply (p: 'a t,
                 in
                    word (WordX.fromIntInf (i, WordSize.compareRes))
                 end
-           | (IntInf_equal, [IntInf i1, IntInf i2]) => bool (i1 = i2)
            | (IntInf_toWord, [IntInf i]) =>
-                (case SmallIntInf.toWord i of
-                    NONE => ApplyResult.Unknown
-                  | SOME w => word w)
+                (case IntInfRep.fromIntInf i of
+                    IntInfRep.Big _ => ApplyResult.Unknown
+                  | IntInfRep.Small w => word w)
+           | (IntInf_toVector, [IntInf i]) =>
+                (case IntInfRep.fromIntInf i of
+                    IntInfRep.Big v => wordVector v
+                  | IntInfRep.Small _ => ApplyResult.Unknown)
            | (_, [IntInf i1, IntInf i2, _]) => intInfBinary (i1, i2)
            | (_, [IntInf i1, Word w2, _]) => intInfShiftOrToString (i1, w2)
            | (_, [IntInf i1, _]) => intInfUnary (i1)
@@ -1692,6 +1751,10 @@ fun ('a, 'b) apply (p: 'a t,
            | (Real_lt _, [Real r1, Real r2]) => boolOpt (RealX.lt (r1, r2))
            | (Real_qequal _, [Real r1, Real r2]) => boolOpt (RealX.qequal (r1, r2))
            | (Real_castToWord _, [Real r]) => wordOpt (RealX.castToWord r)
+           | (Vector_vector, (Word w)::_) =>
+                (wordVector o WordXVector.fromList)
+                ({elementSize = WordX.size w},
+                 List.map (cs, Const.deWord))
            | (Word_castToReal _, [Word w]) => realOpt (RealX.castFromWord w)
            | (Word_rndToReal (_, s, {signed}), [Word w]) =>
                 realOpt
@@ -1724,11 +1787,18 @@ fun ('a, 'b) apply (p: 'a t,
                 wordS (WordX.rshift, s, w1, w2)
            | (Word_sub _, [Word w1, Word w2]) => word (WordX.sub (w1, w2))
            | (Word_subCheck s, [Word w1, Word w2]) => wcheck (op -, s, w1, w2)
-           | (Word_toIntInf, [Word w]) => intInf (SmallIntInf.fromWord w)
+           | (Word_toIntInf, [Word w]) =>
+                (case IntInfRep.smallToIntInf w of
+                    NONE => ApplyResult.Unknown
+                  | SOME i => intInf i)
            | (Word_extdToWord (_, s, {signed}), [Word w]) =>
                 word (if signed then WordX.resizeX (w, s)
                       else WordX.resize (w, s))
            | (Word_xorb _, [Word w1, Word w2]) => word (WordX.xorb (w1, w2))
+           | (WordVector_toIntInf, [WordVector v]) =>
+                (case IntInfRep.bigToIntInf v of
+                    NONE => ApplyResult.Unknown
+                  | SOME i => intInf i)
            | _ => ApplyResult.Unknown)
              handle Chr => ApplyResult.Unknown
                   | Div => ApplyResult.Unknown
@@ -2026,7 +2096,6 @@ fun ('a, 'b) apply (p: 'a t,
                               | CPointer_lt => f
                               | IntInf_compare =>
                                    word (WordX.zero WordSize.compareRes)
-                              | IntInf_equal => t
                               | MLton_eq => t
                               | MLton_equal => t
                               | Real_lt _ => f

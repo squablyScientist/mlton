@@ -6,10 +6,11 @@
  * See the file MLton-LICENSE for details.
  *)
 
-ann  
+ann
    "deadCode true"
+   "nonexhaustiveBind warn" "nonexhaustiveMatch warn"
+   "redundantBind warn" "redundantMatch warn"
    "sequenceNonUnit warn"
-   "nonexhaustiveMatch warn" "redundantMatch warn"
    "warnUnused false" "forceUsed"
 in
    ../primitive/primitive.mlb
@@ -32,6 +33,20 @@ in
       ../config/seqindex/seqindex-$(SEQINDEX_INT).sml
       $(LIB_MLTON_DIR)/targets/$(TARGET)/sml/c-types.sml
    end end
+
+   ../arrays-and-vectors/slice0.sig
+   ../arrays-and-vectors/sequence0.sig
+   local
+      local
+         ../config/bind/int-prim.sml
+         ../config/bind/int-inf-prim.sml
+      in ann "forceUsed" in 
+         ../config/default/default-$(DEFAULT_INT).sml
+      end end
+   in
+      ../arrays-and-vectors/sequence0.sml
+   end
+
    ../integer/int-inf0.sml
    local
       local 

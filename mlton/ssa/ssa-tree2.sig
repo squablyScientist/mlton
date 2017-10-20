@@ -1,4 +1,5 @@
-(* Copyright (C) 2013 Matthew Fluet, David Larsen.
+(* Copyright (C) 2017 Matthew Fluet.
+ * Copyright (C) 2013 Matthew Fluet, David Larsen.
  * Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
@@ -71,6 +72,7 @@ signature SSA_TREE2 =
             val cpointer: t
             val datatypee: Tycon.t -> t
             val dest: t -> dest
+            val deVector1: t -> t
             val equals: t * t -> bool
             val intInf: t
             val isVector: t -> bool
@@ -141,7 +143,6 @@ signature SSA_TREE2 =
             val foreachDef: t * (Var.t * Type.t -> unit) -> unit
             val foreachUse: t * (Var.t -> unit) -> unit
             val layout: t -> Layout.t
-            val prettifyGlobals: t vector -> (Var.t -> string option)
             val profile: ProfileExp.t -> t
             val replaceUses: t * (Var.t -> Var.t) -> t
          end
@@ -270,9 +271,10 @@ signature SSA_TREE2 =
             val foreachVar: t * (Var.t * Type.t -> unit) -> unit
             val layout: t -> Layout.t
             val layoutDot:
-               t * (Var.t -> string option) -> {destroy: unit -> unit,
-                                                graph: Layout.t,
-                                                forest: unit -> Layout.t}
+               t * (Var.t -> Layout.t) -> {destroy: unit -> unit,
+                                           controlFlowGraph: Layout.t,
+                                           dominatorForest: unit -> Layout.t,
+                                           loopForest: unit -> Layout.t}
             val name: t -> Func.t
             val new: {blocks: Block.t vector,
                       entries: FunctionEntry.t vector,

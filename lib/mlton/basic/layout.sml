@@ -1,4 +1,4 @@
-(* Copyright (C) 2009 Matthew Fluet.
+(* Copyright (C) 2009,2014,2017 Matthew Fluet.
  * Copyright (C) 1999-2006 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  *
@@ -72,11 +72,8 @@ end
 
 fun indent (t, n) = T {length = length t, tree = Indent (t, n)}
 
-val tabSize: int = 8
-
 fun blanks (n: int): string =
-   concat [String.make (n div tabSize, #"\t"),
-           String.make (n mod tabSize, #" ")]
+   String.make (n, #" ")
 
 fun outputTree (t, out) =
    let val print = Out.outputc out
@@ -186,11 +183,12 @@ fun outputWidth (t, width, out) =
           print = Out.outputc out}
 
 local
-   val defaultWidth: int = 80
+   val defaultWidth: int ref = ref 80
 in
-   fun output (t, out) = outputWidth (t, defaultWidth, out)
+   fun setDefaultWidth w = defaultWidth := w
+   fun output (t, out) = outputWidth (t, !defaultWidth, out)
    val print =
-      fn (t, p) => print {tree = t, lineWidth = defaultWidth, print = p}
+      fn (t, p) => print {tree = t, lineWidth = !defaultWidth, print = p}
 end
 
 fun outputl (t, out) = (output (t, out); Out.newline out)
@@ -230,6 +228,20 @@ fun alignPrefix (ts, prefix) =
                               ~ (String.size prefix))]
 
 local
+   fun fillAux ts =
+      case ts of
+         [] => []
+       | [t] => [t]
+       | t1::t2::ts => mayAlign [t1, t2] :: fillAux ts
+in
+   fun fill ts =
+      case ts of
+         [] => empty
+       | [t] => t
+       | _ => fill (fillAux ts)
+end
+
+local
    fun sequence (start, finish, sep) ts =
       seq [str start, mayAlign (separateRight (ts, sep)), str finish]
 in
@@ -239,18 +251,13 @@ in
    fun record fts =
       sequence ("{", "}", ",")
       (map (fn (f, t) => seq [str (f ^ " = "), t]) fts)
+   fun vector v =
+      sequence ("#[", "]", ",")
+      (Pervasive.Vector.foldr (op ::) [] v)
+   fun array v =
+      sequence ("#![", "]", ",")
+      (Pervasive.Array.foldr (op ::) [] v)
 end
-
-fun vector v = tuple (Pervasive.Vector.foldr (op ::) [] v)
-
-structure Array =
-   struct
-      open Pervasive.Array
-
-      fun toList a = foldr (op ::) [] a
-   end
-
-val array = list o Array.toList
 
 fun namedRecord (name, fields) = seq [str name, str " ", record fields]
 

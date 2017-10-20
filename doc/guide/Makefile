@@ -3,7 +3,11 @@ export LC_ALL = C
 NULL :=
 
 ASCIIDOC := asciidoc
+ifneq ($(shell which $(ASCIIDOC) 2> /dev/null),)
 ASCIIDOC_CONF_DIR := $(shell $(ASCIIDOC) -v /dev/null 2>&1 | head -n 1 | sed 's|.*reading: \(.*\)/asciidoc.conf|\1|')
+else
+ASCIIDOC_CONF_DIR :=
+endif
 ASCIIDOC_MLTON_FLAGS := $(shell cat conf/asciidoc-mlton.flags | sed 's|^\#.*||')
 ASCIIDOC_MLTON_DEPS := bin/InclGitFile.py conf/asciidoc-mlton.flags $(shell cat conf/asciidoc-mlton.flags | sed -n 's|^.*\(conf/.*\)$$|\1|p')
 ASCIIDOC_HTML5_FLAGS := $(ASCIIDOC_MLTON_FLAGS) $(shell cat conf/asciidoc-html5.flags | sed 's|^\#.*||')
@@ -16,8 +20,8 @@ DBLATEX := dblatex
 GEN_PAGES := Index mlton-guide
 GEN_ATTACHMENTS := $(foreach size,16 32 64 128 256 512 1024,Logo.attachments/mlton-$(size).png Logo.attachments/mlton-$(size).pdf)
 
-SRC_PAGES := $(filter-out $(GEN_PAGES),$(patsubst ./%.txt,%,$(shell cd txt ; find . -type f -name '*.txt')))
-SRC_ATTACHMENTS := $(filter-out $(GEN_ATTACHMENTS),$(patsubst ./%,%,$(foreach dir,$(shell cd txt ; find . -type d -name '*.attachments'),$(shell cd txt ; find $(dir) -type f ! -name '.gitignore' ! -name '.gitattributes'))))
+SRC_PAGES := $(filter-out $(GEN_PAGES),$(patsubst ./%.adoc,%,$(shell cd src ; find . -type f -name '*.adoc')))
+SRC_ATTACHMENTS := $(filter-out $(GEN_ATTACHMENTS),$(patsubst ./%,%,$(foreach dir,$(shell cd src ; find . -type d -name '*.attachments'),$(shell cd src ; find $(dir) -type f ! -name '.gitignore' ! -name '.gitattributes'))))
 
 HTML5_XTRA := asciidoc.css asciidoc.js pygments.css mlton.css mlton-gcse.js index.html
 HTML5_XTRA_PAGES := Index
@@ -26,19 +30,21 @@ MLTON_ORG_XTRA := $(HTML5_XTRA)
 MLTON_ORG_XTRA_PAGES := $(HTML5_XTRA_PAGES)
 MLTON_ORG_XTRA_ATTACHMENTS := $(foreach size,16 32 64 128 256 512 1024,Logo.attachments/mlton-$(size).png)
 MLTON_ORG := $(addprefix www.mlton.org/, $(SRC_PAGES) $(SRC_ATTACHMENTS) $(MLTON_ORG_XTRA) $(MLTON_ORG_XTRA_PAGES) $(MLTON_ORG_XTRA_ATTACHMENTS))
+MLTON_ORG_TORM := $(filter-out $(MLTON_ORG),$(shell if [ -d www.mlton.org ]; then find www.mlton.org -type f; fi))
 
 LOCALHOST_XTRA := $(filter-out mlton-gcse.js,$(HTML5_XTRA))
 LOCALHOST_XTRA_PAGES := $(HTML5_XTRA_PAGES)
 LOCALHOST_XTRA_ATTACHMENTS := $(foreach size,16 32 64 128 256 512 1024,Logo.attachments/mlton-$(size).png)
 LOCALHOST := $(addprefix localhost/, $(SRC_PAGES) $(SRC_ATTACHMENTS) $(LOCALHOST_XTRA) $(LOCALHOST_XTRA_PAGES) $(LOCALHOST_XTRA_ATTACHMENTS))
+LOCALHOST_TORM := $(filter-out $(LOCALHOST),$(shell if [ -d localhost ]; then find localhost -type f; fi))
 
 
 ALL :=
-ifneq ($(shell which $(ASCIIDOC)),)
-ifneq ($(shell which pygmentize),)
-ALL += $(LOCALHOST)
+ifneq ($(shell which $(ASCIIDOC) 2> /dev/null),)
+ifneq ($(shell which pygmentize 2> /dev/null),)
+ALL += $(LOCALHOST) localhost-rm
 endif
-ifneq ($(shell which $(DBLATEX)),)
+ifneq ($(shell which $(DBLATEX) 2> /dev/null),)
 ALL += mlton-guide.pdf
 endif
 endif
@@ -47,10 +53,10 @@ endif
 all: $(ALL)
 
 
-ifneq ($(shell which gm),)
+ifneq ($(shell which gm 2> /dev/null),)
 CONVERT := gm convert
 else
-ifneq ($(shell which convert),)
+ifneq ($(shell which convert 2> /dev/null),)
 CONVERT := convert
 else
 CONVERT := no-convert
@@ -98,10 +104,10 @@ conf/html5-footer.conf : $(ASCIIDOC_CONF_DIR)/html5.conf bin/mk-html5-footer-con
 	./bin/mk-html5-footer-conf.sh $< $@
 
 
-txt/Index.txt : bin/mk-index.sh $(foreach page,$(SRC_PAGES),txt/$(page).txt)
+src/Index.adoc : bin/mk-index.sh $(foreach page,$(SRC_PAGES),src/$(page).adoc)
 	./bin/mk-index.sh $(SRC_PAGES) > $@
 
-txt/mlton-guide.txt : bin/mk-mlton-guide.sh $(foreach page,$(SRC_PAGES),txt/$(page).txt)
+src/mlton-guide.adoc : bin/mk-mlton-guide.sh $(foreach page,$(SRC_PAGES),src/$(page).adoc)
 	./bin/mk-mlton-guide.sh $(SRC_PAGES) > $@
 
 
@@ -129,34 +135,41 @@ conf/mlton-gcse.js: ;
 	rm -f $@ ; mkdir -p $(dir $@) ; ln -s Home $@ ; touch $@
 
 
-www.mlton.org/% : txt/%.txt $(ASCIIDOC_HTML5_DEPS) bin/mk-git-attribute-entity-flags.sh
+www.mlton.org/% : src/%.adoc $(ASCIIDOC_HTML5_DEPS) bin/mk-git-attribute-entity-flags.sh
 	mkdir -p $(dir $@) ; $(ASCIIDOC) $(ASCIIDOC_HTML5_FLAGS) $(shell ./bin/mk-git-attribute-entity-flags.sh $<) -a mlton-guide-host=www.mlton.org -a mlton-guide-page=$(basename $(notdir $<)) -o $@ $<
 
-www.mlton.org/% : txt/%
+www.mlton.org/% : src/%
 	mkdir -p $(dir $@) ; cp -prf $< $@
+
+.PHONY: www.mlton.org-rm
+www.mlton.org-rm: $(MLTON_ORG)
+	@rm -rf $(MLTON_ORG_TORM)
 
 .PHONY: www.mlton.org
 www.mlton.org: $(MLTON_ORG)
 
 .PHONY: upload_www.mlton.org
-upload_www.mlton.org: $(MLTON_ORG)
+upload_www.mlton.org: $(MLTON_ORG) www.mlton.org-rm
 	rsync -avzP --delete -e ssh www.mlton.org/ fluet,mlton@web.sourceforge.net:htdocs/wiki
 
 
-localhost/% : txt/%.txt $(ASCIIDOC_HTML5_DEPS) bin/mk-git-attribute-entity-flags.sh
-	mkdir -p $(dir $@) ; $(ASCIIDOC) $(ASCIIDOC_HTML5_FLAGS) $(shell ./bin/mk-git-attribute-entity-flags.sh $<) -a mlton-guide-host=localhost -a mlton-guide-page=$(basename $(notdir $<)) -o $@ $<
+localhost/% : src/%.adoc $(ASCIIDOC_HTML5_DEPS)
+	mkdir -p $(dir $@) ; $(ASCIIDOC) $(ASCIIDOC_HTML5_FLAGS) -a mlton-guide-host=localhost -a mlton-guide-page=$(basename $(notdir $<)) -o $@ $<
 
-localhost/% : txt/%
+localhost/% : src/%
 	mkdir -p $(dir $@) ; cp -prf $< $@
 
+.PHONY: localhost-rm
+localhost-rm: $(LOCALHOST)
+	@rm -rf $(LOCALHOST_TORM)
+
 .PHONY: localhost
-localhost: $(LOCALHOST)
+localhost: $(LOCALHOST) localhost-rm
 
-
-txt/mlton-guide.xml : txt/mlton-guide.txt conf/asciidoc-docbook45.flags $(ASCIIDOC_DOCBOOK45_DEPS)
+src/mlton-guide.xml : src/mlton-guide.adoc conf/asciidoc-docbook45.flags $(ASCIIDOC_DOCBOOK45_DEPS)
 	mkdir -p $(dir $@) ; $(ASCIIDOC) $(ASCIIDOC_DOCBOOK45_FLAGS) -o $@ $<
 	@true || xmllint --nonet --noout --valid $@ || true
-mlton-guide.pdf : txt/mlton-guide.xml txt/Logo.attachments/mlton-128.pdf conf/mlton-dblatex.xsl conf/mlton-dblatex.sty
+mlton-guide.pdf : src/mlton-guide.xml src/Logo.attachments/mlton-128.pdf conf/mlton-dblatex.xsl conf/mlton-dblatex.sty
 	$(DBLATEX) -t pdf -p conf/mlton-dblatex.xsl -s conf/mlton-dblatex.sty -o $@ $<
 
 

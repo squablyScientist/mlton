@@ -1,4 +1,4 @@
-(* Copyright (C) 2009 Matthew Fluet.
+(* Copyright (C) 2009,2014,2017 Matthew Fluet.
  * Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -23,11 +23,12 @@ signature CONST =
       sharing ConstType.RealSize = RealX.RealSize
       sharing ConstType.WordSize = WordX.WordSize
 
-      structure SmallIntInf:
+      structure IntInfRep:
          sig
-            val fromWord: WordX.t -> IntInf.t
-            val isSmall: IntInf.t -> bool
-            val toWord: IntInf.t -> WordX.t option
+            datatype t = Big of WordXVector.t | Small of WordX.t
+            val bigToIntInf: WordXVector.t -> IntInf.t option
+            val fromIntInf: IntInf.t -> t
+            val smallToIntInf: WordX.t -> IntInf.t option
          end
 
       datatype t =
@@ -37,6 +38,8 @@ signature CONST =
        | Word of WordX.t
        | WordVector of WordXVector.t
 
+      val deWord: t -> WordX.t
+      val deWordOpt: t -> WordX.t option
       val equals: t * t -> bool
       val intInf: IntInf.t -> t
       val hash: t -> word

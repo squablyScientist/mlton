@@ -1,4 +1,5 @@
-(* Copyright (C) 2013 Matthew Fluet, David Larsen.
+(* Copyright (C) 2014,2017 Matthew Fluet.
+ * Copyright (C) 2013 Matthew Fluet, David Larsen.
  * Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
@@ -62,6 +63,7 @@ structure Type =
          val (deTupleOpt,deTuple,isTuple) = make (fn Tuple ts => SOME ts | _ => NONE)
          val (_,deVector,_) = make (fn Vector t => SOME t | _ => NONE)
          val (_,deWeak,_) = make (fn Weak t => SOME t | _ => NONE)
+         val (deWordOpt,deWord,_) = make (fn Word ws => SOME ws | _ => NONE)
       end
 
       local
@@ -137,7 +139,7 @@ structure Type =
       in
          fun tuple ts =
             if 1 = Vector.length ts
-               then Vector.sub (ts, 0)
+               then Vector.first ts
             else lookup (Vector.fold (ts, w, fn (t, w) =>
                                       Word.xorb (w * generator, hash t)),
                          Tuple ts)
@@ -182,8 +184,10 @@ structure Type =
                | Tuple ts =>
                     if Vector.isEmpty ts
                        then str "unit"
-                    else paren (seq (separate (Vector.toListMap (ts, layout),
-                                               " * ")))
+                    else seq [str "(",
+                              (mayAlign o separateRight)
+                              (Vector.toListMap (ts, layout), " *"),
+                              str ")"]
                | Vector t => seq [layout t, str " vector"]
                | Weak t => seq [layout t, str " weak"]
                | Word s => str (concat ["word", WordSize.toString s])))
@@ -245,7 +249,7 @@ structure Cases =
          let
             fun doit v =
                if Vector.length v >= 1
-                  then let val (_, a) = Vector.sub (v, 0)
+                  then let val (_, a) = Vector.first v
                        in a
                        end
                else Error.bug "SsaTree.Cases.hd"
@@ -257,7 +261,7 @@ structure Cases =
 
       fun isEmpty (c: t): bool =
          let
-            fun doit v = 0 = Vector.length v
+            fun doit v = Vector.isEmpty v
          in
             case c of
                Con cs => doit cs
@@ -296,27 +300,11 @@ structure Cases =
       fun foreach (c, f) = fold (c, (), fn (x, ()) => f x)
    end
 
-local open Layout
-in
-   fun layoutTuple xs = Vector.layout Var.layout xs
-end
-
-structure Var =
+structure Size =
    struct
-      open Var
-
-      fun pretty (x, global) =
-         case global x of
-            NONE => toString x
-          | SOME s => s
-
-      fun prettys (xs: Var.t vector, global: Var.t -> string option) =
-         Layout.toString (Vector.layout
-                          (fn x =>
-                           case global x of
-                              NONE => layout x
-                            | SOME s => Layout.str s)
-                          xs)
+      val check: int * int option -> int *bool =
+         fn (size, NONE) => (size,false)
+          | (size, SOME max) => (size,size > max)
    end
 
 structure Exp =
@@ -335,6 +323,16 @@ structure Exp =
        | Var of Var.t
 
       val unit = Tuple (Vector.new0 ())
+
+      (* Vals to determine the size for inline.fun and loop optimization*)
+      val size : t -> int =
+         fn ConApp {args, ...} => 1 + Vector.length args
+          | Const _ => 0
+          | PrimApp {args, ...} => 1 + Vector.length args
+          | Profile _ => 0
+          | Select _ => 1 + 1
+          | Tuple xs => 1 + Vector.length xs
+          | Var _ => 0
 
       fun foreachVar (e, v) =
          let
@@ -366,29 +364,35 @@ structure Exp =
              | Var x => Var (fx x)
          end
 
-      fun layout e =
+      fun layout' (e, layoutVar) =
          let
             open Layout
+            fun layoutArgs xs = Vector.layout layoutVar xs
          in
             case e of
                ConApp {con, args} =>
-                  seq [Con.layout con, str " ", layoutTuple args]
+                  seq [Con.layout con,
+                       if Vector.isEmpty args
+                          then empty
+                          else seq [str " ", layoutArgs args]]
              | Const c => Const.layout c
              | PrimApp {prim, targs, args} =>
                   seq [Prim.layout prim,
                        if !Control.showTypes
-                          then if 0 = Vector.length targs
+                          then if Vector.isEmpty targs
                                   then empty
                                else Vector.layout Type.layout targs
-                       else empty,
-                       seq [str " ", layoutTuple args]]
+                          else empty,
+                       str " ",
+                       layoutArgs args]
              | Profile p => ProfileExp.layout p
              | Select {tuple, offset} =>
                   seq [str "#", Int.layout offset, str " ",
-                       Var.layout tuple]
-             | Tuple xs => layoutTuple xs
-             | Var x => Var.layout x
+                       paren (layoutVar tuple)]
+             | Tuple xs => layoutArgs xs
+             | Var x => layoutVar x
          end
+      fun layout e = layout' (e, Var.layout)
 
       fun maySideEffect (e: t): bool =
          case e of
@@ -438,23 +442,6 @@ structure Exp =
       end
 
       val hash = Trace.trace ("SsaTree.Exp.hash", layout, Word.layout) hash
-
-      fun toPretty (e: t, global: Var.t -> string option): string =
-         case e of
-            ConApp {con, args} =>
-               concat [Con.toString con, " ", Var.prettys (args, global)]
-          | Const c => Const.toString c
-          | PrimApp {prim, args, ...} =>
-               Layout.toString
-               (Prim.layoutApp (prim, args, fn x =>
-                                case global x of
-                                   NONE => Var.layout x
-                                 | SOME s => Layout.str s))
-          | Profile p => ProfileExp.toString p
-          | Select {tuple, offset} =>
-               concat ["#", Int.toString offset, " ", Var.toString tuple]
-          | Tuple xs => Var.prettys (xs, global)
-          | Var x => Var.toString x
    end
 datatype z = datatype Exp.t
 
@@ -471,20 +458,25 @@ structure Statement =
          val exp = make #exp
       end
 
-      fun layout (T {var, ty, exp}) =
+      fun sizeAux (T {exp, ...}, acc, max, sizeExp) =
+         Size.check (sizeExp exp + acc, max)
+
+      fun layout' (T {var, ty, exp}, layoutVar) =
          let
             open Layout
+            val (sep, ty) =
+               if !Control.showTypes
+                  then (str ":", indent (seq [Type.layout ty, str " ="], 2))
+                  else (str " =", empty)
          in
-            seq [seq [case var of
-                         NONE => empty
-                       | SOME var =>
-                            seq [Var.layout var,
-                                 if !Control.showTypes
-                                    then seq [str ": ", Type.layout ty]
-                                 else empty,
-                                 str " = "]],
-                 Exp.layout exp]
+            mayAlign [mayAlign [seq [case var of
+                                        NONE => str "_"
+                                      | SOME var => Var.layout var,
+                                     sep],
+                                ty],
+                      indent (Exp.layout' (exp, layoutVar), 2)]
          end
+      fun layout e = layout' (e, Var.layout)
 
       local
          fun make f x =
@@ -497,33 +489,39 @@ structure Statement =
 
       fun clear s = Option.app (var s, Var.clear)
 
-      fun prettifyGlobals (v: t vector): Var.t -> string option =
+      fun prettifyGlobals (v: t vector): Var.t -> Layout.t =
          let
-            val {get = global: Var.t -> string option, set = setGlobal, ...} =
-               Property.getSet (Var.plist, Property.initConst NONE)
+            val {get = global: Var.t -> Layout.t, set = setGlobal, ...} =
+               Property.getSet (Var.plist, Property.initFun Var.layout)
             val _ = 
                Vector.foreach
                (v, fn T {var, exp, ...} =>
                 Option.app
                 (var, fn var =>
                  let
-                    fun set s =
+                    fun set () =
                        let
-                          val maxSize = 10
+                          val s = Layout.toString (Exp.layout' (exp, global))
+                          val maxSize = 20
+                          val dots = " ... "
+                          val dotsSize = String.size dots
+                          val frontSize = 2 * (maxSize - dotsSize) div 3
+                          val backSize = maxSize - dotsSize - frontSize
                           val s = 
                              if String.size s > maxSize
-                                then concat [String.prefix (s, maxSize), "..."]
+                                then concat [String.prefix (s, frontSize),
+                                             dots,
+                                             String.suffix (s, backSize)]
                              else s
                        in
-                          setGlobal (var, SOME s)
+                          setGlobal (var, Layout.seq [Var.layout var,
+                                                      Layout.str (" (*" ^ s ^ "*)")])
                        end
                  in
                     case exp of
-                       Const c => set (Layout.toString (Const.layout c))
-                     | ConApp {con, args, ...} =>
-                          if Vector.isEmpty args
-                             then set (Con.toString con)
-                          else set (concat [Con.toString con, "(...)"])
+                       Const _ => set ()
+                     | ConApp _ => set ()
+                     | Tuple xs => if Vector.isEmpty xs then set () else ()
                      | _ => ()
                  end))
          in
@@ -697,6 +695,17 @@ structure Transfer =
                      args: Var.t vector,
                      return: Label.t} (* Must be nullary. *)
 
+      (* Vals to determine the size for inline.fun and loop optimization*)
+      val size =
+         fn Arith {args, ...} => 1 + Vector.length args
+          | Bug => 1
+          | Call {args, ...} => 1 + Vector.length args
+          | Case {cases, ...} => 1 + Cases.length cases
+          | Goto {args, ...} => 1 + Vector.length args
+          | Raise xs => 1 + Vector.length xs
+          | Return xs => 1 + Vector.length xs
+          | Runtime {args, ...} => 1 + Vector.length args
+
       fun foreachFuncLabelVar (t, func: Func.t -> unit, label: Label.t -> unit, var) =
          let
             fun vars xs = Vector.foreach (xs, var)
@@ -767,10 +776,10 @@ structure Transfer =
       fun replaceLabel (t, f) = replaceLabelVar (t, f, fn x => x)
       fun replaceVar (t, f) = replaceLabelVar (t, fn l => l, f)
 
-      local open Layout
-      in
-         fun layoutCase {test, cases, default} =
+      local
+         fun layoutCase ({test, cases, default}, layoutVar) =
             let
+               open Layout
                fun doit (l, layout) =
                   Vector.toListMap
                   (l, fn (i, l) =>
@@ -786,33 +795,56 @@ structure Transfer =
                    | SOME j =>
                         cases @ [seq [str "_ => ", Label.layout j]]
             in
-               align [seq [str "case ", Var.layout test, str " of"],
+               align [seq [str "case ", layoutVar test, str " of"],
                       indent (alignPrefix (cases, "| "), 2)]
             end
-
-         val layout =
-            fn Arith {prim, args, overflow, success, ...} =>
-                  seq [Label.layout success, str " ",
-                       tuple [Prim.layoutApp (prim, args, Var.layout)],
-                       str " Overflow => ",
-                       Label.layout overflow, str " ()"]
-             | Bug => str "Bug"
-             | Call {func, entry, args, return} =>
-                  seq [Func.layout func, str "@", FuncEntry.layout entry,
-                       str " ", layoutTuple args, str " ", Return.layout return]
-             | Case arg => layoutCase arg
-             | Goto {dst, args} =>
-                  seq [Label.layout dst, str " ", layoutTuple args]
-             | Raise xs => seq [str "raise ", layoutTuple xs]
-             | Return xs =>
-                  seq [str "return ",
-                       if 1 = Vector.length xs
-                          then Var.layout (Vector.sub (xs, 0))
-                       else layoutTuple xs]
-             | Runtime {prim, args, return} =>
-                  seq [Label.layout return, str " ", 
-                       tuple [Prim.layoutApp (prim, args, Var.layout)]]
+      in
+         fun layout' (t, layoutVar) =
+            let
+               open Layout
+               fun layoutArgs xs = Vector.layout layoutVar xs
+               fun layoutPrim {prim, args} =
+                  Exp.layout'
+                  (Exp.PrimApp {prim = prim,
+                                targs = Vector.new0 (),
+                                args = args},
+                   layoutVar)
+            in
+               case t of
+                  Arith {prim, args, overflow, success, ...} =>
+                     seq [Label.layout success, str " ",
+                          tuple [layoutPrim {prim = prim, args = args}],
+                          str " handle Overflow => ", Label.layout overflow]
+                | Bug => str "Bug"
+                | Call {func, entry, args, return} =>
+                     let
+                        val call = seq [Func.layout func, str "@",
+                                        FuncEntry.layout entry, str " ",
+                                        layoutArgs args]
+                     in
+                        case return of
+                           Return.Dead => seq [str "dead ", paren call]
+                         | Return.NonTail {cont, handler} =>
+                              seq [Label.layout cont, str " ",
+                                   paren call,
+                                   str " handle _ => ",
+                                   case handler of
+                                      Handler.Caller => str "raise"
+                                    | Handler.Dead => str "dead"
+                                    | Handler.Handle l => Label.layout l]
+                         | Return.Tail => seq [str "return ", paren call]
+                     end
+                | Case arg => layoutCase (arg, layoutVar)
+                | Goto {dst, args} =>
+                     seq [Label.layout dst, str " ", layoutArgs args]
+                | Raise xs => seq [str "raise ", layoutArgs xs]
+                | Return xs => seq [str "return ", layoutArgs xs]
+                | Runtime {prim, args, return} =>
+                     seq [Label.layout return, str " ",
+                          tuple [layoutPrim {prim = prim, args = args}]]
+            end
       end
+      fun layout t = layout' (t, Var.layout)
 
       fun varsEquals (xs, xs') = Vector.equals (xs, xs', Var.equals)
 
@@ -919,22 +951,44 @@ structure Block =
          val transfer = make #transfer
       end
 
-      fun layout (T {label, args, statements, transfer}) =
+      fun sizeAux (T {statements, transfer, ...},
+                   acc, max, sizeExp, sizeTransfer) =
+         Exn.withEscape
+         (fn escape =>
+          Vector.fold
+          (statements, Size.check (acc + sizeTransfer transfer, max),
+           fn (stmt, (acc, chk)) =>
+           if chk
+              then escape (acc, chk)
+              else Statement.sizeAux (stmt, acc, max, sizeExp)))
+
+      fun sizeAuxV (bs, acc, max, sizeExp, sizeTransfer) =
+         Exn.withEscape
+         (fn escape =>
+          Vector.fold
+          (bs, (acc, false), fn (b, (acc, chk)) =>
+           if chk
+              then escape (acc, chk)
+              else sizeAux (b, acc, max, sizeExp, sizeTransfer)))
+
+      fun sizeV (bs, {sizeExp, sizeTransfer}) =
+         #1 (sizeAuxV (bs, 0, NONE, sizeExp, sizeTransfer))
+
+      fun layout' (T {label, args, statements, transfer}, layoutVar) =
          let
             open Layout
+            fun layoutStatement s = Statement.layout' (s, layoutVar)
+            fun layoutTransfer t = Transfer.layout' (t, layoutVar)
          in
             align [seq [Label.layout label, str " ",
-                        Vector.layout (fn (x, t) =>
-                                       if !Control.showTypes
-                                          then seq [Var.layout x, str ": ",
-                                                    Type.layout t]
-                                       else Var.layout x) args],
+                        layoutFormals args],
                    indent (align
                            [align
-                            (Vector.toListMap (statements, Statement.layout)),
-                            Transfer.layout transfer],
+                            (Vector.toListMap (statements, layoutStatement)),
+                            layoutTransfer transfer],
                            2)]
          end
+      fun layout b = layout' (b, Var.layout)
 
       fun clear (T {label, args, statements, ...}) =
          (Label.clear label
@@ -990,15 +1044,16 @@ structure FunctionEntry =
          val start = make #start
       end
 
-      fun layoutHeaders (T{args, name, start, ...}) =
+      fun layoutHeader (T {args, name, start, ...}) =
          let
             open Layout
          in
-            seq [str "fun_entry ",
-                 FuncEntry.layout name,
-                 str " ",
-                 layoutFormals args,
-                 str " = ", Label.layout start, str " ()"]
+            mayAlign [seq [str "entry ",
+                           FuncEntry.layout name,
+                           str " ",
+                           layoutFormals args,
+                           str " ="],
+                      Transfer.layout (Transfer.Goto {dst = start, args = Vector.new0 ()})]
          end
    end
 
@@ -1038,6 +1093,21 @@ structure Function =
          val mayInline = make #mayInline
          val name = make #name
       end
+
+      fun sizeAux (f, acc, max, sizeExp, sizeTransfer) =
+         Block.sizeAuxV (blocks f, acc, max, sizeExp, sizeTransfer)
+
+      fun size (f, {sizeExp, sizeTransfer}) =
+         #1 (sizeAux (f, 0, NONE, sizeExp, sizeTransfer))
+
+      fun sizeMax (f, {max, sizeExp, sizeTransfer}) =
+         let
+            val (s, chk) = sizeAux (f, 0, max, sizeExp, sizeTransfer)
+         in
+            if chk
+               then NONE
+               else SOME s
+         end
 
       fun foreachVar (f: t, fx: Var.t * Type.t -> unit): unit =
          let
@@ -1153,33 +1223,24 @@ structure Function =
                 nodeBlock = #block o nodeInfo}
             end
 
-         fun layoutDot (f, global: Var.t -> string option) =
+         fun layoutDot (f, layoutVar) =
             let
-               val {name, blocks, entries, ...} = dest f
-               fun makeNameFormals (name: string,
-                                    formals: (Var.t * Type.t) vector): string =
-                  concat [name, " ",
-                          let
-                             open Layout
-                          in
-                             toString
-                             (vector
-                              (Vector.map
-                               (formals, fn (var, ty) =>
-                                if !Control.showTypes
-                                   then seq [Var.layout var,
-                                             str ": ",
-                                             Type.layout ty]
-                                else Var.layout var)))
-                          end]
+               fun toStringStatement s = Layout.toString (Statement.layout' (s, layoutVar))
+               fun toStringTransfer t =
+                  Layout.toString
+                  (case t of
+                      Case {test, ...} =>
+                         Layout.seq [Layout.str "case ", layoutVar test]
+                    | _ => Transfer.layout' (t, layoutVar))
+               fun toStringFormals args = Layout.toString (layoutFormals args)
+               fun toStringHeader (name, args) = concat [name, " ", toStringFormals args]
+               val {name, entries, blocks, returns, raises, ...} = dest f
                open Dot
                val graph = Graph.new ()
                val {get = nodeOptions, ...} =
                   Property.get (Node.plist, Property.initFun (fn _ => ref []))
-               fun pushNodeOption (n: unit Node.t, option): unit =
-                  List.push (nodeOptions n, option)
-               val {get = edgeOptions, set = setEdgeOptions, ...} =
-                  Property.getSetOnce (Edge.plist, Property.initConst [])
+               fun setNodeText (n: unit Node.t, l): unit =
+                  List.push (nodeOptions n, NodeOption.Label l)
                fun newNode () = Graph.newNode graph
                val {destroy = destroyEntryNode, get = entryNode} =
                   Property.destGet (FuncEntry.plist,
@@ -1187,54 +1248,32 @@ structure Function =
                val {destroy = destroyLabelNode, get = labelNode} =
                   Property.destGet (Label.plist,
                                     Property.initFun (fn _ => newNode ()))
-               val _ =
-                  Vector.foreach
-                  (entries, fn FunctionEntry.T {name, args, start} =>
-                   let
-                      val node = entryNode name
-                      val _ = pushNodeOption (node, NodeOption.Shape Ellipse)
-                      val text =
-                         (makeNameFormals (FuncEntry.toString name, args), Left)::
-                         (concat [Label.toString start, " ()"], Left)::
-                         nil
-                      val _ = pushNodeOption (node, NodeOption.Label text)
-                      val e = Graph.addEdge (graph, {from = node, to = labelNode start})
-                      val _ = setEdgeOptions (e, [EdgeOption.Style Solid])
-                   in
-                      ()
-                   end)
+               val {get = edgeOptions, set = setEdgeOptions, ...} =
+                  Property.getSetOnce (Edge.plist, Property.initConst [])
+               fun edge (from, to, label: string, style: style): unit =
+                  let
+                     val e = Graph.addEdge (graph, {from = from,
+                                                    to = to})
+                     val _ = setEdgeOptions (e, [EdgeOption.label label,
+                                                 EdgeOption.Style style])
+                  in
+                     ()
+                  end
                val _ =
                   Vector.foreach
                   (blocks, fn Block.T {label, args, statements, transfer} =>
                    let
                       val from = labelNode label
-                      val _ = pushNodeOption (from, NodeOption.Shape Box)
-                      fun edge (to: Label.t,
-                                label: string,
-                                style: style): unit =
-                         let
-                            val e = Graph.addEdge (graph, {from = from,
-                                                           to = labelNode to})
-                            val _ = setEdgeOptions (e, [EdgeOption.label label,
-                                                        EdgeOption.Style style])
-                         in
-                            ()
-                         end
-                      val rest =
+                      val edge = fn (to, label, style) =>
+                         edge (from, labelNode to, label, style)
+                      val () =
                          case transfer of
-                            Arith {prim, args, overflow, success, ...} =>
+                            Arith {overflow, success, ...} =>
                                (edge (success, "", Solid)
-                                ; edge (overflow, "Overflow", Dashed)
-                                ; [Layout.toString
-                                   (Prim.layoutApp (prim, args, fn x =>
-                                                    Layout.str
-                                                    (Var.pretty (x, global))))])
-                          | Bug => ["bug"]
-                          | Call {func, entry, args, return} =>
+                                ; edge (overflow, "Overflow", Dashed))
+                          | Bug => ()
+                          | Call {return, ...} =>
                                let
-                                  val f = Func.toString func
-                                  val fe = FuncEntry.toString entry
-                                  val args = Var.prettys (args, global)
                                   val _ =
                                      case return of
                                         Return.Dead => ()
@@ -1242,12 +1281,12 @@ structure Function =
                                            (edge (cont, "", Dotted)
                                             ; (Handler.foreachLabel
                                                (handler, fn l =>
-                                                edge (l, "", Dashed))))
+                                                edge (l, "Handle", Dashed))))
                                       | Return.Tail => ()
                                in
-                                  [f, "@", fe, " ", args]
+                                  ()
                                end
-                          | Case {test, cases, default, ...} =>
+                          | Case {cases, default, ...} =>
                                let
                                   fun doit (v, toString) =
                                      Vector.foreach
@@ -1255,68 +1294,90 @@ structure Function =
                                       edge (j, toString x, Solid))
                                   val _ =
                                      case cases of
-                                        Cases.Con v => doit (v, Con.toString)
+                                        Cases.Con v =>
+                                           doit (v, Con.toString)
                                       | Cases.Word (_, v) =>
                                            doit (v, WordX.toString)
                                   val _ = 
                                      case default of
                                         NONE => ()
                                       | SOME j =>
-                                           edge (j, "default", Solid)
+                                           edge (j, "Default", Solid)
                                in
-                                  ["case ", Var.toString test]
+                                  ()
                                end
-                          | Goto {dst, args} =>
-                               (edge (dst, "", Solid)
-                                ; [Label.toString dst, " ",
-                                   Var.prettys (args, global)])
-                          | Raise xs => ["raise ", Var.prettys (xs, global)]
-                          | Return xs => ["return ", Var.prettys (xs, global)]
-                          | Runtime {prim, args, return} =>
-                               (edge (return, "", Solid)
-                                ; [Layout.toString
-                                   (Prim.layoutApp (prim, args, fn x =>
-                                                    Layout.str
-                                                    (Var.pretty (x, global))))])
-                      val text =
+                          | Goto {dst, ...} => edge (dst, "", Solid)
+                          | Raise _ => ()
+                          | Return _ => ()
+                          | Runtime {return, ...} => edge (return, "", Dotted)
+                      val lab =
+                         [(toStringTransfer transfer, Left)]
+                      val lab =
                          Vector.foldr
-                         (statements, [(concat rest, Left)],
-                          fn (Statement.T {var, ty, exp, ...}, ac) =>
-                          let
-                             val exp = Exp.toPretty (exp, global)
-                             val s =
-                                if Type.isUnit ty
-                                   then exp
-                                else
-                                   case var of
-                                      NONE => exp
-                                    | SOME var =>
-                                         concat [Var.toString var,
-                                                 if !Control.showTypes
-                                                    then concat [": ",
-                                                                 Layout.toString
-                                                                 (Type.layout ty)]
-                                                 else "",
-                                                    " = ", exp]
-                          in
-                             (s, Left) :: ac
-                          end)
-                      val text =
-                         (makeNameFormals (Label.toString label, args), Left)::
-                         text
-                      val _ = pushNodeOption (from, NodeOption.Label text)
+                         (statements, lab, fn (s, ac) =>
+                          (toStringStatement s, Left) :: ac)
+                      val lab =
+                         (toStringHeader (Label.toString label, args), Left)::lab
+                      val _ = setNodeText (from, lab)
                    in
                       ()
                    end)
-               val roots = Vector.map (entries, entryNode o FunctionEntry.name)
-               val graphLayout =
+               val entryNodes =
+                  Vector.map
+                  (entries, fn FunctionEntry.T {name, args, start} =>
+                   let
+                      val entryNode = entryNode name
+                      val _ = edge (entryNode, labelNode start, "Start", Solid)
+                      val lab = [(toStringTransfer (Transfer.Goto {dst = start, args = Vector.new0 ()}), Left)]
+                      val lab =
+                         (toStringHeader ("entry " ^ FuncEntry.toString name, args), Left)::
+                         lab
+                      val _ = setNodeText (entryNode, lab)
+                   in
+                      entryNode
+                   end)
+               val funNode =
+                  let
+                     val funNode = newNode ()
+                     val _ =
+                        Vector.foreach
+                        (entryNodes, fn entryNode =>
+                         edge (funNode, entryNode, "entry", Solid))
+                     val lab = []
+                     val lab =
+                        if !Control.showTypes
+                           then ((Layout.toString o Layout.record)
+                                 [("returns",
+                                   Option.layout
+                                   (Vector.layout Type.layout)
+                                   returns),
+                                  ("raises",
+                                   Option.layout
+                                   (Vector.layout Type.layout)
+                                   raises)],
+                                 Left)::lab
+                           else lab
+                     val lab =
+                        ("fun " ^ Func.toString name, Left)::
+                        lab
+                     val _ = setNodeText (funNode, lab)
+                  in
+                     funNode
+                  end
+               val controlFlowGraphLayout =
                   Graph.layoutDot
                   (graph, fn {nodeName} => 
                    {title = concat [Func.toString name, " control-flow graph"],
-                    options = [GraphOption.Rank (Min, Vector.toListMap (roots, fn root => {nodeName = nodeName root}))],
+                    options = [GraphOption.Rank (Min, [{nodeName = nodeName funNode}])],
                     edgeOptions = edgeOptions,
-                    nodeOptions = ! o nodeOptions})
-               fun forestLayout () =
+                    nodeOptions =
+                    fn n => let
+                               val l = ! (nodeOptions n)
+                               open NodeOption
+                            in FontColor Black :: Shape Box :: l
+                            end})
+               val () = Graph.removeNode (graph, funNode)
+               fun dominatorForestLayout () =
                   let
                      val {get = nodeOptions, set = setNodeOptions, ...} =
                         Property.getSetOnce (Node.plist, Property.initConst [])
@@ -1330,20 +1391,18 @@ structure Function =
                         Vector.foreach
                         (blocks, fn Block.T {label, ...} =>
                          setNodeOptions (labelNode label,
-                                         [NodeOption.Shape Box,
-                                          NodeOption.label (Label.toString label)]))
-                     val forestLayout =
+                                         [NodeOption.label (Label.toString label)]))
+                     val dominatorForestLayout =
                         Tree.Forest.layoutDot
                         (Graph.dominatorForest (graph,
-                                                {roots = roots,
+                                                {roots = entryNodes,
                                                  nodeValue = fn n => n}),
                          {title = concat [Func.toString name, " dominator forest"],
                           options = [],
                           nodeOptions = nodeOptions})
                   in
-                     forestLayout
+                     dominatorForestLayout
                   end
-               (*
                fun loopForestLayout () =
                   let
                      val {get = nodeName, set = setNodeName, ...} =
@@ -1355,18 +1414,18 @@ structure Function =
                      val loopForestLayout =
                         Graph.LoopForest.layoutDot
                         (Graph.loopForestSteensgaard (graph,
-                                                      {root = root}),
+                                                      {roots = entryNodes}),
                          {title = concat [Func.toString name, " loop forest"],
                           options = [],
                           nodeName = nodeName})
                   in
                      loopForestLayout
                   end
-               *)
             in
-               {destroy = fn () => (destroyEntryNode (); destroyLabelNode ()),
-                graph = graphLayout,
-                forest = forestLayout}
+               {destroy = destroyEntryNode o destroyLabelNode,
+                controlFlowGraph = controlFlowGraphLayout,
+                dominatorForest = dominatorForestLayout,
+                loopForest = loopForestLayout}
             end
       end
 
@@ -1389,52 +1448,63 @@ structure Function =
             ()
          end
 
-      fun layoutHeaders (f: t): Layout.t =
+      fun layoutHeader (f: t): Layout.t =
          let
             val {entries, name, raises, returns, ...} = dest f
             open Layout
             val entryLayouts =
                Vector.foldr(entries, [],
                   fn (entry, entryLayouts) =>
-                     FunctionEntry.layoutHeaders entry :: entryLayouts
+                     FunctionEntry.layoutHeader entry :: entryLayouts
                )
+            val (sep, rty) =
+               if !Control.showTypes
+                  then (str ":",
+                        indent (seq [record [("returns",
+                                              Option.layout
+                                              (Vector.layout Type.layout)
+                                              returns),
+                                             ("raises",
+                                              Option.layout
+                                              (Vector.layout Type.layout)
+                                              raises)],
+                                     str " ="],
+                                2))
+                  else (str " =", empty)
          in
-            align (seq [str "fun ",
-                 Func.layout name,
-                 str " ",
-                 if !Control.showTypes
-                    then seq [str ": ",
-                              record [("raises",
-                                       Option.layout
-                                       (Vector.layout Type.layout) raises),
-                                      ("returns",
-                                       Option.layout
-                                       (Vector.layout Type.layout) returns)]]
-                 else empty]
-               :: entryLayouts)
+            align ((mayAlign [seq [str "fun ",
+                                   Func.layout name,
+                                   sep],
+                              rty])
+                   :: entryLayouts)
          end
 
-      fun layout (f: t) =
+      fun layout' (f: t, layoutVar) =
          let
             val {blocks, ...} = dest f
             open Layout
+            fun layoutBlock b = Block.layout' (b, layoutVar)
          in
-            align [layoutHeaders f,
-                   indent (align (Vector.toListMap (blocks, Block.layout)), 2)]
+            align [layoutHeader f,
+                   indent (align (Vector.toListMap (blocks, layoutBlock)), 2)]
          end
+      fun layout f = layout' (f, Var.layout)
 
-      fun layouts (f: t, global, output: Layout.t -> unit): unit =
+      fun layouts (f: t, layoutVar, output: Layout.t -> unit): unit =
          let
             val {blocks, name, ...} = dest f
-            val _ = output (layoutHeaders f)
-            val _ = Vector.foreach (blocks, fn b =>
-                                    output (Layout.indent (Block.layout b, 2)))
+            val _ = output (layoutHeader f)
+            val _ =
+               Vector.foreach
+               (blocks, fn b =>
+                output (Layout.indent (Block.layout' (b, layoutVar), 2)))
             val _ =
                if not (!Control.keepDot)
                   then ()
                else
                   let
-                     val {destroy, graph, forest} = layoutDot (f, global)
+                     val {destroy, controlFlowGraph, dominatorForest, loopForest} =
+                        layoutDot (f, layoutVar)
                      val name = Func.toString name
                      fun doit (s, g) =
                         let
@@ -1444,14 +1514,12 @@ structure Function =
                            ({suffix = concat [name, ".", s, ".dot"]},
                             Dot, (), Layout (fn () => g))
                         end
-                     val _ = doit ("cfg", graph)
+                     val _ = doit ("cfg", controlFlowGraph)
                         handle _ => Error.warning "SsaTree.layouts: couldn't layout cfg"
-                     val _ = doit ("dom", forest ())
+                     val _ = doit ("dom", dominatorForest ())
                         handle _ => Error.warning "SsaTree.layouts: couldn't layout dom"
-                     (*
                      val _ = doit ("lf", loopForest ())
                         handle _ => Error.warning "SsaTree.layouts: couldn't layout lf"
-                     *)
                      val () = destroy ()
                   in
                      ()
@@ -1801,7 +1869,7 @@ structure Program =
       fun layouts (p as T {datatypes, globals, functions, main},
                    output': Layout.t -> unit) =
          let
-            val global = Statement.prettifyGlobals globals
+            val layoutVar = Statement.prettifyGlobals globals
             open Layout
             (* Layout includes an output function, so we need to rebind output
              * to the one above.
@@ -1811,14 +1879,14 @@ structure Program =
             output (str "\n\nDatatypes:")
             ; Vector.foreach (datatypes, output o Datatype.layout)
             ; output (str "\n\nGlobals:")
-            ; Vector.foreach (globals, output o Statement.layout)
+            ; Vector.foreach (globals, output o (fn s => Statement.layout' (s, layoutVar)))
             ; output (seq [str "\n\nMain: ",
                            Func.layout (#func main),
                            str "@",
                            FuncEntry.layout (#entry main)])
             ; output (str "\n\nFunctions:")
             ; List.foreach (functions, fn f =>
-                            Function.layouts (f, global, output))
+                            Function.layouts (f, layoutVar, output))
             ; if not (!Control.keepDot)
                  then ()
               else

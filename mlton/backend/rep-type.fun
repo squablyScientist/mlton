@@ -1,4 +1,4 @@
-(* Copyright (C) 2009-2010 Matthew Fluet.
+(* Copyright (C) 2009-2010,2014 Matthew Fluet.
  * Copyright (C) 2004-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  *
@@ -107,6 +107,8 @@ structure Type =
 
       val cint: unit -> t = word o WordSize.cint
 
+      val compareRes = word WordSize.compareRes
+
       val objptrHeader: unit -> t = word o WordSize.objptrHeader
 
       val seqIndex: unit -> t = word o WordSize.seqIndex
@@ -145,7 +147,7 @@ structure Type =
 
       val seq: t vector -> t =
          fn ts =>
-         if 0 = Vector.length ts
+         if Vector.isEmpty ts
             then unit
          else
             let
@@ -181,7 +183,7 @@ structure Type =
 
       val sum: t vector -> t =
          fn ts =>
-         if 0 = Vector.length ts
+         if Vector.isEmpty ts
             then Error.bug "RepType.Type.sum: empty"
          else
             let
@@ -193,8 +195,8 @@ structure Type =
                        Objptr opts => SOME opts
                      | _ => NONE))
             in
-               if 0 = Vector.length opts
-                  then Vector.sub (ts, 0)
+               if Vector.isEmpty opts
+                  then Vector.first ts
                else
                   T {node = (Objptr (QuickSort.sortVector (opts, ObjptrTycon.<=))),
                      width = WordSize.bits (WordSize.objptr ())}
@@ -222,7 +224,7 @@ structure Type =
          case node t of
             Objptr opts =>
                if 1 = Vector.length opts
-                  then SOME (Vector.sub (opts, 0))
+                  then SOME (Vector.first opts)
                else NONE
           | _ => NONE
 
@@ -805,7 +807,7 @@ fun arrayOffsetIsOk {base, index, offset, tyconTy, result, scale} =
     | Objptr opts => 
          (equals (index, seqIndex ()))
          andalso (1 = Vector.length opts)
-         andalso (case tyconTy (Vector.sub (opts, 0)) of
+         andalso (case tyconTy (Vector.first opts) of
                      ObjectType.Array {elt, ...} => 
                         if equals (elt, word8)
                            then (* special case for PackWord operations *)
@@ -844,19 +846,19 @@ structure BuiltInCFunction =
       local
          fun make b = fn () =>
             T {args = Vector.new3 (Type.gcState (), Type.csize (), Type.bool),
-                   bytesNeeded = NONE,
                    convention = Cdecl,
-                   ensuresBytesFree = true,
-                   mayGC = true,
-                   maySwitchThreads = b,
-                   modifiesFrontier = true,
+                   kind = Kind.Runtime {bytesNeeded = NONE,
+                                        ensuresBytesFree = true,
+                                        mayGC = true,
+                                        maySwitchThreads = b,
+                                        modifiesFrontier = true,
+                                        readsStackTop = true,
+                                        writesStackTop = true},
                    prototype = (Vector.new3 (CType.cpointer, CType.csize (), CType.bool),
                                 NONE),
-                   readsStackTop = true,
                    return = Type.unit,
                    symbolScope = SymbolScope.Private,
-                   target = Direct "GC_collect",
-                   writesStackTop = true}
+                   target = Direct "GC_collect"}
          val t = make true
          val f = make false
       in

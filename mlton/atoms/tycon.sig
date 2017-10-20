@@ -1,4 +1,5 @@
-(* Copyright (C) 1999-2005 Henry Cejtin, Matthew Fluet, Suresh
+(* Copyright (C) 2017 Matthew Fluet.
+ * Copyright (C) 1999-2005 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
@@ -8,8 +9,10 @@
 
 signature TYCON_STRUCTS = 
    sig
+      structure AdmitsEquality: ADMITS_EQUALITY
       structure CharSize: CHAR_SIZE
       structure IntSize: INT_SIZE
+      structure Kind: TYCON_KIND
       structure RealSize: REAL_SIZE
       structure WordSize: WORD_SIZE
    end

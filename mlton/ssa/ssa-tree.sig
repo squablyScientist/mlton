@@ -1,4 +1,5 @@
-(* Copyright (C) 2013 Matthew Fluet, David Larsen.
+(* Copyright (C) 2017 Matthew Fluet.
+ * Copyright (C) 2013 Matthew Fluet, David Larsen.
  * Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
@@ -87,6 +88,8 @@ signature SSA_TREE =
             val deTupleOpt: t -> t vector option
             val deVector: t -> t
             val deWeak: t -> t
+            val deWord: t -> WordSize.t
+            val deWordOpt: t -> WordSize.t option
             val equals: t * t -> bool
             val hash: t -> word
             val intInf: t
@@ -126,6 +129,7 @@ signature SSA_TREE =
             val layout: t -> Layout.t
             val maySideEffect: t -> bool
             val replaceVar: t * (Var.t -> Var.t) -> t
+            val size: t -> int
             val unit: t
          end
 
@@ -138,7 +142,6 @@ signature SSA_TREE =
             val clear: t -> unit (* clear the var *)
             val exp: t -> Exp.t
             val layout: t -> Layout.t
-            val prettifyGlobals: t vector -> (Var.t -> string option)
             val profile: ProfileExp.t -> t
             val var: t -> Var.t option
          end
@@ -181,7 +184,7 @@ signature SSA_TREE =
                         test: Var.t}
              | Goto of {args: Var.t vector,
                         dst: Label.t}
-             (* Raise implicitly raises to the caller.  
+             (* Raise implicitly raises to the caller.
               * I.E. the local handler stack must be empty.
               *)
              | Raise of Var.t vector
@@ -195,11 +198,12 @@ signature SSA_TREE =
             val foreachLabel: t * (Label.t -> unit) -> unit
             val foreachLabelVar: t * (Label.t -> unit) * (Var.t -> unit) -> unit
             val foreachVar: t * (Var.t -> unit) -> unit
-            val hash: t -> Word.t 
+            val hash: t -> Word.t
             val layout: t -> Layout.t
             val replaceLabelVar: t * (Label.t -> Label.t) * (Var.t -> Var.t) -> t
             val replaceLabel: t * (Label.t -> Label.t) -> t
             val replaceVar: t * (Var.t -> Var.t) -> t
+            val size: t -> int
          end
 
       structure Block:
@@ -214,6 +218,7 @@ signature SSA_TREE =
             val clear: t -> unit
             val label: t -> Label.t
             val layout: t -> Layout.t
+            val sizeV: t vector * {sizeExp: Exp.t -> int, sizeTransfer: Transfer.t -> int} -> int
             val statements: t -> Statement.t vector
             val transfer: t -> Transfer.t
          end
@@ -272,9 +277,10 @@ signature SSA_TREE =
             val foreachVar: t * (Var.t * Type.t -> unit) -> unit
             val layout: t -> Layout.t
             val layoutDot:
-               t * (Var.t -> string option) -> {destroy: unit -> unit,
-                                                graph: Layout.t,
-                                                forest: unit -> Layout.t}
+               t * (Var.t -> Layout.t) -> {destroy: unit -> unit,
+                                           controlFlowGraph: Layout.t,
+                                           dominatorForest: unit -> Layout.t,
+                                           loopForest: unit -> Layout.t}
             val mayInline: t -> bool
             val name: t -> Func.t
             val new: {blocks: Block.t vector,
@@ -284,6 +290,8 @@ signature SSA_TREE =
                       raises: Type.t vector option,
                       returns: Type.t vector option} -> t
             val profile: t * SourceInfo.t -> t
+            val size: t * {sizeExp: Exp.t -> int, sizeTransfer: Transfer.t -> int} -> int
+            val sizeMax: t * {max: int option, sizeExp: Exp.t -> int, sizeTransfer: Transfer.t -> int} -> int option
          end
 
       structure Program:

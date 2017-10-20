@@ -1,4 +1,4 @@
-(* Copyright (C) 2013 Matthew Fluet.
+(* Copyright (C) 2013-2014 Matthew Fluet.
  * Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -22,11 +22,10 @@ structure IntInf: INT_INF_EXTRA =
       val precision: Int.int option = NONE
 
       fun sign (arg: int): Int.int =
-         if Prim.isSmall arg
-            then I.sign (Prim.dropTagCoerceInt arg)
-            else if isNeg arg
-                    then ~1
-                    else 1
+         case compare (arg, zero) of
+            LESS => ~1
+          | EQUAL => 0
+          | GREATER => 1
 
       fun sameSign (x, y) = sign x = sign y
 
@@ -201,8 +200,8 @@ structure IntInf: INT_INF_EXTRA =
                              NONE => (acc, s)
                            | SOME ({more, shift, chunk}, s') =>
                                 loop (more,
-                                      ((Prim.addTagCoerce shift) * acc)
-                                      + (Prim.addTagCoerce chunk),
+                                      ((W.toLargeInt shift) * acc)
+                                      + (W.toLargeInt chunk),
                                       s')
                      else (acc, s)
                fun reader (s: 'a): (int * 'a) option =
@@ -210,7 +209,7 @@ structure IntInf: INT_INF_EXTRA =
                      NONE => NONE
                    | SOME ({more, chunk, ...}, s') =>
                         SOME (loop (more,
-                                    Prim.addTagCoerce chunk,
+                                    W.toLargeInt chunk,
                                     s'))
             in 
                reader
@@ -334,7 +333,4 @@ structure IntInf: INT_INF_EXTRA =
                  fromLarge = fn {numLimbsMinusOne, mostSigLimbLog2} =>
                  Int.+ (Int.* (MPLimb.wordSize, SeqIndex.toInt numLimbsMinusOne),
                         Int32.toInt mostSigLimbLog2)}
-
-      val isSmall = Prim.isSmall
-      val areSmall = Prim.areSmall
    end

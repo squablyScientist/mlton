@@ -1,4 +1,4 @@
-(* Copyright (C) 2009,2013 Matthew Fluet.
+(* Copyright (C) 2009,2013-2014,2017 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -61,9 +61,6 @@ structure SignalCheck = SignalCheck(structure Rssa = Rssa)
 structure SsaToRssa = SsaToRssa (structure Rssa = Rssa
                                  structure Ssa = Ssa)
 
-nonfix ^
-fun ^ r = valOf (!r)
-
 structure VarOperand =
    struct
       datatype t =
@@ -83,7 +80,7 @@ structure VarOperand =
          end
 
       val operand: t -> M.Operand.t =
-         fn Allocate {operand, ...} => ^operand
+         fn Allocate {operand, ...} => valOf (!operand)
           | Const oper => oper
    end
 
@@ -182,13 +179,16 @@ fun toMachine (program: Ssa.Program.t, codegen) =
                end 
             fun pass ({name, doit}, p) =
                pass' ({name = name, doit = doit}, fn p => p, p)
-            fun maybePass ({name, doit}, p) =
-               if List.exists (!Control.dropPasses, fn re =>
-                               Regexp.Compiled.matchesAll (re, name))
-                  then p
-               else pass ({name = name, doit = doit}, p)
-            val p = maybePass ({name = "rssaShrink1", 
-                                doit = Program.shrink}, p)
+            fun maybePass ({name, doit, execute}, p) =
+               if List.foldr (!Control.executePasses, execute, fn ((re, new), old) =>
+                  if Regexp.Compiled.matchesAll (re, name)
+                     then new
+                     else old)
+               then pass ({name = name, doit = doit}, p)
+               else (Control.messageStr (Control.Pass, name ^ " skipped"); p)
+            val p = maybePass ({name = "rssaShrink1",
+                                doit = Program.shrink,
+                                execute = true}, p)
             val p = pass ({name = "insertLimitChecks", 
                            doit = LimitCheck.transform}, p)
             val p = pass ({name = "insertSignalChecks", 
@@ -196,14 +196,16 @@ fun toMachine (program: Ssa.Program.t, codegen) =
             val p = pass ({name = "implementHandlers", 
                            doit = ImplementHandlers.transform}, p)
             val p = maybePass ({name = "rssaShrink2", 
-                                doit = Program.shrink}, p)
+                                doit = Program.shrink,
+                                execute = true}, p)
             val () = Program.checkHandlers p
             val (p, makeProfileInfo) =
                pass' ({name = "implementProfiling",
                        doit = ImplementProfiling.doit},
                       fn (p,_) => p, p)
             val p = maybePass ({name = "rssaOrderFunctions", 
-                                doit = Program.orderFunctions}, p)
+                                doit = Program.orderFunctions,
+                                execute = true}, p)
          in
             (p, makeProfileInfo)
          end
@@ -328,6 +330,7 @@ let
                 *    end of the backend.
                 *)
                if !Control.codegen = Control.CCodegen
+                  orelse !Control.codegen = Control.LLVMCodegen
                   orelse !Control.profile <> Control.ProfileNone
                   then new ()
                else
@@ -423,11 +426,6 @@ let
                (all, get)
             end
       in
-         val (allIntInfs, globalIntInf) =
-            make (IntInf.equals,
-                  fn i => (IntInf.toString i,
-                           Type.intInf (),
-                           i))
          val (allReals, globalReal) =
             make (RealX.equals,
                   fn r => (RealX.toString r,
@@ -457,10 +455,8 @@ let
             datatype z = datatype Const.t
          in
             case c of
-               IntInf i =>
-                  (case Const.SmallIntInf.toWord i of
-                      NONE => globalIntInf i
-                    | SOME w => M.Operand.Cast (M.Operand.Word w, Type.intInf ()))
+               IntInf _ =>
+                  Error.bug "Backend.constOperand: IntInf"
              | Null => M.Operand.Null
              | Real r => globalReal r
              | Word w => M.Operand.Word w
@@ -502,11 +498,17 @@ let
          in
             case oper of
                ArrayOffset {base, index, offset, scale, ty} =>
-                  M.Operand.ArrayOffset {base = translateOperand base,
-                                         index = translateOperand index,
-                                         offset = offset,
-                                         scale = scale,
-                                         ty = ty}
+                  let
+                     val base = translateOperand base
+                  in
+                     if M.Operand.isLocation base
+                        then M.Operand.ArrayOffset {base = base,
+                                                    index = translateOperand index,
+                                                    offset = offset,
+                                                    scale = scale,
+                                                    ty = ty}
+                     else bogusOp ty
+                  end
              | Cast (z, t) => M.Operand.Cast (translateOperand z, t)
              | Const c => constOperand c
              | EnsuresBytesFree =>
@@ -542,15 +544,10 @@ let
             datatype z = datatype R.Statement.t
          in
             case s of
-               Bind {dst = (var, _), isMutable, src} =>
-                  if isMutable
-                     orelse (case #operand (varInfo var) of
-                                VarOperand.Const _ => false
-                              | _ => true)
-                     then (Vector.new1
-                           (M.Statement.move {dst = varOperand var,
-                                              src = translateOperand src}))
-                  else Vector.new0 ()
+               Bind {dst = (var, _), src, ...} =>
+                  Vector.new1
+                  (M.Statement.move {dst = varOperand var,
+                                     src = translateOperand src})
              | Move {dst, src} =>
                   Vector.new1
                   (M.Statement.move {dst = translateOperand dst,
@@ -665,6 +662,22 @@ let
          valOf o M.Live.fromOperand
       val operandsLive: M.Operand.t vector -> M.Live.t vector =
          fn ops => Vector.map (ops, operandLive)
+      val isGlobal =
+         let
+            val {get: Var.t -> bool, set, rem, ...} =
+               Property.getSet
+               (Var.plist,
+                Property.initRaise ("Backend.toMachine.isGlobal", Var.layout))
+            val _ =
+               Function.foreachDef (#func main, fn (x, _) => set (x, false))
+            val _ =
+               List.foreach
+               (functions, fn f =>
+                (Function.foreachUse (f, fn x => set (x, true))
+                 ; Function.foreachDef (f, fn (x, _) => rem x)))
+         in
+            get
+         end
       fun genFunc (f: Function.t, isMain: bool): unit =
          let
             val f = eliminateDeadCode f
@@ -680,10 +693,25 @@ let
             fun newVarInfo (x, ty: Type.t) =
                let
                   val operand =
-                     if isMain
-                        then VarOperand.Const (M.Operand.Global
-                                               (M.Global.new {isRoot = true,
-                                                              ty = ty}))
+                     if isMain andalso isGlobal x
+                        then let
+                                val _ =
+                                   Control.diagnostics
+                                   (fn display =>
+                                    let
+                                       open Layout
+                                    in
+                                       display (seq
+                                                [str "Global: ",
+                                                 R.Var.layout x,
+                                                 str ": ",
+                                                 R.Type.layout ty])
+                                    end)
+                             in
+                                VarOperand.Const (M.Operand.Global
+                                                  (M.Global.new {isRoot = true,
+                                                                 ty = ty}))
+                             end
                      else VarOperand.Allocate {operand = ref NONE}
                in
                   setVarInfo (x, {operand = operand,
@@ -1011,9 +1039,9 @@ let
                   val (first, statements) =
                      if !Control.profile = Control.ProfileTimeLabel
                         then
-                           case (if 0 = Vector.length statements
+                           case (if Vector.isEmpty statements
                                     then NONE
-                                 else (case Vector.sub (statements, 0) of
+                                 else (case Vector.first statements of
                                           s as M.Statement.ProfileLabel _ =>
                                              SOME s
                                         | _ => NONE)) of
@@ -1154,7 +1182,6 @@ in
        frameLayouts = frameLayouts,
        frameOffsets = frameOffsets,
        handlesSignals = handlesSignals,
-       intInfs = allIntInfs (), 
        main = main,
        maxFrameSize = maxFrameSize,
        objectTypes = objectTypes,

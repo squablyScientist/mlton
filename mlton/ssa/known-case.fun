@@ -748,7 +748,7 @@ fun doMany ()
                                       else Vector.sub (conValues, i))
 
                   fun route (statements, (cases, default))
-                    = if Vector.length statements = 0
+                    = if Vector.isEmpty statements
                         then (cases, default)
                         else let
                                fun route' dst
@@ -804,7 +804,7 @@ fun doMany ()
                      | SOME (statements, transfer)
                      => let
                           val label
-                            = if Vector.length statements = 0
+                            = if Vector.isEmpty statements
                                 then newBlock transfer
                                 else let
                                        val label = Label.newNoname ()

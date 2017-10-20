@@ -1,4 +1,5 @@
-(* Copyright (C) 2013 Matthew Fluet, David Larsen.
+(* Copyright (C) 2017 Matthew Fluet.
+ * Copyright (C) 2013 Matthew Fluet, David Larsen.
  * Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
@@ -216,7 +217,8 @@ signature RSSA =
              * then applying v' ().
              *)
             val dfs: t * (Block.t -> unit -> unit) -> unit
-            val foreachVar: t * (Var.t * Type.t -> unit) -> unit
+            val foreachDef: t * (Var.t * Type.t -> unit) -> unit
+            val foreachUse: t * (Var.t -> unit) -> unit
             val name: t -> Func.t
             val new: {blocks: Block.t vector,
                       entries: FunctionEntry.t vector,

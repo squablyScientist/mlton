@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #include <unistd.h>
+#include <winsock2.h>
 #include <windows.h>
 
 #include <dirent.h>
@@ -23,7 +24,6 @@
 #include <lm.h>
 #include <process.h>
 //#include <psapi.h>
-#include <winsock2.h>
 #include <ws2tcpip.h>
 #include <psapi.h>
 
@@ -34,6 +34,7 @@
 #define HAS_MSG_DONTWAIT FALSE
 #define HAS_REMAP TRUE
 #define HAS_SIGALTSTACK FALSE
+#define NEEDS_SIGALTSTACK_EXEC FALSE
 #define HAS_SPAWN TRUE
 #define HAS_TIME_PROFILING TRUE
 

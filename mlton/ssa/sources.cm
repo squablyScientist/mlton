@@ -21,9 +21,9 @@ functor SsaToSsa2
 
 is
 
+../../lib/mlton/sources.cm
 ../atoms/sources.cm
 ../control/sources.cm
-../../lib/mlton/sources.cm
 
 equatable.sig
 equatable.sml
@@ -82,6 +82,8 @@ known-case.fun
 local-flatten.fun
 local-ref.fun
 loop-invariant.fun
+loop-unroll.fun
+loop-unswitch.fun
 merge-tail-calls.fun
 poly-equal.fun
 poly-hash.fun

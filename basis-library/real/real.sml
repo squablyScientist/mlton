@@ -1,4 +1,4 @@
-(* Copyright (C) 2011-2013 Matthew Fluet.
+(* Copyright (C) 2011-2014,2017 Matthew Fluet.
  * Copyright (C) 2003-2007 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  *
@@ -180,7 +180,7 @@ functor Real (structure W: WORD_EXTRA
       fun isNormal r = class r = NORMAL
 
       val op ?= =
-         if MLton.Codegen.isX86 orelse MLton.Codegen.isAmd64
+         if MLton.Codegen.isAMD64 orelse MLton.Codegen.isLLVM orelse MLton.Codegen.isX86
             then R.?=
          else
             fn (x, y) =>
@@ -350,8 +350,8 @@ functor Real (structure W: WORD_EXTRA
                     | _ => x - realTrunc (x/y) * y))
 
       (* fromDecimal, scan, fromString: decimal -> binary conversions *)
-      fun strto (str: NullString.t,
-                 rounding_mode: IEEEReal.rounding_mode) =
+      fun strtor (str: NullString.t,
+                  rounding_mode: IEEEReal.rounding_mode) =
          let
             val rounding : C_Int.int =
                case rounding_mode of
@@ -360,7 +360,7 @@ functor Real (structure W: WORD_EXTRA
                 | TO_POSINF => 2
                 | TO_ZERO => 0
          in
-            Prim.strto (str, rounding)
+            Prim.strtor (str, rounding)
          end
       exception Bad
       fun fromDecimalWithRoundingMode
@@ -382,7 +382,7 @@ functor Real (structure W: WORD_EXTRA
                           Int.+ (4 (* "0." + "E" + "\000" *),
                           Int.+ (List.length digits,
                                  String.size exp)))
-                  val a = Array.arrayUninit n
+                  val a = Array.uninit n
                   fun upd (i, c) = (Array.update (a, i, c); Int.+ (i, 1))
                   val i = 0
                   val i = if sign then upd (i, #"-") else i
@@ -399,7 +399,7 @@ functor Real (structure W: WORD_EXTRA
                   val i = CharVector.foldl (fn (c, i) => upd (i, c)) i exp
                   val _ = upd (i, #"\000")
                   val str = Vector.unsafeFromArray a
-                  val x = strto (NullString.fromString str, rounding_mode)
+                  val x = strtor (NullString.fromString str, rounding_mode)
                in
                   x
                end
@@ -777,8 +777,8 @@ functor Real (structure W: WORD_EXTRA
                if IntInf.< (i, 0)
                   then "-" ^ (IntInf.toString (IntInf.~ i))
                else IntInf.toString i
-            val x = strto (NullString.nullTerm str,
-                           IEEEReal.getRoundingMode ())
+            val x = strtor (NullString.nullTerm str,
+                            IEEEReal.getRoundingMode ())
          in
             x
          end

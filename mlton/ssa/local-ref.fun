@@ -187,7 +187,7 @@ fun transform (program: Program.t): Program.t =
                       then
                          ignore
                          (FuncLattice.<= (varFuncUses (valOf var),
-                                          varFuncUses (Vector.sub (args, 0))))
+                                          varFuncUses (Vector.first args)))
                    else default ()
               | _ => default ()
           end)

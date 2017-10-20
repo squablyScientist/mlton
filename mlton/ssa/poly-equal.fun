@@ -1,4 +1,5 @@
-(* Copyright (C) 2013 Matthew Fluet, David Larsen
+(* Copyright (C) 2014 Matthew Fluet.
+ * Copyright (C) 2013 Matthew Fluet, David Larsen
  * Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
@@ -19,7 +20,7 @@ open S
  * For each datatype tycon and vector type, it builds an equality function and
  * translates calls to MLton_equal into calls to that function.
  *
- * Also generates calls to primitives intInfEqual and wordEqual.
+ * Also generates calls to primitive wordEqual.
  *
  * For tuples, it does the equality test inline.  I.E. it does not create
  * a separate equality function for each tuple type.
@@ -45,12 +46,6 @@ structure Dexp =
    struct
       open DirectExp
 
-      fun add (e1: t, e2: t, s): t =
-         primApp {prim = Prim.wordAdd s,
-                  targs = Vector.new0 (),
-                  args = Vector.new2 (e1, e2),
-                  ty = Type.word s}
-
       fun conjoin (e1: t, e2: t): t =
          casee {test = e1,
                 cases = Con (Vector.new2 ({con = Con.truee,
@@ -72,6 +67,19 @@ structure Dexp =
                                            body = e2})),
                 default = NONE,
                 ty = Type.bool}
+
+      local
+         fun mk prim =
+            fn (e1: t, e2: t, s) =>
+            primApp {prim = prim s,
+                     targs = Vector.new0 (),
+                     args = Vector.new2 (e1, e2),
+                     ty = Type.word s}
+      in
+         val add = mk Prim.wordAdd
+         val andb = mk Prim.wordAndb
+         val orb = mk Prim.wordOrb
+      end
 
       fun wordEqual (e1: t, e2: t, s): t =
          primApp {prim = Prim.wordEqual s,
@@ -106,6 +114,13 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
            set = setVectorEqualFunc,
            destroy = destroyVectorEqualFunc} =
          Property.destGetSet (Type.plist, Property.initConst NONE)
+      val (getIntInfEqualFunc: unit -> {funcName: Func.t, entryName: FuncEntry.t} option,
+           setIntInfEqualFunc: {funcName: Func.t, entryName: FuncEntry.t} option -> unit) =
+         let
+            val r = ref NONE
+         in
+            (fn () => !r, fn fo => r := fo)
+         end
       val returns = SOME (Vector.new1 Type.bool)
       val seqIndexWordSize = WordSize.seqIndex ()
       val seqIndexTy = Type.word seqIndexWordSize
@@ -138,14 +153,14 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                       {test = darg1,
                        ty = Type.bool,
                        default = (if Vector.exists (cons, fn {args, ...} =>
-                                                    0 = Vector.length args)
+                                                    Vector.isEmpty args)
                                      then SOME Dexp.falsee
                                   else NONE),
                        cases =
                        Dexp.Con
                        (Vector.keepAllMap
                         (cons, fn {con, args} =>
-                         if 0 = Vector.length args
+                         if Vector.isEmpty args
                             then NONE
                          else
                             let
@@ -191,121 +206,209 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                in
                   funcRecord
                end
+      and mkVectorEqualFunc {funcName: Func.t, entryName: FuncEntry.t,
+                             ty: Type.t, doEq: bool}: unit =
+         let
+            val loopFunc = Func.newString (Func.originalName funcName ^ "Loop")
+            val loopEntry = FuncEntry.newString "default"
+            (* Build two functions, one that checks the lengths and the
+             * other that loops.
+             *)
+            val vty = Type.vector ty
+            local
+               val vec1 = (Var.newNoname (), vty)
+               val vec2 = (Var.newNoname (), vty)
+               val args = Vector.new2 (vec1, vec2)
+               val dvec1 = Dexp.var vec1
+               val dvec2 = Dexp.var vec2
+               val len1 = (Var.newNoname (), seqIndexTy)
+               val dlen1 = Dexp.var len1
+               val len2 = (Var.newNoname (), seqIndexTy)
+               val dlen2 = Dexp.var len2
+
+               val body =
+                  let
+                     fun length dvec =
+                        Dexp.primApp {prim = Prim.vectorLength,
+                                      targs = Vector.new1 ty,
+                                      args = Vector.new1 dvec,
+                                      ty = Type.word seqIndexWordSize}
+                     val body =
+                        Dexp.lett
+                        {decs = [{var = #1 len1, exp = length dvec1},
+                                 {var = #1 len2, exp = length dvec2}],
+                         body =
+                         Dexp.conjoin
+                         (Dexp.wordEqual (dlen1, dlen2, seqIndexWordSize),
+                          Dexp.call
+                          {func = loopFunc,
+                           entry = loopEntry,
+                           args = Vector.new4
+                                  (dvec1, dvec2, dlen1,
+                                   Dexp.word (WordX.zero seqIndexWordSize)),
+                           ty = Type.bool})}
+                  in
+                     if doEq
+                        then Dexp.disjoin (Dexp.eq (dvec1, dvec2, vty), body)
+                     else body
+                  end
+               val (start, blocks) = Dexp.linearize (body, Handler.Caller)
+               val blocks = Vector.fromList blocks
+               val entry = FunctionEntry.T {args = args,
+                                            name = entryName,
+                                            start = start}
+            in
+               val _ =
+                  newFunction {blocks = blocks,
+                               entries = Vector.new1 entry,
+                               mayInline = true,
+                               name = funcName,
+                               raises = NONE,
+                               returns = returns}
+            end
+            local
+               val vec1 = (Var.newNoname (), vty)
+               val vec2 = (Var.newNoname (), vty)
+               val len = (Var.newNoname (), seqIndexTy)
+               val i = (Var.newNoname (), seqIndexTy)
+               val args = Vector.new4 (vec1, vec2, len, i)
+               val dvec1 = Dexp.var vec1
+               val dvec2 = Dexp.var vec2
+               val dlen = Dexp.var len
+               val di = Dexp.var i
+               val body =
+                  let
+                     fun sub (dvec, di) =
+                        Dexp.primApp {prim = Prim.vectorSub,
+                                      targs = Vector.new1 ty,
+                                      args = Vector.new2 (dvec, di),
+                                      ty = ty}
+                     val args =
+                        Vector.new4
+                        (dvec1, dvec2, dlen,
+                         Dexp.add
+                         (di, Dexp.word (WordX.one seqIndexWordSize),
+                          seqIndexWordSize))
+                  in
+                     Dexp.disjoin
+                     (Dexp.wordEqual
+                      (di, dlen, seqIndexWordSize),
+                      Dexp.conjoin
+                      (equalExp (sub (dvec1, di), sub (dvec2, di), ty),
+                       Dexp.call {args = args,
+                                  func = loopFunc,
+                                  entry = loopEntry,
+                                  ty = Type.bool}))
+                  end
+               val (start, blocks) = Dexp.linearize (body, Handler.Caller)
+               val blocks = Vector.fromList blocks
+               val entry = FunctionEntry.T {args = args,
+                                            name = loopEntry,
+                                            start = start}
+            in
+               val _ =
+                  newFunction {blocks = blocks,
+                               entries = Vector.new1 entry,
+                               mayInline = true,
+                               name = loopFunc,
+                               raises = NONE,
+                               returns = returns}
+            end
+         in
+            ()
+         end
       and vectorEqualFunc (ty: Type.t): {funcName: Func.t, entryName: FuncEntry.t} =
          case getVectorEqualFunc ty of
             SOME f => f
           | NONE =>
                let
-                  (* Build two functions, one that checks the lengths and the
-                   * other that loops.
-                   *)
-                  val vectorEqualFunc = Func.newString "vectorEqual"
-                  val vectorEqualFuncEntry = FuncEntry.newString "default"
-                  val vectorEqualRecord = {funcName = vectorEqualFunc,
-                                           entryName = vectorEqualFuncEntry}
-                  val _ = setVectorEqualFunc (ty, SOME vectorEqualRecord)
-                  val vectorEqualLoopFunc = Func.newString "vectorEqualLoop"
-                  val vectorEqualLoopFuncEntry = FuncEntry.newString "default"
-                  val vty = Type.vector ty
-                  local
-                     val vec1 = (Var.newNoname (), vty)
-                     val vec2 = (Var.newNoname (), vty)
-                     val args = Vector.new2 (vec1, vec2)
-                     val dvec1 = Dexp.var vec1
-                     val dvec2 = Dexp.var vec2
-                     val len1 = (Var.newNoname (), seqIndexTy)
-                     val dlen1 = Dexp.var len1
-                     val len2 = (Var.newNoname (), seqIndexTy)
-                     val dlen2 = Dexp.var len2
+                  val funcName = Func.newString "vectorEqual"
+                  val entryName = FuncEntry.newString "default"
+                  val _ =
+                     setVectorEqualFunc
+                     (ty, SOME {funcName = funcName,
+                                entryName = entryName})
+                  val () =
+                     mkVectorEqualFunc
+                     {funcName = funcName, entryName = entryName,
+                      ty = ty, doEq = true}
+               in
+                  {funcName = funcName, entryName = entryName}
+               end
+      and intInfEqualFunc (): {funcName: Func.t, entryName: FuncEntry.t} =
+         case getIntInfEqualFunc () of
+            SOME f => f
+          | NONE =>
+               let
+                  val intInfEqualFunc = Func.newString "intInfEqual"
+                  val intInfEqualEntry = FuncEntry.newString "default"
+                  val _ = setIntInfEqualFunc (SOME {funcName = intInfEqualFunc,
+                                                    entryName = intInfEqualEntry})
 
-                     val body =
-                        let
-                           fun length dvec =
-                              Dexp.primApp {prim = Prim.vectorLength,
-                                            targs = Vector.new1 ty,
-                                            args = Vector.new1 dvec,
-                                            ty = Type.word seqIndexWordSize}
-                        in
-                           Dexp.disjoin
-                           (Dexp.eq (dvec1, dvec2, vty),
-                            Dexp.lett
-                            {decs = [{var = #1 len1, exp = length dvec1},
-                                     {var = #1 len2, exp = length dvec2}],
-                             body =
-                             Dexp.conjoin
-                             (Dexp.wordEqual (dlen1, dlen2, seqIndexWordSize),
-                              Dexp.call
-                              {func = vectorEqualLoopFunc,
-                               entry = vectorEqualLoopFuncEntry,
-                               args = (Vector.new4 
-                                       (dvec1, dvec2, dlen1,
-                                        Dexp.word (WordX.zero seqIndexWordSize))),
-                              ty = Type.bool})})
-                        end
-                     val (start, blocks) = Dexp.linearize (body, Handler.Caller)
-                     val blocks = Vector.fromList blocks
-                  in
-                     val entry = FunctionEntry.T{args = args,
-                                                 name = vectorEqualFuncEntry,
-                                                 start = start}
-                     val _ =
-                        newFunction {blocks = blocks,
-                                     entries = Vector.new1 entry,
-                                     mayInline = true,
-                                     name = vectorEqualFunc,
-                                     raises = NONE,
-                                     returns = returns}
-                  end
+                  val bws = WordSize.bigIntInfWord ()
+                  val sws = WordSize.smallIntInfWord ()
+
+                  val bigIntInfEqualFunc = Func.newString "bigIntInfEqual"
+                  val bigIntInfEqualEntry = FuncEntry.newString "default"
+                  val () = mkVectorEqualFunc {funcName = bigIntInfEqualFunc,
+                                              entryName = bigIntInfEqualEntry,
+                                              ty = Type.word bws,
+                                              doEq = false}
+
                   local
-                     val vec1 = (Var.newNoname (), vty)
-                     val vec2 = (Var.newNoname (), vty)
-                     val len = (Var.newNoname (), seqIndexTy)
-                     val i = (Var.newNoname (), seqIndexTy)
-                     val args = Vector.new4 (vec1, vec2, len, i)
-                     val dvec1 = Dexp.var vec1
-                     val dvec2 = Dexp.var vec2
-                     val dlen = Dexp.var len
-                     val di = Dexp.var i
+                     val arg1 = (Var.newNoname (), Type.intInf)
+                     val arg2 = (Var.newNoname (), Type.intInf)
+                     val args = Vector.new2 (arg1, arg2)
+                     val darg1 = Dexp.var arg1
+                     val darg2 = Dexp.var arg2
+                     fun toWord dx =
+                        Dexp.primApp
+                        {prim = Prim.intInfToWord,
+                         targs = Vector.new0 (),
+                         args = Vector.new1 dx,
+                         ty = Type.word sws}
+                     fun toVector dx =
+                        Dexp.primApp
+                        {prim = Prim.intInfToVector,
+                         targs = Vector.new0 (),
+                         args = Vector.new1 dx,
+                         ty = Type.vector (Type.word bws)}
+                     val one = Dexp.word (WordX.one sws)
                      val body =
-                        let
-                           fun sub (dvec, di) =
-                              Dexp.primApp {prim = Prim.vectorSub,
-                                            targs = Vector.new1 ty,
-                                            args = Vector.new2 (dvec, di),
-                                            ty = ty}
-                           val args =
-                              Vector.new4 
-                              (dvec1, dvec2, dlen, 
-                               Dexp.add
-                               (di, Dexp.word (WordX.one seqIndexWordSize), 
-                                seqIndexWordSize))
-                        in
-                           Dexp.disjoin 
-                           (Dexp.wordEqual
-                            (di, dlen, seqIndexWordSize),
-                            Dexp.conjoin
-                            (equalExp (sub (dvec1, di), sub (dvec2, di), ty),
-                             Dexp.call {args = args,
-                                        func = vectorEqualLoopFunc,
-                                        entry = vectorEqualLoopFuncEntry,
-                                        ty = Type.bool}))
-                        end
+                        Dexp.disjoin
+                        (Dexp.eq (darg1, darg2, Type.intInf),
+                         Dexp.casee
+                         {test = Dexp.wordEqual (Dexp.andb (Dexp.orb (toWord darg1, toWord darg2, sws), one, sws), one, sws),
+                          ty = Type.bool,
+                          default = NONE,
+                          cases =
+                          (Dexp.Con o Vector.new2)
+                          ({con = Con.truee,
+                            args = Vector.new0 (),
+                            body = Dexp.falsee},
+                           {con = Con.falsee,
+                            args = Vector.new0 (),
+                            body =
+                            Dexp.call {func = bigIntInfEqualFunc,
+                                       entry = bigIntInfEqualEntry,
+                                       args = Vector.new2 (toVector darg1, toVector darg2),
+                                       ty = Type.bool}})})
                      val (start, blocks) = Dexp.linearize (body, Handler.Caller)
                      val blocks = Vector.fromList blocks
-                  in
                      val entry = FunctionEntry.T {args = args,
-                                                  name = vectorEqualLoopFuncEntry,
+                                                  name = intInfEqualEntry,
                                                   start = start}
+                  in
                      val _ =
                         newFunction {blocks = blocks,
                                      entries = Vector.new1 entry,
                                      mayInline = true,
-                                     name = vectorEqualLoopFunc,
+                                     name = intInfEqualFunc,
                                      raises = NONE,
                                      returns = returns}
                   end
                in
-                  vectorEqualRecord
+                  {funcName = intInfEqualFunc, entryName = intInfEqualEntry}
                end
       and equalExp (e1: Dexp.t, e2: Dexp.t, ty: Type.t): Dexp.t =
          Dexp.name (e1, fn x1 => 
@@ -340,7 +443,16 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
              | Type.IntInf => 
                   if hasConstArg ()
                      then eq ()
-                  else prim (Prim.intInfEqual, Vector.new0 ())
+                  else let
+                          val {funcName = intInfEqualFunc,
+                               entryName = intInfEqualEntry} =
+                             intInfEqualFunc ()
+                       in
+                          Dexp.call {func = intInfEqualFunc,
+                                     entry = intInfEqualEntry,
+                                     args = Vector.new2 (dx1, dx2),
+                                     ty = Type.bool}
+                       end
              | Type.Real rs =>
                   let
                      val ws = WordSize.fromBits (RealSize.bits rs)
@@ -407,9 +519,9 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                Const c =>
                   (case c of
                       Const.IntInf i =>
-                         if Const.SmallIntInf.isSmall i
-                            then const ()
-                         else ()
+                         (case Const.IntInfRep.fromIntInf i of
+                             Const.IntInfRep.Big _ => ()
+                           | Const.IntInfRep.Small _ => const ())
                     | Const.Word _ => const ()
                     | _ => ())
              | ConApp {args, ...} =>
@@ -477,7 +589,7 @@ fun transform (Program.T {datatypes, globals, functions, main}) =
                             PrimApp {prim, targs, args, ...} =>
                                (case (Prim.name prim, Vector.length targs) of
                                    (Prim.Name.MLton_eq, 1) =>
-                                      (case Type.dest (Vector.sub (targs, 0)) of
+                                      (case Type.dest (Vector.first targs) of
                                           Type.CPointer => 
                                              let
                                                 val cp0 = Vector.sub (args, 0)

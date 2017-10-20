@@ -1,4 +1,5 @@
-(* Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
+(* Copyright (C) 2017 Matthew Fluet.
+ * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
@@ -113,10 +114,10 @@ structure Array2 : ARRAY2 =
                   rows = rows,
                   cols = cols}
       in
-         fun arrayUninit' (rows, cols) =
-            make (rows, cols, Array.arrayUninit')
+         fun uninit' (rows, cols) =
+            make (rows, cols, Primitive.Array.uninit)
          fun array' (rows, cols, init) =
-            make (rows, cols, fn size => Array.array' (size, init))
+            make (rows, cols, fn size => Primitive.Array.new (size, init))
       end
       local
          fun make (rows, cols, doit) =
@@ -134,14 +135,14 @@ structure Array2 : ARRAY2 =
                else doit (SeqIndex.fromIntUnsafe rows,
                           SeqIndex.fromIntUnsafe cols)
       in
-         fun arrayUninit (rows, cols) =
-            make (rows, cols, fn (rows, cols) => arrayUninit' (rows, cols))
+         fun uninit (rows, cols) =
+            make (rows, cols, fn (rows, cols) => uninit' (rows, cols))
          fun array (rows, cols, init) =
             make (rows, cols, fn (rows, cols) => array' (rows, cols, init))
       end
 
       fun array0 (): 'a array =
-         {array = Array.arrayUninit' 0,
+         {array = Primitive.Array.uninit 0,
           rows = 0,
           cols = 0}
 
@@ -154,13 +155,13 @@ structure Array2 : ARRAY2 =
             else unsafeSpot' (a, r, c)
 
       fun unsafeSub' (a as {array, ...}: 'a array, r, c) =
-         Array.unsafeSub' (array, unsafeSpot' (a, r, c))
+         Primitive.Array.unsafeSub (array, unsafeSpot' (a, r, c))
       fun sub' (a as {array, ...}: 'a array, r, c) =
-         Array.unsafeSub' (array, spot' (a, r, c))
+         Primitive.Array.unsafeSub (array, spot' (a, r, c))
       fun unsafeUpdate' (a as {array, ...}: 'a array, r, c, x) =
-         Array.unsafeUpdate' (array, unsafeSpot' (a, r, c), x)
+         Primitive.Array.unsafeUpdate (array, unsafeSpot' (a, r, c), x)
       fun update' (a as {array, ...}: 'a array, r, c, x) =
-         Array.unsafeUpdate' (array, spot' (a, r, c), x)
+         Primitive.Array.unsafeUpdate (array, spot' (a, r, c), x)
 
       local
          fun make (r, c, doit) =
@@ -191,7 +192,7 @@ structure Array2 : ARRAY2 =
                let
                   val cols = length row1
                   val a as {array, cols = cols', ...} = 
-                     arrayUninit (length rows, cols)
+                     uninit (length rows, cols)
                   val _ =
                      List.foldl
                      (fn (row: 'a list, i) =>
@@ -201,7 +202,7 @@ structure Array2 : ARRAY2 =
                             List.foldl (fn (x: 'a, i) =>
                                         (if i >= max
                                             then raise Size
-                                         else (Array.unsafeUpdate' (array, i, x)
+                                         else (Primitive.Array.unsafeUpdate (array, i, x)
                                                ; i +? 1)))
                             i row
                       in if i' = max
@@ -217,7 +218,7 @@ structure Array2 : ARRAY2 =
          if Primitive.Controls.safe andalso geu (r, rows)
             then raise Subscript
          else
-            ArraySlice.vector (ArraySlice.slice' (array, r *? cols, SOME cols))
+            ArraySlice.vector (Primitive.Array.Slice.slice (array, r *? cols, SOME cols))
       fun row (a, r) =
          if Primitive.Controls.safe
             then let
@@ -232,7 +233,7 @@ structure Array2 : ARRAY2 =
          if Primitive.Controls.safe andalso geu (c, cols)
             then raise Subscript
          else
-            Vector.tabulate' (rows, fn r => unsafeSub' (a, r, c))
+            Primitive.Vector.tabulate (rows, fn r => unsafeSub' (a, r, c))
       fun column (a, c) =
          if Primitive.Controls.safe
             then let
@@ -299,7 +300,7 @@ structure Array2 : ARRAY2 =
 
       fun tabulate trv (rows, cols, f) =
          let 
-            val a = arrayUninit (rows, cols)
+            val a = uninit (rows, cols)
             val () = modifyi trv (fn (r, c, _) => f (r, c)) (wholeRegion a)
          in 
             a
