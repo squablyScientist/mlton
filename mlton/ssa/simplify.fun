@@ -49,7 +49,7 @@ type pass = {name: string,
 val ssaPassesDefault =
    {name = "duplicateEntries", doit = DuplicateEntries.transform, execute = false} ::
    {name = "removeUnused1", doit = RemoveUnused.transform, execute = true} ::
-   {name = "mergeRecTailCalls1", doit = MergeRecTailCalls.transform, execute = true} ::
+   {name = "mergeRecTailCalls1", doit = MergeRecTailCalls.transform, execute = false} ::
    {name = "introduceLoops1", doit = IntroduceLoops.transform, execute = true} ::
    {name = "loopInvariant1", doit = LoopInvariant.transform, execute = true} ::
    {name = "inlineLeaf1", doit = fn p => 
@@ -80,7 +80,7 @@ val ssaPassesDefault =
     *   - before inlining so that hash functions can be inlined
     *)
    {name = "polyHash", doit = PolyHash.transform, execute = true} ::
-   {name = "mergeRecTailCalls2", doit = MergeRecTailCalls.transform, execute = true} ::
+   {name = "mergeRecTailCalls2", doit = MergeRecTailCalls.transform, execute = false} ::
    {name = "introduceLoops2", doit = IntroduceLoops.transform, execute = true} ::
    {name = "loopInvariant2", doit = LoopInvariant.transform, execute = true} ::
    (* loopUnswitch should run
@@ -93,7 +93,7 @@ val ssaPassesDefault =
    {name = "inlineNonRecursive", doit = fn p =>
     Inline.inlineNonRecursive (p, !Control.inlineNonRec), execute = true} ::
    {name = "localFlatten2", doit = LocalFlatten.transform, execute = true} ::
-   {name = "splitEntries1", doit = SplitEntries.transform, execute = true} ::
+   {name = "splitEntries1", doit = SplitEntries.transform, execute = false} ::
    {name = "removeUnused3", doit = RemoveUnused.transform, execute = true} ::
    {name = "contify3", doit = Contify.transform, execute = true} ::
    {name = "introduceLoops3", doit = IntroduceLoops.transform, execute = true} ::
@@ -118,7 +118,7 @@ val ssaPassesDefault =
    {name = "redundantTests", doit = RedundantTests.transform, execute = true} ::
    {name = "redundant", doit = Redundant.transform, execute = true} ::
    {name = "loopUnswitch2", doit = LoopUnswitch.transform, execute = false} ::
-   {name = "splitEntries2", doit = SplitEntries.transform, execute = true} ::
+   {name = "splitEntries2", doit = SplitEntries.transform, execute = false} ::
    {name = "knownCase2", doit = KnownCase.transform, execute = true} ::
    {name = "loopUnroll2", doit = LoopUnroll.transform, execute = false} ::
    {name = "commonSubexp2", doit = CommonSubexp.transform, execute = false} ::
