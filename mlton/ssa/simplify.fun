@@ -250,6 +250,7 @@ local
                  ("removeUnused", RemoveUnused.transform),
                  ("shareZeroVec", ShareZeroVec.transform),
                  ("simplifyTypes", SimplifyTypes.transform),
+                 ("splitEntries", SplitEntries.transform),
                  ("useless", Useless.transform),
                  ("breakCriticalEdges",fn p => 
                   S.breakCriticalEdges (p, {codeMotion = true})),
