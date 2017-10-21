@@ -2029,21 +2029,6 @@ structure Program =
                     in
                        n
                     end))
-               val {get = funcEntryNode, destroy = destroyFuncEntry} =
-                  Property.destGet
-                  (FuncEntry.plist, Property.initFun
-                   (fn f =>
-                    let
-                       val n = Graph.newNode graph
-                       val _ =
-                          setNodeOptions
-                          (n,
-                           let open NodeOption
-                           in [FontColor Black, label (FuncEntry.toString f)]
-                           end)
-                    in
-                       n
-                    end))
                val {get = edgeOptions, set = setEdgeOptions, ...} =
                   Property.getSetOnce (Edge.plist, Property.initConst [])
                val _ =
@@ -2061,7 +2046,7 @@ structure Program =
                          Vector.foreach
                          (blocks, fn Block.T {transfer, ...} =>
                           case transfer of
-                             Call {func, entry, return, ...} =>
+                             Call {func, return, ...} =>
                                 let
                                    val to = funcNode func
                                    val {tail, nontail} = get to
@@ -2088,7 +2073,7 @@ structure Program =
                    in
                       ()
                    end)
-               val root = funcEntryNode (#entry main)
+               val root = funcNode (#func main)
                val l =
                   Graph.layoutDot
                   (graph, fn {nodeName} =>
@@ -2097,7 +2082,6 @@ structure Program =
                     edgeOptions = edgeOptions,
                     nodeOptions = nodeOptions})
                val _ = destroyFunc ()
-               val _ = destroyFuncEntry ()
             in
                l
             end
