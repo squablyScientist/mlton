@@ -49,6 +49,7 @@ type pass = {name: string,
 val ssaPassesDefault =
    {name = "duplicateEntries", doit = DuplicateEntries.transform, execute = false} ::
    {name = "removeUnused1", doit = RemoveUnused.transform, execute = true} ::
+   {name = "mergeAllTailCalls1", doit = MergeAllTailCalls.transform, execute = false} ::
    {name = "mergeRecTailCalls1", doit = MergeRecTailCalls.transform, execute = false} ::
    {name = "introduceLoops1", doit = IntroduceLoops.transform, execute = true} ::
    {name = "loopInvariant1", doit = LoopInvariant.transform, execute = true} ::
@@ -80,6 +81,7 @@ val ssaPassesDefault =
     *   - before inlining so that hash functions can be inlined
     *)
    {name = "polyHash", doit = PolyHash.transform, execute = true} ::
+   {name = "mergeAllTailCalls2", doit = MergeAllTailCalls.transform, execute = false} ::
    {name = "mergeRecTailCalls2", doit = MergeRecTailCalls.transform, execute = false} ::
    {name = "introduceLoops2", doit = IntroduceLoops.transform, execute = true} ::
    {name = "loopInvariant2", doit = LoopInvariant.transform, execute = true} ::
@@ -96,6 +98,8 @@ val ssaPassesDefault =
    {name = "splitEntries1", doit = SplitEntries.transform, execute = false} ::
    {name = "removeUnused3", doit = RemoveUnused.transform, execute = true} ::
    {name = "contify3", doit = Contify.transform, execute = true} ::
+   {name = "mergeAllTailCalls3", doit = MergeAllTailCalls.transform, execute = false} ::
+   {name = "mergeRecTailCalls3", doit = MergeRecTailCalls.transform, execute = false} ::
    {name = "introduceLoops3", doit = IntroduceLoops.transform, execute = true} ::
    {name = "loopInvariant3", doit = LoopInvariant.transform, execute = true} ::
    {name = "localRef", doit = LocalRef.transform, execute = true} ::
