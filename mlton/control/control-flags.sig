@@ -248,7 +248,8 @@ signature CONTROL_FLAGS =
       val libname : string ref
 
       (* Number of times to loop through optimization passes. *)
-      val loopPasses: int ref
+      val loopSsaPasses: int ref
+      val loopSsa2Passes: int ref
 
       (* Limit the code growth loop unrolling/unswitching will allow. *)
       val loopUnrollLimit: int ref
@@ -299,6 +300,10 @@ signature CONTROL_FLAGS =
             (* whether or not to split assembly file in native codegen *)
             val split: int option ref
          end
+
+      val optFuel: int option ref
+
+      val optFuelAvailAndUse: unit -> bool
 
       val optimizationPasses:
          {il: string, set: string -> unit Result.t, get: unit -> string} list ref

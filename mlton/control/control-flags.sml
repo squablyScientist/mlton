@@ -909,9 +909,13 @@ val libTargetDir = control {name = "lib target dir",
 
 val libname = ref ""
 
-val loopPasses = control {name = "loop passes",
-                          default = 1,
-                          toString = Int.toString}
+val loopSsaPasses = control {name = "loop ssa passes",
+                             default = 1,
+                             toString = Int.toString}
+
+val loopSsa2Passes = control {name = "loop ssa2 passes",
+                              default = 1,
+                              toString = Int.toString}
 
 val loopUnrollLimit = control {name = "loop unrolling limit",
                                 default = 150,
@@ -982,6 +986,24 @@ structure Native =
                            default = SOME 20000,
                            toString = Option.toString Int.toString}
    end
+
+val optFuel =
+   control {name = "optFuel",
+            default = NONE,
+            toString = Option.toString Int.toString}
+
+fun optFuelAvailAndUse () =
+   case !optFuel of
+      NONE => true
+    | SOME i => if i > 0
+                   then (optFuel := SOME (i - 1); true)
+                   else false
+(* Suppress unused variable warning
+ * This variable is purposefully unused in production,
+ * but is retained to make it easy to use in development of new
+ * optimization passes.
+ *)
+val _ = optFuelAvailAndUse
 
 val optimizationPasses:
    {il: string, set: string -> unit Result.t, get: unit -> string} list ref =

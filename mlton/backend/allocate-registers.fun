@@ -1,4 +1,5 @@
-(* Copyright (C) 2013 David Larsen.
+(* Copyright (C) 2017 Matthew Fluet.
+ * Copyright (C) 2013 David Larsen.
  * Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
@@ -90,65 +91,66 @@ structure Allocation:
                 val () =
                    QuickSort.sortArray
                    (a, fn (r, r') => Bytes.<= (#offset r, #offset r'))
-
+                fun loop (alloc, ac) =
+                   case alloc of
+                      [] => List.rev ac
+                    | [a] => List.rev (a::ac)
+                    | (a1 as {offset = offset1, size = size1})::(a2 as {offset = offset2, size = size2})::alloc =>
+                         if Bytes.equals (Bytes.+ (offset1, size1), offset2)
+                            then loop ({offset = offset1, size = Bytes.+ (size1, size2)}::alloc, ac)
+                            else loop (a2::alloc, a1::ac)
              in
-                T (Array.toList a)
+                T (loop (Array.toList a, []))
              end
 
           fun get (T alloc, ty) =
              let
                 val slotSize = Type.bytes ty
-             in
-                case alloc of
-                   [] => (T [{offset = Bytes.zero, size = slotSize}],
-                          {offset = Bytes.zero})
-                 | a :: alloc =>
-                      let
-                         fun loop (alloc, a as {offset, size}, ac) =
+                fun loop (alloc, a as {offset, size}, ac) =
+                   let
+                      val prevEnd = Bytes.+ (offset, size)
+                      val begin = Type.align (ty, prevEnd)
+                      fun coalesce () =
+                         if Bytes.equals (prevEnd, begin)
+                            then ({offset = offset, size = Bytes.+ (size, slotSize)}, ac)
+                            else ({offset = begin, size = slotSize}, a :: ac)
+                   in
+                      case alloc of
+                         [] =>
                             let
-                               val prevEnd = Bytes.+ (offset, size)
-                               val begin = Type.align (ty, prevEnd)
-                               fun coalesce () =
-                                  if Bytes.equals (prevEnd, begin)
-                                     then ({offset = offset,
-                                            size = Bytes.+ (size, slotSize)},
-                                           ac)
-                                  else ({offset = begin, size = slotSize},
-                                        {offset = offset, size = size} :: ac)
+                               val (a, ac) = coalesce ()
                             in
-                              case alloc of
-                                 [] =>
-                                    let
-                                       val (a, ac) = coalesce ()
-                                    in
-                                       (T (rev (a :: ac)), {offset = begin})
-                                    end
-                                | (a' as {offset, size}) :: alloc =>
-                                    if Bytes.> (Bytes.+ (begin, slotSize),
-                                                offset)
-                                       then loop (alloc, a', a :: ac)
-                                    else
-                                       let
-                                          val (a'' as {offset = o', size = s'}, ac) = 
-                                             coalesce ()
-                                          val alloc =
-                                             List.appendRev
-                                             (ac,
-                                              if Bytes.equals (Bytes.+ (o', s'),
-                                                               offset)
-                                                 then {offset = o',
-                                                       size = Bytes.+ (size, s')}
-                                                      :: alloc
-                                              else a'' :: a' :: alloc)
-                                       in
-                                          (T alloc, {offset = begin})
-                                       end
+                               (T (rev (a :: ac)), {offset = begin})
                             end
-                      in
-                         loop (alloc, a, [])
-                      end
+                       | (a' as {offset, size}) :: alloc =>
+                            if Bytes.> (Bytes.+ (begin, slotSize), offset)
+                               then loop (alloc, a',
+                                          if Bytes.isZero offset andalso Bytes.isZero size
+                                             then ac
+                                             else a :: ac)
+                               else let
+                                       val (a'' as {offset = o', size = s'}, ac) =
+                                          coalesce ()
+                                       val alloc =
+                                          List.appendRev
+                                          (ac,
+                                           if Bytes.equals (Bytes.+ (o', s'), offset)
+                                              then {offset = o', size = Bytes.+ (size, s')} :: alloc
+                                              else a'' :: a' :: alloc)
+                                    in
+                                       (T alloc, {offset = begin})
+                                    end
+                   end
+             in
+                loop (alloc, {offset = Bytes.zero, size = Bytes.zero}, [])
              end
-
+          val get =
+             Trace.trace2
+             ("AllocateRegisters.Allocation.Stack.get",
+              layout, Type.layout,
+              Layout.tuple2 (layout, fn {offset} =>
+                             Layout.record [("offset", Bytes.layout offset)]))
+             get
        end
        structure Registers =
        struct
@@ -280,7 +282,7 @@ structure Info =
 (*                     allocate                      *)
 (* ------------------------------------------------- *)
 
-fun allocate {mkArgOperands,
+fun allocate {formalsStackOffsets,
               function = f: Rssa.Function.t,
               varInfo: Var.t -> {operand: Machine.Operand.t option ref option,
                                  ty: Type.t}} =
@@ -315,10 +317,17 @@ fun allocate {mkArgOperands,
        * will live in registers.
        * Initially,
        *   - all formals are put in stack slots
-       *   - everything else is put everything in a register.
+       *   - everything else is put in a register.
        * Variables get moved to the stack if they are
-       *   - live at the beginning of a basic block (i.e. Fun dec)
-       *   - live at a primitive that enters the runtime system
+       *   - live at the beginning of a Cont block; such variables are
+       *     live while the frame is suspended during a non-tail call
+       *     and must be stack allocated to be traced during a GC
+       *   - live at the beginning of a CReturn block that mayGC; such
+       *     variables are live while the frame is suspended during a
+       *     C call and must be stack allocated to be traced during
+       *     the potential GC
+       * Both of the above are indiced by Kind.frameStyle kind =
+       * Kind.OffsetsAndSize
        *)
       datatype place = Stack | Register
       val {get = place: Var.t -> place ref, rem = removePlace, ...} =
@@ -334,7 +343,7 @@ fun allocate {mkArgOperands,
       val _ =
          Vector.foreach
          (blocks,
-          fn R.Block.T {args, kind, label, statements, ...} =>
+          fn R.Block.T {kind, label, statements, ...} =>
           let
              val {beginNoFormals, ...} = labelLive label
              val _ =
@@ -343,10 +352,6 @@ fun allocate {mkArgOperands,
                  | Kind.OffsetsAndSize =>
                       Vector.foreach (beginNoFormals, forceStack)
                  | Kind.SizeOnly => ()
-             val _ =
-                case kind of
-                   Kind.Cont _ => Vector.foreach (args, forceStack o #1)
-                 | _ => ()
              val _ =
                 if not (!hasHandler)
                    andalso (Vector.exists
@@ -398,30 +403,48 @@ fun allocate {mkArgOperands,
          Trace.trace2
          ("AllocateRegisters.allocateVar", Var.layout, Allocation.layout, Unit.layout)
          allocateVar
-      (* Create the initial stack and set the stack slots for the formals. *)
-      (* XXX Temporary hack: Instead of allocating the max(\all entries), I'll
-         sum all of the stack space that all of the entries need. *)
-      val stack =
-         Allocation.Stack.new
-         (Vector.fold (entries, [], fn (FunctionEntry.T {args, ...}, ac) =>
-            (Vector.foldr2
-             (args, mkArgOperands args, ac,
-              fn ((x, t), z, ac) =>
-              case z of
-                 Operand.StackOffset (StackOffset.T {offset, ...}) =>
-                    (valOf (#operand (varInfo x)) := SOME z
-                     ; StackOffset.T {offset = offset, ty = t} :: ac)
-               | _ => Error.bug "AllocateRegisters.allocate: strange argOperand"))
-         ))
-      (* Allocate slots for the link and handler, if necessary. *)
+      (* Set the stack slots for the formals.
+       * Also, create stack allocations that includes all formals; if
+       * link and handler stack slots are required, then they will be
+       * allocated against these stacks.
+       *)
+      val stacks =
+         Vector.map
+         (entries, fn FunctionEntry.T {args, ...} =>
+          Allocation.Stack.new
+          (Vector.foldr2
+           (args, formalsStackOffsets args, [],
+            fn ((x, _), so, stack) =>
+            (valOf (#operand (varInfo x)) := SOME (Operand.StackOffset so)
+             ; so :: stack))))
+      (* Allocate stack slots for the link and handler, if necessary. *)
       val handlerLinkOffset =
          if !hasHandler
             then
                let
-                  val (stack, {offset = handler, ...}) =
-                     Allocation.Stack.get (stack, Type.label (Label.newNoname ()))
-                  val (_, {offset = link, ...}) = 
-                     Allocation.Stack.get (stack, Type.exnStack ())
+                  (* Choose fixed and permanently allocated stack
+                   * slots that do not conflict with formals.
+                   *)
+                  fun slots stack =
+                     let
+                        val (stack, {offset = handler, ...}) =
+                           Allocation.Stack.get (stack, Type.label (Label.newNoname ()))
+                        val (_, {offset = link, ...}) =
+                           Allocation.Stack.get (stack, Type.exnStack ())
+                     in
+                        (handler, link)
+                     end
+                  val (handler, link) =
+                     Vector.fold
+                     (stacks, slots (Allocation.Stack.new []),
+                      fn (stack, (handler', link')) =>
+                      let
+                         val (handler, link) = slots stack
+                      in
+                         if Bytes.> (handler, handler')
+                            then (handler, link)
+                            else (handler', link')
+                      end)
                in
                   SOME {handler = handler, link = link}
                end
