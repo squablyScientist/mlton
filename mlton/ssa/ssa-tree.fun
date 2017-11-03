@@ -1440,8 +1440,10 @@ structure Function =
       fun clear (T {controlFlow, dest, ...}) =
          let
             val {blocks, entries, ...} = dest
-            val _ = Vector.foreach (entries, fn (FunctionEntry.T{args, ...})
-                     => Vector.foreach (args, Var.clear o #1))
+            val _ =
+               Vector.foreach
+               (entries, fn FunctionEntry.T {args, ...} =>
+                Vector.foreach (args, Var.clear o #1))
             val _ = Vector.foreach (blocks, Block.clear)
             val _ = CPromise.clear controlFlow
          in
