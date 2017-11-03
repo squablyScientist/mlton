@@ -47,7 +47,7 @@ type pass = {name: string,
              execute: bool}
 
 val ssaPassesDefault =
-   {name = "duplicateEntries", doit = DuplicateEntries.transform, execute = false} ::
+   {name = "duplicateEntries1", doit = DuplicateEntries.transform, execute = false} ::
    {name = "removeUnused1", doit = RemoveUnused.transform, execute = true} ::
    {name = "mergeAllTailCalls1", doit = MergeAllTailCalls.transform, execute = false} ::
    {name = "mergeRecTailCalls1", doit = MergeRecTailCalls.transform, execute = false} ::
@@ -69,6 +69,7 @@ val ssaPassesDefault =
     *   - after constants have been globalized
     *)
    {name = "loopUnroll1", doit = LoopUnroll.transform, execute = false} ::
+   {name = "duplicateEntries2", doit = DuplicateEntries.transform, execute = false} ::
    {name = "removeUnused2", doit = RemoveUnused.transform, execute = true} ::
    {name = "simplifyTypes", doit = SimplifyTypes.transform, execute = true} ::
    (* polyEqual should run
@@ -95,7 +96,7 @@ val ssaPassesDefault =
    {name = "inlineNonRecursive", doit = fn p =>
     Inline.inlineNonRecursive (p, !Control.inlineNonRec), execute = true} ::
    {name = "localFlatten2", doit = LocalFlatten.transform, execute = true} ::
-   {name = "splitEntries1", doit = SplitEntries.transform, execute = false} ::
+   {name = "splitEntries3", doit = SplitEntries.transform, execute = false} ::
    {name = "removeUnused3", doit = RemoveUnused.transform, execute = true} ::
    {name = "contify3", doit = Contify.transform, execute = true} ::
    {name = "mergeAllTailCalls3", doit = MergeAllTailCalls.transform, execute = false} ::
@@ -126,6 +127,7 @@ val ssaPassesDefault =
    {name = "knownCase2", doit = KnownCase.transform, execute = true} ::
    {name = "loopUnroll2", doit = LoopUnroll.transform, execute = false} ::
    {name = "commonSubexp2", doit = CommonSubexp.transform, execute = false} ::
+   {name = "duplicateEntries4", doit = DuplicateEntries.transform, execute = false} ::
    {name = "removeUnused4", doit = RemoveUnused.transform, execute = true} ::
    nil
 
