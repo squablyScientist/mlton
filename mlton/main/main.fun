@@ -391,6 +391,8 @@ fun makeOptions {usage} =
                                     in List.push (executePasses, (re, false))
                                     end
                    | NONE => usage (concat ["invalid -disable-pass flag: ", s])))),
+       (Expert, "duplicate-entries-degree", " <n>", "duplicate entries degree",
+        intRef duplicateEntriesDegree),
        let
           val flag = "enable-ann"
        in

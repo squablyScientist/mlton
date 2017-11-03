@@ -63,6 +63,8 @@ signature CONTROL_FLAGS =
       (* List of pass names to keep diagnostic info on. *)
       val diagPasses: Regexp.Compiled.t list ref
 
+      val duplicateEntriesDegree: int ref
+
       (* List of optimization passes to disable/enable. *)
       val executePasses: (Regexp.Compiled.t * bool) list ref
 

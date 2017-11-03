@@ -1,4 +1,5 @@
-(* Copyright (C) 2013 Matthew Fluet, David Larsen.
+(* Copyright (C) 2017 Matthew Fluet.
+ * Copyright (C) 2013 Matthew Fluet, David Larsen.
  *
  * MLton is released under a BSD-style license.
  * See the file MLton-LICENSE for details.
@@ -14,12 +15,10 @@ struct
 
 open S
 
-(* Degree of duplication. *)
-val degree = 2
-
 fun transform (Program.T {datatypes, globals, functions, main}) =
    let
       val shrink = shrinkFunction {globals = globals}
+      val degree = !Control.duplicateEntriesDegree
 
       val {get = entryInfo : FuncEntry.t -> {newNames: FuncEntry.t vector, counter: Counter.t},
            destroy = destroyEntryInfo} =

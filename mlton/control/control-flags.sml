@@ -114,6 +114,11 @@ val diagPasses =
                        (Layout.toString o 
                         Regexp.Compiled.layout)}
 
+val duplicateEntriesDegree: int ref =
+   control {name = "duplicate entries degree",
+            default = 2,
+            toString = Int.toString}
+
 val executePasses =
    control {name = "execute passes",
             default = [],
