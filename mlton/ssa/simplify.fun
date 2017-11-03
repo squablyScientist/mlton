@@ -96,7 +96,8 @@ val ssaPassesDefault =
    {name = "inlineNonRecursive", doit = fn p =>
     Inline.inlineNonRecursive (p, !Control.inlineNonRec), execute = true} ::
    {name = "localFlatten2", doit = LocalFlatten.transform, execute = true} ::
-   {name = "splitEntries3", doit = SplitEntries.transform, execute = false} ::
+   {name = "splitEntries1", doit = SplitEntries.transform, execute = false} ::
+   {name = "duplicateEntries3", doit = DuplicateEntries.transform, execute = false} ::
    {name = "removeUnused3", doit = RemoveUnused.transform, execute = true} ::
    {name = "contify3", doit = Contify.transform, execute = true} ::
    {name = "mergeAllTailCalls3", doit = MergeAllTailCalls.transform, execute = false} ::
