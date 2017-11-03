@@ -1,4 +1,6 @@
-(* Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
+(* Copyright (C) 2017 Matthew Fluet.
+ * Copyright (C) 2013 David Larsen.
+ * Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
@@ -53,7 +55,7 @@ structure Atoms =
       structure FuncEntry =
          struct
             open Var
-            fun newNoname () = newString "FE"
+            fun newNoname () = newString "E"
          end
       structure Label =
          struct
