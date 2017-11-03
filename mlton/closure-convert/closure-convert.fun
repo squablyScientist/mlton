@@ -380,7 +380,7 @@ fun closureConvert
                       LambdaInfo.T {con = ref Con.bogus,
                                     frees = ref (Vector.new0 ()),
                                     name = Func.newString (Var.originalName x),
-                                    entry = FuncEntry.newString "default",
+                                    entry = FuncEntry.newNoname (),
                                     recs = ref (Vector.new0 ()),
                                     ty = ref NONE})
                   val _ = newVar (arg, Value.fromType argType)
@@ -1144,7 +1144,7 @@ fun closureConvert
       (*    main body of closure convert    *)
       (*------------------------------------*)
       val mainFunc = Func.newString "main"
-      val mainEntry = FuncEntry.newString "default"
+      val mainEntry = FuncEntry.newNoname ()
       val {functions, globals} =
          Control.trace (Control.Pass, "convert")
          (fn () =>
