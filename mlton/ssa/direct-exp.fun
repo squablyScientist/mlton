@@ -132,8 +132,9 @@ in
             align [Prim.layoutApp (prim, args, layout),
                    seq [str "Overflow => ", layout overflow]]
        | Call {func, entry, args, ty} =>
-            seq [Func.layout func, str "@", FuncEntry.layout entry, str " ",
-                layouts args, str ": ", Type.layout ty]
+            seq [Func.layout func, str "@", FuncEntry.layout entry,
+                 str " ", layouts args,
+                 str ": ", Type.layout ty]
        | Case {cases, default, test, ...} =>
             align
             [seq [str "case ", layout test, str " of"],

@@ -157,12 +157,14 @@ fun live (function, {shouldConsider: Var.t -> bool}) =
       (* Add the control-flow edges and set the defines and uses for each
        * variable.
        *)
-      val _ = Vector.foreach (entries, fn FunctionEntry.T {args, name, ...} =>
-         let
-            val head = LiveInfo.new (FuncEntry.toString name)
-         in
-            Vector.foreach (args, fn (x, _) => setDefined (x, head))
-         end)
+      val _ =
+         Vector.foreach
+         (entries, fn FunctionEntry.T {args, name, ...} =>
+          let
+             val head = LiveInfo.new (FuncEntry.toString name)
+          in
+             Vector.foreach (args, fn (x, _) => setDefined (x, head))
+          end)
       val _ =
          Vector.foreach
          (blocks,

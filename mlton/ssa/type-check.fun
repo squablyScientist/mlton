@@ -32,9 +32,8 @@ fun checkScopes (program as
             fun bind (x, v) =
                case get x of
                   Undefined => set (x, InScope v)
-                | _ => Error.bug (concat
-                                  ["Ssa.TypeCheck.checkScopes: duplicate definition of ",
-                                   Layout.toString (layout x)])
+                | _ => Error.bug ("Ssa.TypeCheck.checkScopes: duplicate definition of "
+                                  ^ (Layout.toString (layout x)))
             fun reference x =
                case get x of
                   InScope v => v
@@ -299,11 +298,6 @@ structure Function =
                                     setLabelInfo (label,
                                                   {block = b,
                                                    sources = ref NONE}))
-
-            (*
-             * Check to make sure that Enter/Leave statements match up in
-             * functions.
-             *)
             fun goto (l: Label.t, sources: SourceInfo.t list) =
                let
                   fun bug (msg: string): 'a =
@@ -404,9 +398,10 @@ structure Function =
                            then ()
                         else bug "mismatched block"
                end
-            val () =
+            val _ =
                Vector.foreach
-               (entries, fn FunctionEntry.T {start, ...} => goto (start, []))
+               (entries, fn FunctionEntry.T {start, ...} =>
+                goto (start, []))
             val _ = Vector.foreach (blocks, fn Block.T {label, ...} => rem label)
          in
             ()

@@ -250,10 +250,11 @@ fun shrinkFunction {globals: Statement.t vector} =
          val () = Function.clear f
          val {blocks, entries, mayInline, name, raises, returns, ...} =
             Function.dest f
-         val () = Vector.foreach (entries, fn FunctionEntry.T{args, ...} =>
-            Vector.foreach (args, fn (x, ty) =>
-                            setVarInfo (x, VarInfo.new (x, SOME ty)))
-            )
+         val () =
+            Vector.foreach
+            (entries, fn FunctionEntry.T{args, ...} =>
+             Vector.foreach (args, fn (x, ty) =>
+                             setVarInfo (x, VarInfo.new (x, SOME ty))))
          (* Index the labels by their defining block in blocks. *)
          val {get = labelIndex, set = setLabelIndex, ...} =
             Property.getSetOnce (Label.plist,
@@ -506,10 +507,10 @@ fun shrinkFunction {globals: Statement.t vector} =
                       ; incLabel return
                       ; normal ())
             end
-         val () = Vector.foreach
-            (entries,
-            fn FunctionEntry.T{start, ...} => incLabel start
-            )
+         val () =
+            Vector.foreach
+            (entries, fn FunctionEntry.T{start, ...} =>
+             incLabel start)
          fun indexMeaning i =
             case Array.sub (states, i) of
                State.Visited m => m
@@ -589,11 +590,10 @@ fun shrinkFunction {globals: Statement.t vector} =
                               State.Visited m => doit m
                             | _ => ())
                     else ())
-                val () = Vector.foreach
-                  (entries,
-                  fn FunctionEntry.T{start, ...} =>
-                     (bumpMeaning (labelMeaning start))
-                  )
+                val () =
+                   Vector.foreach
+                   (entries, fn FunctionEntry.T{start, ...} =>
+                    bumpMeaning (labelMeaning start))
              in
                 Array.equals (inDegree, inDegree', Int.equals)
                 orelse
@@ -1334,18 +1334,17 @@ fun shrinkFunction {globals: Statement.t vector} =
                  | Profile _ => simple ()
                  | Update _ => simple ()
              end) arg
-         val entries = Vector.map
-            (entries,
-            fn FunctionEntry.T{args, name, start} =>
-               let
-                  val start = labelMeaning start
-                  val () = forceMeaningBlock start
-               in
-                  FunctionEntry.T{args = args,
-                                  name = name,
-                                  start = meaningLabel start}
-               end
-            )
+         val entries =
+            Vector.map
+            (entries, fn FunctionEntry.T {args, name, start} =>
+             let
+                val start = labelMeaning start
+                val () = forceMeaningBlock start
+             in
+                FunctionEntry.T {args = args,
+                                 name = name,
+                                 start = meaningLabel start}
+             end)
          val f =
             Function.new {blocks = Vector.fromList (!newBlocks),
                           entries = entries,

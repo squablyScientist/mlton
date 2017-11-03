@@ -1700,13 +1700,12 @@ fun convert (program as S.Program.T {functions, globals, main, ...},
             val blocks = Vector.map (blocks, translateBlock)
             val blocks = Vector.concat [Vector.fromList (!extraBlocks), blocks]
             val _ = extraBlocks := []
-            val entries = Vector.map
-                (entries,
-                 fn S.FunctionEntry.T {args, name, start} =>
-                    FunctionEntry.T {args = translateFormals args,
-                                     name = name,
-                                     start = start}
-                )
+            val entries =
+               Vector.map
+               (entries, fn S.FunctionEntry.T {args, name, start} =>
+                FunctionEntry.T {args = translateFormals args,
+                                 name = name,
+                                 start = start})
             fun transTypes (ts : S.Type.t vector option)
                : Type.t vector option =
                Option.map (ts, fn ts => Vector.keepAllMap (ts, toRtype))
@@ -1725,37 +1724,37 @@ fun convert (program as S.Program.T {functions, globals, main, ...},
              val entry_name = FuncEntry.newNoname ()
           in
              (translateFunction
-                 (S.Function.profile
-                  (S.Function.new
-                   {blocks = (Vector.new2
-                              (S.Block.T
-                               {label = start,
-                                args = Vector.new0 (),
-                                statements = globals,
-                                transfer = (S.Transfer.Call
-                                            {args = Vector.new0 (),
-                                             entry = #entry main,
-                                             func = #func main,
-                                             return =
-                                             S.Return.NonTail
-                                             {cont = bug,
-                                              handler = S.Handler.Dead}})},
-                               S.Block.T
-                               {label = bug,
-                                args = Vector.new0 (),
-                                statements = Vector.new0 (),
-                                transfer = S.Transfer.Bug})),
-                    entries = (Vector.new1
-                               (S.FunctionEntry.T
-                                {args = Vector.new0 (),
-                                 name = entry_name,
-                                 start = start})),
-                    mayInline = false, (* doesn't matter *)
-                    name = main_name,
-                    raises = NONE,
-                    returns = NONE},
-                   S.SourceInfo.main)),
-               entry_name)
+              (S.Function.profile
+               (S.Function.new
+                {blocks = (Vector.new2
+                           (S.Block.T
+                            {label = start,
+                             args = Vector.new0 (),
+                             statements = globals,
+                             transfer = (S.Transfer.Call
+                                         {args = Vector.new0 (),
+                                          entry = #entry main,
+                                          func = #func main,
+                                          return =
+                                          S.Return.NonTail
+                                          {cont = bug,
+                                           handler = S.Handler.Dead}})},
+                            S.Block.T
+                            {label = bug,
+                             args = Vector.new0 (),
+                             statements = Vector.new0 (),
+                             transfer = S.Transfer.Bug})),
+                 entries = (Vector.new1
+                            (S.FunctionEntry.T
+                             {args = Vector.new0 (),
+                              name = entry_name,
+                              start = start})),
+                 mayInline = false, (* doesn't matter *)
+                 name = main_name,
+                 raises = NONE,
+                 returns = NONE},
+                S.SourceInfo.main)),
+              entry_name)
           end
       val functions = List.revMap (functions, translateFunction)
       val {entries, ...} = Function.dest main

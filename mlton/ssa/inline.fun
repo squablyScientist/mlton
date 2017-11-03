@@ -403,19 +403,15 @@ fun transform {program as Program.T {datatypes, globals, functions, main},
                                     val blocks = doit (blocks, return)
                                     val _ = List.push (newBlocks, blocks)
                                     val calledEntry =
-                                        Vector.peek
-                                            (entries,
-                                             fn FunctionEntry.T {name, ...} =>
-                                                FuncEntry.equals (entry, name)
-                                            )
+                                       Vector.peek
+                                       (entries, fn FunctionEntry.T {name, ...} =>
+                                        FuncEntry.equals (entry, name))
                                     val FunctionEntry.T {args, name, start, ...} =
-                                        case calledEntry of
-                                                SOME e => e
-                                            |   NONE   => Error.bug "Inline.transform: call to a non-existant function entry."
+                                       case calledEntry of
+                                          SOME e => e
+                                        | NONE => Error.bug "Inline.transform: call to a non-existant function entry."
                                     val name =
-                                       Label.newString
-                                        ((Func.originalName func) ^ "_" ^
-                                         (FuncEntry.originalName name))
+                                       Label.newString (Func.originalName func ^ "$" ^ FuncEntry.originalName name)
                                     val _ = 
                                        List.push 
                                        (newBlocks,
@@ -475,7 +471,8 @@ fun transform {program as Program.T {datatypes, globals, functions, main},
                    :: ac
                 end
           in
-             if Vector.exists (entries, fn FunctionEntry.T{name, ...} =>
+             if Vector.exists
+                (entries, fn FunctionEntry.T{name, ...} =>
                  FuncEntry.equals(name, #entry main))
                 then if inlineIntoMain
                         then keep ()

@@ -313,12 +313,12 @@ fun convert (S.Program.T {datatypes, functions, globals, main}) =
              val blocks = Vector.map (blocks, convertBlock)
              val blocks = Vector.concat [blocks, Vector.fromList (!extraBlocks)]
              val () = extraBlocks := []
-             val entries = Vector.map
+             val entries =
+                Vector.map
                 (entries, fn S.FunctionEntry.T {args, name, start} =>
-                   S2.FunctionEntry.T {args = convertFormals args,
-                                       name = name,
-                                       start = start}
-                )
+                 S2.FunctionEntry.T {args = convertFormals args,
+                                     name = name,
+                                     start = start})
           in
              S2.Function.new {blocks = blocks,
                               entries = entries,

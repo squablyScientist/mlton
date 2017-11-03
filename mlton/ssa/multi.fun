@@ -323,18 +323,24 @@ fun multi (p as Program.T {functions, main, ...})
           let
             val {blocks, entries, ...} = Function.dest f
           in
-            (Vector.foreach (entries, fn FunctionEntry.T {args, ...} =>
-               Vector.foreach (args, forceMultiThreadedVar o #1))
-            ; Vector.foreach (blocks, forceMultiThreadedBlock))
+            Vector.foreach
+            (entries, fn FunctionEntry.T {args, ...} =>
+             Vector.foreach
+             (args, forceMultiThreadedVar o #1)) ;
+            Vector.foreach
+            (blocks, forceMultiThreadedBlock)
           end
       val rec forceMultiUsedFunc
         = fn f =>
           let
             val {blocks, entries, ...} = Function.dest f
           in
-            (Vector.foreach (entries, fn FunctionEntry.T {args, ...} =>
-               Vector.foreach (args, forceMultiUsedVar o #1))
-            ; Vector.foreach (blocks, forceMultiUsedBlock))
+            Vector.foreach
+            (entries, fn FunctionEntry.T {args, ...} =>
+             Vector.foreach
+             (args, forceMultiUsedVar o #1));
+            Vector.foreach
+            (blocks, forceMultiUsedBlock)
           end
 
       fun visitFunc multiUsed f

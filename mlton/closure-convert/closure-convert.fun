@@ -106,19 +106,17 @@ structure Accum =
                                               Dexp.var (var, ty))),
                                      ty = Type.tuple tys}},
                  Ssa.Handler.Caller)
-             val funcName = Func.newNoname ()
-             val entryName = FuncEntry.newNoname ()
-             val entry = FunctionEntry.T{args = Vector.new0 (),
-                                         name = entryName,
-                                         start = start}
              val {blocks, ...} =
                 Function.dest
                 (Ssa.shrinkFunction
                  {globals = Vector.new0 ()}
                  (Function.new {blocks = Vector.fromList blocks,
-                                entries = Vector.new1 entry,
+                                entries = (Vector.new1 o FunctionEntry.T)
+                                          {args = Vector.new0 (),
+                                           name = FuncEntry.newNoname (),
+                                           start = start},
                                 mayInline = false, (* doesn't matter *)
-                                name = funcName,
+                                name = Func.newNoname (),
                                 raises = NONE,
                                 returns = SOME (Vector.new1 (Type.tuple tys))}))
           in

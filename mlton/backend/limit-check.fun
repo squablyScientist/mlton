@@ -228,11 +228,10 @@ fun insertFunction (f: Function.t,
                        else transfer)
                  | _ => transfer
              (* Determine if the current block is a function entry block. *)
-             val stack = Vector.exists
-                (entries,
-                 fn FunctionEntry.T {start, ...} =>
-                    Label.equals(start, label)
-                )
+             val stack =
+                Vector.exists
+                (entries, fn FunctionEntry.T {start, ...} =>
+                 Label.equals(start, label))
              fun insert (amount: Operand.t (* of type word *)) =
                 let
                    val collect = Label.newNoname ()

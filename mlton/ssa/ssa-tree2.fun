@@ -1355,8 +1355,10 @@ structure Function =
       fun foreachVar (f: t, fx: Var.t * Type.t -> unit): unit =
          let
             val {blocks, entries, ...} = dest f
-            val _ = Vector.foreach (entries, fn FunctionEntry.T{args, ...} =>
-                     Vector.foreach (args, fx))
+            val _ =
+               Vector.foreach
+               (entries, fn FunctionEntry.T{args, ...} =>
+                Vector.foreach (args, fx))
             val _ =
                Vector.foreach
                (blocks, fn Block.T {args, statements, ...} =>
@@ -1409,10 +1411,10 @@ structure Function =
                         ()
                      end
                end
-            val () = Vector.foreach
-               (entries,
-                fn FunctionEntry.T{start, ...} => visit start
-               )
+            val () =
+               Vector.foreach
+               (entries, fn FunctionEntry.T {start, ...} =>
+                visit start)
             val _ = Vector.foreach (blocks, rem o Block.label)
          in
             ()
@@ -1685,8 +1687,10 @@ structure Function =
       fun clear (T {controlFlow, dest, ...}) =
          let
             val {blocks, entries, ...} = dest
-            val _ = Vector.foreach (entries, fn (FunctionEntry.T{args, ...})
-                     => Vector.foreach (args, Var.clear o #1))
+            val _ =
+               Vector.foreach
+               (entries, fn FunctionEntry.T {args, ...} =>
+                Vector.foreach (args, Var.clear o #1))
             val _ = Vector.foreach (blocks, Block.clear)
             val _ = CPromise.clear controlFlow
          in
@@ -1698,10 +1702,9 @@ structure Function =
             val {entries, name, raises, returns, ...} = dest f
             open Layout
             val entryLayouts =
-               Vector.foldr(entries, [],
-                  fn (entry, entryLayouts) =>
-                     FunctionEntry.layoutHeader entry :: entryLayouts
-               )
+               Vector.foldr
+               (entries, [], fn (entry, entryLayouts) =>
+                FunctionEntry.layoutHeader entry :: entryLayouts)
             val (sep, rty) =
                if !Control.showTypes
                   then (str ":",
@@ -1802,14 +1805,11 @@ structure Function =
             val {blocks, entries, mayInline, name, raises, returns, ...} =
                dest f
             val entries : FunctionEntry.t vector =
-               Vector.map (entries,
-                  (fn (FunctionEntry.T{args, name, start}) =>
-                     FunctionEntry.T{
-                        args = Vector.map(args, fn (x, ty) => (bindVar x, ty)),
-                        name = name,
-                        start = start}
-                  )
-               )
+               Vector.map
+               (entries, fn FunctionEntry.T {args, name, start} =>
+                FunctionEntry.T {args = Vector.map(args, fn (x, ty) => (bindVar x, ty)),
+                                 name = name,
+                                 start = start})
             val bindLabel = ignore o bindLabel
             val bindVar = ignore o bindVar
             val _ = 
@@ -1832,12 +1832,12 @@ structure Function =
                                              use = lookupVar}))),
                          transfer = Transfer.replaceLabelVar
                                     (transfer, lookupLabel, lookupVar)})
-            val entries = Vector.map (entries,
-               fn FunctionEntry.T {args, name, start} =>
-                  FunctionEntry.T {args = args,
-                                   name = name,
-                                   start = lookupLabel start}
-               )
+            val entries =
+               Vector.map
+               (entries, fn FunctionEntry.T {args, name, start} =>
+                FunctionEntry.T {args = args,
+                                 name = name,
+                                 start = lookupLabel start})
             val _ = destroyVar ()
             val _ = destroyLabel ()
          in
@@ -1874,15 +1874,13 @@ structure Function =
                 let
                    val statements =
                       if Vector.exists
-                       (entries,
-                        fn FunctionEntry.T{start, ...} =>
-                           Label.equals (label, start)
-                       )
+                         (entries, fn FunctionEntry.T{start, ...} =>
+                          Label.equals (label, start))
                          then (Vector.concat
                                [Vector.new1
                                 (Profile (ProfileExp.Enter sourceInfo)),
                                 statements])
-                         else statements
+                      else statements
                    fun leave () = Profile (ProfileExp.Leave sourceInfo)
                    fun prefix (l: Label.t,
                                statements: Statement.t vector): Label.t =
@@ -2121,24 +2119,21 @@ structure Program =
                  end
          end
 
-      fun mainFunction (T {functions, main, ...}) =
-         case List.peek (functions, fn f =>
-                         Func.equals (#func main, Function.name f)) of
-            NONE => Error.bug "SsaTree.Program.mainFunction: no main function"
-          | SOME f => f
-
-      fun layoutStats (program as T {datatypes, globals, functions, ...}) =
+      fun layoutStats (T {datatypes, globals, functions, main, ...}) =
          let
             val (mainNumVars, mainNumBlocks) =
-               let
-                  val f = mainFunction program
-                  val numVars = ref 0
-                  val _ = Function.foreachVar (f, fn _ => Int.inc numVars)
-                  val {blocks, ...} = Function.dest f
-                  val numBlocks = Vector.length blocks
-               in
-                  (!numVars, numBlocks)
-               end
+               case List.peek (functions, fn f =>
+                               Func.equals (#func main, Function.name f)) of
+                  NONE => Error.bug "SsaTree2.Program.layoutStats: no main"
+                | SOME f =>
+                     let
+                        val numVars = ref 0
+                        val _ = Function.foreachVar (f, fn _ => Int.inc numVars)
+                        val {blocks, ...} = Function.dest f
+                        val numBlocks = Vector.length blocks
+                     in
+                        (!numVars, numBlocks)
+                     end
             val numTypes = ref 0
             val {get = countType, destroy} =
                Property.destGet
@@ -2174,11 +2169,10 @@ structure Program =
                 let
                    val {blocks, entries, ...} = Function.dest f
                    (* Count all of the arguments *)
-                   val _ = Vector.foreach
-                     (entries,
-                      fn FunctionEntry.T{args, ...} =>
-                         Vector.foreach (args, countType o #2)
-                     )
+                   val _ =
+                      Vector.foreach
+                      (entries, fn FunctionEntry.T{args, ...} =>
+                       Vector.foreach (args, countType o #2))
                    val _ =
                       Vector.foreach
                       (blocks, fn Block.T {args, statements, ...} =>

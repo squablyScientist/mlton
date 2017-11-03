@@ -758,8 +758,10 @@ structure Function =
                         ()
                      end
                end
-            val _ = Vector.foreach (entries,
-                     fn FunctionEntry.T{start, ...} => visit start)
+            val _ =
+               Vector.foreach
+               (entries, fn FunctionEntry.T {start, ...} =>
+                visit start)
             val _ = Vector.foreach (blocks, rem o Block.label)
          in
             ()
@@ -1404,17 +1406,16 @@ structure Program =
                             | Return _ => tail "return"
                             | Switch s => Switch.foreachLabel (s, goto)
                         end
-                  val () = Vector.foreach
-                     (entries,
-                      fn FunctionEntry.T {start, ...} =>
-                        let
-                           val info as HandlerInfo.T {global, ...} = labelInfo start
-                           val _ = ExnStack.forcePoint (global, ExnStack.Point.Caller)
-                           val _ = visitInfo info
-                        in
-                           ()
-                        end
-                     )
+                  val () =
+                     Vector.foreach
+                     (entries, fn FunctionEntry.T {start, ...} =>
+                      let
+                         val info as HandlerInfo.T {global, ...} = labelInfo start
+                         val _ = ExnStack.forcePoint (global, ExnStack.Point.Caller)
+                         val _ = visitInfo info
+                      in
+                         ()
+                      end)
                   val _ =
                      Control.diagnostics
                      (fn display =>
@@ -1493,11 +1494,10 @@ structure Program =
                let
                   val bindVar = fn x => bindVar (x, isMain)
                   val {blocks, entries, ...} = Function.dest f
-                  val _ = Vector.foreach
-                     (entries,
-                      fn FunctionEntry.T {args, ...} =>
-                        Vector.foreach (args, bindVar o #1)
-                     )
+                  val _ =
+                     Vector.foreach
+                     (entries, fn FunctionEntry.T {args, ...} =>
+                      Vector.foreach (args, bindVar o #1))
                   val _ = Vector.foreach (blocks, bindLabel o Block.label)
                   val _ =
                      Vector.foreach
@@ -1538,11 +1538,10 @@ structure Program =
                       end)
                      )
                   val _ = Vector.foreach (blocks, unbindLabel o Block.label)
-                  val _ = Vector.foreach
-                     (entries,
-                      fn FunctionEntry.T {args, ...} =>
-                        Vector.foreach (args, unbindVar o #1)
-                     )
+                  val _ =
+                     Vector.foreach
+                     (entries, fn FunctionEntry.T {args, ...} =>
+                      Vector.foreach (args, unbindVar o #1))
                in
                   ()
                end
@@ -1709,11 +1708,10 @@ structure Program =
                      funcInfo func
 
                   (* Make sure the call uses valid 'funcEntry' names. *)
-                  val entry = Vector.peek
-                     (entries,
-                      fn FunctionEntry.T {name, ...} =>
-                        FuncEntry.equals (funcEntry, name)
-                     )
+                  val entry =
+                     Vector.peek
+                     (entries, fn FunctionEntry.T {name, ...} =>
+                      FuncEntry.equals (funcEntry, name))
                in
                   (* Once we are sure that the 'funcEntry' name being used is a
                    * valid entry for the function, make sure the types of the
@@ -1766,11 +1764,10 @@ structure Program =
             fun checkFunction (Function.T {blocks, entries, raises, returns,
                                            ...}) =
                let
-                  val _ = Vector.foreach
-                     (entries,
-                      fn FunctionEntry.T {args, ...} =>
-                        Vector.foreach (args, setVarType)
-                     )
+                  val _ =
+                     Vector.foreach
+                     (entries, fn FunctionEntry.T {args, ...} =>
+                      Vector.foreach (args, setVarType))
                   val _ =
                      Vector.foreach
                      (blocks, fn b as Block.T {args, label, statements,
@@ -1781,10 +1778,10 @@ structure Program =
                                          Statement.foreachDef
                                          (s, setVarType))
                        ; Transfer.foreachDef (transfer, setVarType)))
-                  val _ = Vector.foreach
-                     (entries,
-                      ignore o labelIsNullaryJump o FunctionEntry.start
-                     )
+                  val _ =
+                     Vector.foreach
+                     (entries, fn FunctionEntry.T {start, ...} =>
+                      ignore (labelIsNullaryJump start))
                   fun transferOk (t: Transfer.t): bool =
                      let
                         datatype z = datatype Transfer.t
@@ -1928,11 +1925,10 @@ structure Program =
                 fn f =>
                 let
                    val {entries, ...} = Function.dest f
-                   val entry : FunctionEntry.t option = Vector.peek
-                     (entries,
-                      fn FunctionEntry.T {name, ...} =>
-                        FuncEntry.equals (name, #entry main)
-                     )
+                   val entry =
+                      Vector.peek
+                      (entries, fn FunctionEntry.T {name, ...} =>
+                       FuncEntry.equals (name, #entry main))
                 in
                    case entry of
                      SOME (FunctionEntry.T {args, ...}) => Vector.isEmpty args

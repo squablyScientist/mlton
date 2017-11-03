@@ -335,11 +335,10 @@ fun allocate {formalsStackOffsets,
       (* !hasHandler = true iff handlers are installed in this function. *)
       val hasHandler: bool ref = ref false
       fun forceStack (x: Var.t): unit = place x := Stack
-      val _ = Vector.foreach
-         (entries,
-          fn FunctionEntry.T {args, ...} =>
-            Vector.foreach (args, forceStack o #1)
-         )
+      val _ =
+         Vector.foreach
+         (entries, fn FunctionEntry.T {args, ...} =>
+          Vector.foreach (args, forceStack o #1))
       val _ =
          Vector.foreach
          (blocks,
@@ -568,11 +567,10 @@ fun allocate {formalsStackOffsets,
                                record [("handler", Bytes.layout handler),
                                        ("link", Bytes.layout link)])
                               handlerLinkOffset])
-             val _ = Vector.foreach
-               (entries,
-                fn FunctionEntry.T {args, ...} =>
-                  Vector.foreach (args, diagVar o #1)
-               )
+             val _ =
+                Vector.foreach
+                (entries, fn FunctionEntry.T {args, ...} =>
+                 Vector.foreach (args, diagVar o #1))
              val _ =
                 Vector.foreach
                 (blocks, fn R.Block.T {label, args, statements, ...} =>
