@@ -669,7 +669,7 @@ let
                (Var.plist,
                 Property.initRaise ("Backend.toMachine.isGlobal", Var.layout))
             val _ =
-               Function.foreachDef (#func main, fn (x, _) => set (x, false))
+               Function.foreachDef (main, fn (x, _) => set (x, false))
             val _ =
                List.foreach
                (functions, fn f =>
@@ -954,29 +954,29 @@ let
                                      ...}) : unit =
                let
                   (* Make an entry block for each function entry. *)
-                  val _ = Vector.foreach (entries,
-                     fn FunctionEntry.T {start, name, ...} =>
-                        if Label.equals (label, start)
-                           then
-                              let
-                                 val live = #live (labelRegInfo start)
-                                 val returns =
-                                    Option.map
-                                    (returns, fn returns =>
-                                     Vector.map (returns, Live.StackOffset))
-                              in
-                                 Chunk.newBlock
-                                 (chunk,
-                                  {label = funcToLabel name,
-                                   kind = M.Kind.Func,
-                                   live = operandsLive live,
-                                   raises = raises,
-                                   returns = returns,
-                                   statements = Vector.new0 (),
-                                   transfer = M.Transfer.Goto start})
-                              end
-                           else ()
-                     )
+                  val _ =
+                     Vector.foreach
+                     (entries, fn FunctionEntry.T {start, name, ...} =>
+                      if Label.equals (label, start)
+                         then
+                            let
+                               val live = #live (labelRegInfo start)
+                               val returns =
+                                  Option.map
+                                  (returns, fn returns =>
+                                   Vector.map (returns, Live.StackOffset))
+                            in
+                               Chunk.newBlock
+                               (chunk,
+                                {label = funcToLabel name,
+                                 kind = M.Kind.Func,
+                                 live = operandsLive live,
+                                 raises = raises,
+                                 returns = returns,
+                                 statements = Vector.new0 (),
+                                 transfer = M.Transfer.Goto start})
+                            end
+                         else ())
                   val {live, liveNoFormals, size, ...} = labelRegInfo label
                   val chunk = labelChunk label
                   val statements =
@@ -1083,7 +1083,7 @@ let
       (* Generate the main function first.
        * Need to do this in order to set globals.
        *)
-      val _ = genFunc (#func main, true)
+      val _ = genFunc (main, true)
       val _ = List.foreach (functions, fn f => genFunc (f, false))
       val chunks = !chunks
       fun chunkToMachine (Chunk.T {chunkLabel, blocks}) =
@@ -1126,9 +1126,14 @@ let
                              blocks = blocks,
                              regMax = ! o regMax}
          end
-      val mainName = R.Function.name (#func main)
+      val (mainName, mainEntryName) =
+         let
+            val {entries, name, ...} = R.Function.dest main
+         in
+            (name, R.FunctionEntry.name (Vector.first entries))
+         end
       val main = {chunkLabel = Chunk.label (funcChunk mainName),
-                  label = funcToLabel (#entry main)}
+                  label = funcToLabel mainEntryName}
       val chunks = List.revMap (chunks, chunkToMachine)
       (* The clear is necessary because properties have been attached to Funcs
        * and Labels, and they appear as labels in the resulting program.

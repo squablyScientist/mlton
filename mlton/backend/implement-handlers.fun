@@ -192,26 +192,25 @@ fun flow (f: Function.t): Function.t =
                       statements = statements,
                       transfer = transfer}
           end)
-      val (newEntries, newStartBlocks) = Vector.fold
-         (entries, ([],[]),
-          fn (FunctionEntry.T {args, name, start},
-              (newEntries, newStartBlocks)) =>
-            let
-               val newStart = Label.newNoname ()
-               val startBlock =
-                  Block.T {args = Vector.new0 (),
-                           kind = Kind.Jump,
-                           label = newStart,
-                           statements = Vector.new1 SetSlotExnStack,
-                           transfer = Goto {args = Vector.new0 (),
-                                            dst = start}}
-               val newEntry = FunctionEntry.T {args = args,
-                                               name = name,
-                                               start = newStart}
-            in
-               (newEntry :: newEntries, startBlock :: newStartBlocks)
-            end
-         )
+      val (newEntries, newStartBlocks) =
+         Vector.fold
+         (entries, ([],[]), fn (FunctionEntry.T {args, name, start},
+                                (newEntries, newStartBlocks)) =>
+          let
+             val newStart = Label.newNoname ()
+             val startBlock =
+                Block.T {args = Vector.new0 (),
+                         kind = Kind.Jump,
+                         label = newStart,
+                         statements = Vector.new1 SetSlotExnStack,
+                         transfer = Goto {args = Vector.new0 (),
+                                          dst = start}}
+             val newEntry = FunctionEntry.T {args = args,
+                                             name = name,
+                                             start = newStart}
+          in
+             (newEntry :: newEntries, startBlock :: newStartBlocks)
+          end)
       val blocks = Vector.concat [blocks, Vector.fromList newStartBlocks]
       val () = Vector.foreach (blocks, rem o Block.label)
    in
@@ -225,8 +224,7 @@ fun flow (f: Function.t): Function.t =
 fun transform (Program.T {functions, handlesSignals, main, objectTypes}) =
    Program.T {functions = List.revMap (functions, flow),
               handlesSignals = handlesSignals,
-              main = {func = flow (#func main),
-                      entry = #entry main},
+              main = flow main,
               objectTypes = objectTypes}
 
 end

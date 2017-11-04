@@ -232,7 +232,7 @@ signature RSSA =
             datatype t =
                T of {functions: Function.t list,
                      handlesSignals: bool,
-                     main: {func: Function.t, entry: FuncEntry.t},
+                     main: Function.t,
                      objectTypes: ObjectType.t vector}
 
             val clear: t -> unit

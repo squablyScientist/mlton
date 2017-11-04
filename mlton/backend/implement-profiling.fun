@@ -908,8 +908,7 @@ fun doit program =
          end
       val program = Program.T {functions = List.revMap (functions, doFunction),
                                handlesSignals = handlesSignals,
-                               main = {func = doFunction (#func main),
-                                       entry = #entry main},
+                               main = doFunction main,
                                objectTypes = objectTypes}
       val _ = addFuncEdges ()
       val names = Vector.fromListRev (!names)

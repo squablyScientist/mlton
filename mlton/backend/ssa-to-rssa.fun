@@ -1716,57 +1716,47 @@ fun convert (program as S.Program.T {functions, globals, main, ...},
                           raises = transTypes raises,
                           returns = transTypes returns}
          end
-      val (main : Function.t, entry : FuncEntry.t) =
+      val main =
           let
              val start = Label.newNoname ()
              val bug = Label.newNoname ()
-             val main_name = Func.newNoname ()
-             val entry_name = FuncEntry.newNoname ()
           in
-             (translateFunction
-              (S.Function.profile
-               (S.Function.new
-                {blocks = (Vector.new2
-                           (S.Block.T
-                            {label = start,
-                             args = Vector.new0 (),
-                             statements = globals,
-                             transfer = (S.Transfer.Call
-                                         {args = Vector.new0 (),
-                                          entry = #entry main,
-                                          func = #func main,
-                                          return =
-                                          S.Return.NonTail
-                                          {cont = bug,
-                                           handler = S.Handler.Dead}})},
-                            S.Block.T
-                            {label = bug,
-                             args = Vector.new0 (),
-                             statements = Vector.new0 (),
-                             transfer = S.Transfer.Bug})),
-                 entries = (Vector.new1
-                            (S.FunctionEntry.T
-                             {args = Vector.new0 (),
-                              name = entry_name,
-                              start = start})),
-                 mayInline = false, (* doesn't matter *)
-                 name = main_name,
-                 raises = NONE,
-                 returns = NONE},
-                S.SourceInfo.main)),
-              entry_name)
+             translateFunction
+             (S.Function.profile
+              (S.Function.new
+               {blocks = (Vector.new2
+                          (S.Block.T
+                           {label = start,
+                            args = Vector.new0 (),
+                            statements = globals,
+                            transfer = (S.Transfer.Call
+                                        {args = Vector.new0 (),
+                                         entry = #entry main,
+                                         func = #func main,
+                                         return =
+                                         S.Return.NonTail
+                                         {cont = bug,
+                                          handler = S.Handler.Dead}})},
+                           S.Block.T
+                           {label = bug,
+                            args = Vector.new0 (),
+                            statements = Vector.new0 (),
+                            transfer = S.Transfer.Bug})),
+                entries = (Vector.new1
+                           (S.FunctionEntry.T
+                            {args = Vector.new0 (),
+                             name = FuncEntry.newNoname (),
+                             start = start})),
+                mayInline = false, (* doesn't matter *)
+                name = Func.newNoname (),
+                raises = NONE,
+                returns = NONE},
+               S.SourceInfo.main))
           end
       val functions = List.revMap (functions, translateFunction)
-      val {entries, ...} = Function.dest main
-      (* The RSSA main just created should only have 1 entry point. *)
-      val () = case Vector.length entries of
-            1 => ()
-        |   n => Error.bug ("Backend.RSSA newly created main function has " ^
-                            (Int.toString n) ^
-                            " entry points, but should only have 1.")
       val p = Program.T {functions = functions,
                          handlesSignals = handlesSignals,
-                         main = {func = main, entry = entry},
+                         main = main,
                          objectTypes = Vector.concat [objectTypes, Vector.fromListRev (!newObjectTypes)]}
       val _ = Program.clear p
    in

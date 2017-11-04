@@ -15,7 +15,7 @@ datatype z = datatype Transfer.t
 (* A chunkifier that puts each function in its own chunk. *)
 fun chunkPerFunc (Program.T {functions, main, ...}) =
    Vector.fromListMap
-   ((#func main) :: functions, fn f =>
+   (main :: functions, fn f =>
     let
        val {name, blocks, ...} = Function.dest f
     in
@@ -27,7 +27,7 @@ fun chunkPerFunc (Program.T {functions, main, ...}) =
  *)
 fun oneChunk (Program.T {functions, main, ...}) =
    let
-      val functions = (#func main) :: functions
+      val functions = main :: functions
    in
       Vector.new1
       {funcs = Vector.fromListMap (functions, Function.name),
@@ -56,7 +56,7 @@ fun blockSize (Block.T {statements, transfer, ...}): int =
 (* Compute the list of functions that each function returns to *)
 fun returnsTo (Program.T {functions, main, ...}) =
    let
-      val functions = (#func main) :: functions
+      val functions = main :: functions
       val {get: Func.t -> {returnsTo: Label.t list ref,
                            tailCalls: Func.t list ref},
            rem, ...} =
@@ -107,7 +107,7 @@ structure Graph = EquivalenceGraph
 structure Class = Graph.Class
 fun coalesce (program as Program.T {functions, main, ...}, limit) =
    let
-      val functions = (#func main) :: functions
+      val functions = main :: functions
       val graph = Graph.new ()
       val {get = funcClass: Func.t -> Class.t, set = setFuncClass,
            rem = remFuncClass, ...} =
@@ -139,10 +139,10 @@ fun coalesce (program as Program.T {functions, main, ...}, limit) =
                 of functions has been turned into one function, with multiple
                 entries, earlier in the pipeline). *)
              val entryClass = Graph.newClass (graph, {size = 0})
-             val () = Vector.foreach
-                (entries,
-                 fn FunctionEntry.T {start, ...} =>
-                    Graph.==(graph, labelClass start, entryClass))
+             val () =
+                Vector.foreach
+                (entries, fn FunctionEntry.T {start, ...} =>
+                 Graph.== (graph, labelClass start, entryClass))
              val _ = setFuncClass (funcName, entryClass)
 
              val _ =

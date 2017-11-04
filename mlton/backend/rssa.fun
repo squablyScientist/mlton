@@ -925,12 +925,12 @@ structure Program =
       datatype t =
          T of {functions: Function.t list,
                handlesSignals: bool,
-               main: {func: Function.t, entry: FuncEntry.t},
+               main: Function.t,
                objectTypes: ObjectType.t vector}
 
       fun clear (T {functions, main, ...}) =
          (List.foreach (functions, Function.clear)
-          ; Function.clear (#func main))
+          ; Function.clear main)
 
       fun layouts (T {functions, main, objectTypes, ...},
                    output': Layout.t -> unit): unit =
@@ -943,7 +943,7 @@ structure Program =
                                output (seq [str "opt_", Int.layout i,
                                             str " = ", ObjectType.layout ty]))
             ; output (str "\nMain:")
-            ; Function.layouts (#func main, output)
+            ; Function.layouts (main, output)
             ; output (str "\nFunctions:")
             ; List.foreach (functions, fn f => Function.layouts (f, output))
          end
@@ -954,7 +954,7 @@ structure Program =
             val numBlocks = ref 0
             val _ =
                List.foreach
-               ((#func main)::functions, fn f =>
+               (main::functions, fn f =>
                 let
                    val {blocks, ...} = Function.dest f
                 in
@@ -978,7 +978,7 @@ structure Program =
          (Control.profile := Control.ProfileNone
           ; T {functions = List.map (functions, Function.dropProfile),
                handlesSignals = handlesSignals,
-               main = {func = Function.dropProfile (#func main), entry = #entry main},
+               main = Function.dropProfile main,
                objectTypes = objectTypes})
       (* quell unused warning *)
       val _ = dropProfile
@@ -986,7 +986,7 @@ structure Program =
       fun dfs (p, v) =
          let
             val T {functions, main, ...} = p
-            val functions = Vector.fromList ((#func main)::functions)
+            val functions = Vector.fromList (main::functions)
             val numFunctions = Vector.length functions
             val {get = funcIndex, set = setFuncIndex, rem, ...} =
                Property.getSetOnce (Func.plist,
@@ -1014,16 +1014,15 @@ structure Program =
                         ()
                      end
                end
-            val _ = visit (Function.name (#func main))
+            val _ = visit (Function.name main)
             val _ = Vector.foreach (functions, rem o Function.name)
          in
             ()
          end
 
-      fun orderFunctions (p as T {handlesSignals, objectTypes, main, ...}) =
+      fun orderFunctions (p as T {handlesSignals, objectTypes, ...}) =
          let
             val functions = ref []
-            val {entry = mainFuncEntry, ...} = main
             val () =
                dfs
                (p, fn f =>
@@ -1052,7 +1051,7 @@ structure Program =
          in
             T {functions = functions,
                handlesSignals = handlesSignals,
-               main = {func = main, entry = mainFuncEntry},
+               main = main,
                objectTypes = objectTypes}
          end
 
@@ -1157,10 +1156,10 @@ structure Program =
                let
                   val {name, entries, raises, returns, ...} =
                      Function.dest f
-                  val () = Vector.foreach
-                     (entries,
-                      loopFormals o FunctionEntry.args
-                     )
+                  val () =
+                     Vector.foreach
+                     (entries, fn FunctionEntry.T {args, ...} =>
+                      loopFormals args)
                   val blocks = ref []
                   val () =
                      Function.dfs
@@ -1191,23 +1190,21 @@ structure Program =
             (* Must process main first, because it defines globals that are
              * used in other functions.
              *)
-            val {func = mainFunc, entry = mainEntry} = main
-            val mainFunc = loopFunction mainFunc
+            val main = loopFunction main
             val functions = List.revMap (functions, loopFunction)
          in
             T {functions = functions,
                handlesSignals = handlesSignals,
-               main = {func = mainFunc, entry = mainEntry},
+               main = main,
                objectTypes = objectTypes}
          end
 
       fun shrink (T {functions, handlesSignals, main, objectTypes}) =
          let
-            val {func = mainFunc, entry = mainEntry} = main
             val p = 
                T {functions = List.revMap (functions, Function.shrink),
                   handlesSignals = handlesSignals,
-                  main = {func = Function.shrink mainFunc, entry = mainEntry},
+                  main = Function.shrink main,
                   objectTypes = objectTypes}
             val p = copyProp p
             val () = clear p
@@ -1506,37 +1503,38 @@ structure Program =
                   (* Descend the dominator trees, verifying that variable
                    * definitions dominate variable uses.
                    *)
-                  val _ = Vector.foreach (Function.dominatorForest f, fn tree =>
-                     Tree.traverse
-                     (tree,
-                      fn Block.T {args, statements, transfer, ...} =>
-                      let
-                         val _ = Vector.foreach (args, bindVar o #1)
-                         val _ =
-                            Vector.foreach
-                            (statements, fn s =>
-                             (Statement.foreachUse (s, getVar)
-                              ; Statement.foreachDef (s, bindVar o #1)))
-                         val _ = Transfer.foreachUse (transfer, getVar)
-                         val _ = Transfer.foreachDef (transfer, bindVar o #1)
-                      in
-                         fn () =>
-                         if isMain
-                            then ()
-                         else
-                            let
-                               val _ =
-                                  Vector.foreach
-                                  (statements, fn s =>
-                                   Statement.foreachDef (s, unbindVar o #1))
-                               val _ =
-                                  Transfer.foreachDef (transfer, unbindVar o #1)
-                               val _ = Vector.foreach (args, unbindVar o #1)
-                            in
-                               ()
-                            end
-                      end)
-                     )
+                  val _ =
+                     Vector.foreach
+                     (Function.dominatorForest f, fn tree =>
+                      Tree.traverse
+                      (tree,
+                       fn Block.T {args, statements, transfer, ...} =>
+                       let
+                          val _ = Vector.foreach (args, bindVar o #1)
+                          val _ =
+                             Vector.foreach
+                             (statements, fn s =>
+                              (Statement.foreachUse (s, getVar)
+                               ; Statement.foreachDef (s, bindVar o #1)))
+                          val _ = Transfer.foreachUse (transfer, getVar)
+                          val _ = Transfer.foreachDef (transfer, bindVar o #1)
+                       in
+                          fn () =>
+                          if isMain
+                             then ()
+                          else
+                             let
+                                val _ =
+                                   Vector.foreach
+                                   (statements, fn s =>
+                                    Statement.foreachDef (s, unbindVar o #1))
+                                val _ =
+                                   Transfer.foreachDef (transfer, unbindVar o #1)
+                                val _ = Vector.foreach (args, unbindVar o #1)
+                             in
+                                ()
+                             end
+                       end))
                   val _ = Vector.foreach (blocks, unbindLabel o Block.label)
                   val _ =
                      Vector.foreach
@@ -1546,7 +1544,7 @@ structure Program =
                   ()
                end
             val _ = List.foreach (functions, bindFunc o Function.name)
-            val _ = loopFunc (#func main, true)
+            val _ = loopFunc (main, true)
             val _ = List.foreach (functions, fn f => loopFunc (f, false))
             val _ = clear program
          in ()
@@ -1917,22 +1915,17 @@ structure Program =
                List.foreach
                (functions, fn f as Function.T {name, ...} =>
                 setFuncInfo (name, f))
-            val _ = checkFunction (#func main)
+            val _ = checkFunction main
             val _ = List.foreach (functions, checkFunction)
             val _ =
                check'
-               (#func main, "main function",
+               (main, "main function",
                 fn f =>
                 let
                    val {entries, ...} = Function.dest f
-                   val entry =
-                      Vector.peek
-                      (entries, fn FunctionEntry.T {name, ...} =>
-                       FuncEntry.equals (name, #entry main))
                 in
-                   case entry of
-                     SOME (FunctionEntry.T {args, ...}) => Vector.isEmpty args
-                   |  NONE => false
+                   Vector.length entries = 1
+                   andalso Vector.isEmpty (FunctionEntry.args (Vector.first entries))
                 end,
                 Function.layout)
             val _ = clear p

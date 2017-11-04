@@ -630,11 +630,12 @@ fun insertCoalesce (f: Function.t, handlesSignals) =
              b orelse isBigAlloc
           end)
       (* Add the entry points to the graph. *)
-      val _ = Vector.foreach
+      val _ =
+         Vector.foreach
          (entries, fn FunctionEntry.T {start, ...} =>
-            (Array.update (mayHaveCheck, labelIndex start, true)
-            (* Build cfg. *)
-            ; ignore (Graph.addEdge (g, {from = root, to = labelNode start}))))
+          (Array.update (mayHaveCheck, labelIndex start, true)
+           (* Build cfg. *)
+           ; ignore (Graph.addEdge (g, {from = root, to = labelNode start}))))
       datatype z = datatype Control.limitCheck
       val fullCFG = 
          case !Control.limitCheck of
@@ -840,36 +841,33 @@ fun transform (Program.T {functions, handlesSignals, main, objectTypes}) =
             PerBlock => insertPerBlock (f, handlesSignals)
           | _ => insertCoalesce (f, handlesSignals)
       val functions = List.revMap (functions, insert)
-      (* The FuncEntry label /should/ stay the same here, so I can continue to
-       * use Program.main.entry as the FuncEntry label for main. *)
       val {blocks, entries, name, raises, returns} =
-         Function.dest (insert (#func main))
-      val (newEntries, newStartBlocks) = Vector.fold
-         (entries, ([],[]),
-          fn (FunctionEntry.T {args, name, start},
-              (newEntries, newStartBlocks)) =>
-            let
-               val newStart = Label.newNoname ()
-               val newStartBlock =
-                  Block.T {args = Vector.new0 (),
-                           kind = Kind.Jump,
-                           label = newStart,
-                           statements = (Vector.fromListMap
-                                         (!extraGlobals, fn x =>
-                                          Statement.Bind
-                                          {dst = (x, Type.bool),
-                                           isMutable = true,
-                                           src = Operand.cast (Operand.bool true,
-                                                               Type.bool)})),
-                           transfer = Transfer.Goto {args = Vector.new0 (),
-                                                     dst = start}}
-               val newEntry = FunctionEntry.T {args = args,
-                                               name = name,
-                                               start = newStart}
-            in
-               (newEntry :: newEntries, newStartBlock :: newStartBlocks)
-            end
-         )
+         Function.dest (insert main)
+      val (newEntries, newStartBlocks) =
+         Vector.fold
+         (entries, ([],[]), fn (FunctionEntry.T {args, name, start},
+                                (newEntries, newStartBlocks)) =>
+          let
+             val newStart = Label.newNoname ()
+             val newStartBlock =
+                Block.T {args = Vector.new0 (),
+                         kind = Kind.Jump,
+                         label = newStart,
+                         statements = (Vector.fromListMap
+                                       (!extraGlobals, fn x =>
+                                        Statement.Bind
+                                        {dst = (x, Type.bool),
+                                         isMutable = true,
+                                         src = Operand.cast (Operand.bool true,
+                                                             Type.bool)})),
+                         transfer = Transfer.Goto {args = Vector.new0 (),
+                                                   dst = start}}
+             val newEntry = FunctionEntry.T {args = args,
+                                             name = name,
+                                             start = newStart}
+          in
+             (newEntry :: newEntries, newStartBlock :: newStartBlocks)
+          end)
       val blocks = Vector.concat [Vector.fromList newStartBlocks, blocks]
       val newMain = Function.new {blocks = blocks,
                                   entries = Vector.fromList newEntries,
@@ -879,7 +877,7 @@ fun transform (Program.T {functions, handlesSignals, main, objectTypes}) =
    in
       Program.T {functions = functions,
                  handlesSignals = handlesSignals,
-                 main = {func = newMain, entry = #entry main},
+                 main = newMain,
                  objectTypes = objectTypes}
    end
 
