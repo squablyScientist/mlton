@@ -78,7 +78,8 @@ local
                     val shouldInline = shouldInline name
                  in
                     display
-                    (seq [FuncEntry.layout name, str ": ",
+                    (seq [Func.layout (Function.name f), str "@",
+                          FuncEntry.layout name, str ": ",
                           record [("shouldInline", Bool.layout shouldInline)]])
                  end))
             end)
@@ -222,7 +223,8 @@ local
                      val size = !size
                   in
                      display
-                     (seq [FuncEntry.layout name, str ": ",
+                     (seq [Func.layout (Function.name f), str "@",
+                           FuncEntry.layout name, str ": ",
                            record [("shouldInline", Bool.layout shouldInline),
                                    ("size", Int.layout size)]])
                   end))
@@ -382,7 +384,8 @@ fun nonRecursive
                   val size = !size
                in
                   display
-                  (seq [FuncEntry.layout name, str ": ",
+                  (seq [Func.layout (Function.name f), str "@",
+                        FuncEntry.layout name, str ": ",
                         record [("numCalls", Int.layout numCalls),
                                 ("shouldInline", Bool.layout shouldInline),
                                 ("size", Int.layout size)]])
