@@ -1092,15 +1092,15 @@ structure Function =
          val name = make #name
       end
 
-      fun sizeAux (f, acc, max, sizeExp, sizeTransfer) =
-         Block.sizeAuxV (blocks f, acc, max, sizeExp, sizeTransfer)
+      fun sizeAux (blocks, acc, max, sizeExp, sizeTransfer) =
+         Block.sizeAuxV (blocks, acc, max, sizeExp, sizeTransfer)
 
       fun size (f, {sizeExp, sizeTransfer}) =
-         #1 (sizeAux (f, 0, NONE, sizeExp, sizeTransfer))
+         #1 (sizeAux (blocks f, 0, NONE, sizeExp, sizeTransfer))
 
       fun sizeMax (f, {max, sizeExp, sizeTransfer}) =
          let
-            val (s, chk) = sizeAux (f, 0, max, sizeExp, sizeTransfer)
+            val (s, chk) = sizeAux (blocks f, 0, max, sizeExp, sizeTransfer)
          in
             if chk
                then NONE
@@ -1138,7 +1138,7 @@ structure Function =
          val dominatorForest = make #dominatorForest
       end
 
-      fun dfsAux (f, p, v) =
+      fun dfsReachable (f, p, v) =
          let
             val {entries, blocks, ...} = dest f
             val numBlocks = Vector.length blocks
@@ -1175,18 +1175,31 @@ structure Function =
             ()
          end
 
-      fun dfs (f, v) = dfsAux (f, fn _ => true, v)
+      fun dfs (f, v) = dfsReachable (f, fn _ => true, v)
 
       fun blocksReachable (f, p) =
          let
             val blocks = ref []
             val () =
-               dfsAux
+               dfsReachable
                (f, p, fn b =>
                 fn () => List.push (blocks, b))
          in
             Vector.fromList (!blocks)
          end
+
+      fun sizeReachable (f, p, {sizeExp, sizeTransfer}) =
+         #1 (sizeAux (blocksReachable (f, p), 0, NONE, sizeExp, sizeTransfer))
+
+      fun sizeReachableMax (f, p, {max, sizeExp, sizeTransfer}) =
+         let
+            val (s, chk) = sizeAux (blocksReachable (f, p), 0, max, sizeExp, sizeTransfer)
+         in
+            if chk
+               then NONE
+               else SOME s
+         end
+
 
       local
          structure Graph = DirectedGraph

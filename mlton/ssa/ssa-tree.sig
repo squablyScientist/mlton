@@ -272,6 +272,7 @@ signature SSA_TREE =
              * then applying v' ().
              *)
             val dfs: t * (Block.t -> unit -> unit) -> unit
+            val dfsReachable: t * (FuncEntry.t -> bool) * (Block.t -> unit -> unit) -> unit
             val dominatorForest: t -> Block.t Tree.t vector
             val entries: t -> FunctionEntry.t vector
             val foreachVar: t * (Var.t * Type.t -> unit) -> unit
@@ -292,6 +293,8 @@ signature SSA_TREE =
             val profile: t * SourceInfo.t -> t
             val size: t * {sizeExp: Exp.t -> int, sizeTransfer: Transfer.t -> int} -> int
             val sizeMax: t * {max: int option, sizeExp: Exp.t -> int, sizeTransfer: Transfer.t -> int} -> int option
+            val sizeReachable: t * (FuncEntry.t -> bool) * {sizeExp: Exp.t -> int, sizeTransfer: Transfer.t -> int} -> int
+            val sizeReachableMax: t * (FuncEntry.t -> bool) * {max: int option, sizeExp: Exp.t -> int, sizeTransfer: Transfer.t -> int} -> int option
          end
 
       structure Program:
