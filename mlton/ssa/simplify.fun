@@ -53,6 +53,7 @@ val ssaPassesDefault =
    {name = "mergeRecTailCalls1", doit = MergeRecTailCalls.transform, execute = false} ::
    {name = "introduceLoops1", doit = IntroduceLoops.transform, execute = true} ::
    {name = "loopInvariant1", doit = LoopInvariant.transform, execute = true} ::
+   {name = "splitEntries1", doit = SplitEntries.transform, execute = false} ::
    {name = "inlineLeaf1", doit = fn p => 
     Inline.inlineLeaf (p, !Control.inlineLeafA), execute = true} ::
    {name = "inlineLeaf2", doit = fn p => 
@@ -93,10 +94,10 @@ val ssaPassesDefault =
    {name = "loopUnswitch1", doit = LoopUnswitch.transform, execute = false} ::
    {name = "knownCase1", doit = KnownCase.transform, execute = false} ::
    {name = "contify2", doit = Contify.transform, execute = true} ::
+   {name = "splitEntries2", doit = SplitEntries.transform, execute = false} ::
    {name = "inlineNonRecursive", doit = fn p =>
     Inline.inlineNonRecursive (p, !Control.inlineNonRec), execute = true} ::
    {name = "localFlatten2", doit = LocalFlatten.transform, execute = true} ::
-   {name = "splitEntries1", doit = SplitEntries.transform, execute = false} ::
    {name = "duplicateEntries3", doit = DuplicateEntries.transform, execute = false} ::
    {name = "removeUnused3", doit = RemoveUnused.transform, execute = true} ::
    {name = "contify3", doit = Contify.transform, execute = true} ::
@@ -124,7 +125,7 @@ val ssaPassesDefault =
    {name = "redundantTests", doit = RedundantTests.transform, execute = true} ::
    {name = "redundant", doit = Redundant.transform, execute = true} ::
    {name = "loopUnswitch2", doit = LoopUnswitch.transform, execute = false} ::
-   {name = "splitEntries2", doit = SplitEntries.transform, execute = false} ::
+   {name = "splitEntries3", doit = SplitEntries.transform, execute = false} ::
    {name = "knownCase2", doit = KnownCase.transform, execute = true} ::
    {name = "loopUnroll2", doit = LoopUnroll.transform, execute = false} ::
    {name = "commonSubexp2", doit = CommonSubexp.transform, execute = false} ::
