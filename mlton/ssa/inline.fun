@@ -235,73 +235,85 @@ in
    val leafRepeatNoLoop = make (fn (f, e) => Function.containsLoop (f, e))
 end
 
-fun nonRecursive (Program.T {functions, ...}, {small: int, product: int}) =
+fun nonRecursive
+   (Program.T {functions, ...}, {small: int, product: int}):
+   {func: Func.t, entry: FuncEntry.t} -> bool =
    let
       type info = {doesCallSelf: bool ref,
+                   entry: FuncEntry.t,
                    function: Function.t,
                    node: unit Node.t,
                    numCalls: int ref,
                    shouldInline: bool ref,
                    size: int ref}
-      val {get = funcInfo: Func.t -> info,
-           set = setFuncInfo, ...} =
+      val {get = entryInfo: FuncEntry.t -> info,
+           set = setEntryInfo, ...} =
          Property.getSetOnce
-         (Func.plist, Property.initRaise ("funcInfo", Func.layout))
-      val {get = nodeFunc: unit Node.t -> Func.t,
-           set = setNodeFunc, ...} = 
+         (FuncEntry.plist, Property.initRaise ("entryInfo", FuncEntry.layout))
+      val {get = nodeEntry: unit Node.t -> FuncEntry.t,
+           set = setNodeEntry, ...} =
          Property.getSetOnce 
-         (Node.plist, Property.initRaise ("nodeFunc", Node.layout))
+         (Node.plist, Property.initRaise ("nodeEntry", Node.layout))
       val graph = Graph.new ()
-      (* initialize the info for each func *)
+      (* initialize the info for each entry *)
       val _ = 
          List.foreach
          (functions, fn f =>
-          let 
-             val name = Function.name f
-             val n = Graph.newNode graph
-          in
-             setNodeFunc (n, name)
-             ; setFuncInfo (name, {doesCallSelf = ref false,
-                                   function = f,
-                                   node = n,
-                                   numCalls = ref 0,
-                                   shouldInline = ref false,
-                                   size = ref 0})
-          end)
+          Vector.foreach
+          (Function.entries f, fn e =>
+           let
+              val name = FunctionEntry.name e
+              val n = Graph.newNode graph
+           in
+              setNodeEntry (n, name)
+              ; setEntryInfo (name, {doesCallSelf = ref false,
+                                     entry = name,
+                                     function = f,
+                                     node = n,
+                                     numCalls = ref 0,
+                                     shouldInline = ref false,
+                                     size = ref 0})
+           end))
       (* Update call counts. *)
       val _ = 
          List.foreach
          (functions, fn f =>
-          let 
-             val {name, blocks, ...} = Function.dest f
-             val {doesCallSelf, ...} = funcInfo name
+          Vector.foreach
+          (Function.entries f, fn e =>
+           let
+              val name = FunctionEntry.name e
+              val blocks =
+                 Function.blocksReachable
+                 (f, fn entry => FuncEntry.equals (entry, name))
+             val {doesCallSelf, ...} = entryInfo name
           in
              Vector.foreach
              (blocks, fn Block.T {transfer, ...} =>
               case transfer of
-                 Call {func, ...} =>
+                 Call {entry, ...} =>
                     let
-                       val {numCalls, ...} = funcInfo func
+                       val {numCalls, ...} = entryInfo entry
                     in
-                       if Func.equals (name, func)
+                       if FuncEntry.equals (name, entry)
                           then doesCallSelf := true
                        else Int.inc numCalls
                     end
                | _ => ())
-          end)
+          end))
       fun mayInline (setSize: bool,
-                     {function, doesCallSelf, numCalls, size, ...}: info): bool =
+                     {entry, function, doesCallSelf, numCalls, size, ...}: info): bool =
          Function.mayInline function
          andalso not (!doesCallSelf)
          andalso let
                     val n =
-                       Function.size
+                       Function.sizeReachable
                        (function,
+                        fn name => FuncEntry.equals (name, entry),
                         {sizeExp = Exp.size,
                          sizeTransfer =
-                         fn t as Call {func, ...} =>
+                         fn t as Call {entry, ...} =>
                                let
-                                  val {shouldInline, size, ...} = funcInfo func
+                                  val {shouldInline, size, ...} = entryInfo entry
                                in
                                   if !shouldInline
                                      then !size
@@ -319,31 +331,39 @@ fun nonRecursive (Program.T {functions, ...}, {small: int, product: int}) =
        *)
       val _ =
          List.foreach
-         (functions, fn f => 
-          let 
-             val {name, blocks, ...} = Function.dest f
-             val info as {node, ...} = funcInfo name
-          in
-             if mayInline (false, info)
-                then Vector.foreach
-                     (blocks, fn Block.T {transfer, ...} =>
-                      case transfer of
-                         Call {func, ...} =>
-                            if Func.equals (name, func)
-                               then ()
-                            else (ignore o Graph.addEdge)
-                                 (graph, {from = node, to = #node (funcInfo func)})
-                       | _ => ())
-             else ()
-          end)
+         (functions, fn f =>
+          Vector.foreach
+          (Function.entries f, fn e =>
+           let
+              val name = FunctionEntry.name e
+              val blocks =
+                 Function.blocksReachable
+                 (f, fn entry => FuncEntry.equals (entry, name))
+              val info as {node, ...} = entryInfo name
+           in
+              if mayInline (false, info)
+                 then Vector.foreach
+                      (blocks, fn Block.T {transfer, ...} =>
+                       case transfer of
+                          Call {entry, ...} =>
+                             if FuncEntry.equals (name, entry)
+                                then ()
+                                else (ignore o Graph.addEdge)
+                                     (graph, {from = node, to = #node (entryInfo entry)})
+                        | _ => ())
+                 else ()
+           end))
       (* Compute strongly-connected components.
        * Then start at the leaves of the call graph and work up.
        *)
       val _ = 
          List.foreach
          (rev (Graph.stronglyConnectedComponents graph),
-          fn [n] => let val info as {shouldInline, ...} = funcInfo (nodeFunc n)
-                    in shouldInline := mayInline (true, info)
+          fn [n] => let
+                       val entry = nodeEntry n
+                       val info as {shouldInline, ...} = entryInfo entry
+                    in
+                       shouldInline := mayInline (true, info)
                     end
            | _ => ())
       val _ =
@@ -351,23 +371,25 @@ fun nonRecursive (Program.T {functions, ...}, {small: int, product: int}) =
          (fn display =>
           let open Layout
           in List.foreach
-             (functions, fn f => 
-              let 
-                 val name = Function.name f
-                 val {numCalls, shouldInline, size, ...} = funcInfo name
-                 val numCalls = !numCalls
-                 val shouldInline = !shouldInline
-                 val size = !size
-              in 
-                 display
-                 (seq [Func.layout name, str ": ",
-                       record [("numCalls", Int.layout numCalls),
-                               ("shouldInline", Bool.layout shouldInline),
-                               ("size", Int.layout size)]])
-              end)
+             (functions, fn f =>
+              Vector.foreach
+              (Function.entries f, fn e =>
+               let
+                  val name = FunctionEntry.name e
+                  val {numCalls, shouldInline, size, ...} = entryInfo name
+                  val numCalls = !numCalls
+                  val shouldInline = !shouldInline
+                  val size = !size
+               in
+                  display
+                  (seq [FuncEntry.layout name, str ": ",
+                        record [("numCalls", Int.layout numCalls),
+                                ("shouldInline", Bool.layout shouldInline),
+                                ("size", Int.layout size)]])
+               end))
           end)
    in
-      ! o #shouldInline o funcInfo
+      ! o #shouldInline o entryInfo o #entry
    end
 
 fun transform {program as Program.T {datatypes, globals, functions, main},
@@ -535,7 +557,7 @@ fun inlineLeaf (p, {loops, repeat, size}) =
                    inlineIntoMain = true}
 fun inlineNonRecursive (p, arg) =
    transform {program = p,
-              shouldInline = nonRecursive (p, arg) o #func,
+              shouldInline = nonRecursive (p, arg),
               inlineIntoMain = !Control.inlineIntoMain}
 
 end
