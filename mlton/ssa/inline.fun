@@ -302,6 +302,61 @@ fun nonRecursive
                     end
                | _ => ())
           end))
+      (* Merge call counts of "major" entries. *)
+      val _ =
+         List.foreach
+         (functions, fn f =>
+          let
+             val entries = Function.entries f
+             fun doit () =
+                let
+                   val funcSize =
+                      Function.size
+                      (f, {sizeExp = Exp.size,
+                           sizeTransfer = Transfer.size})
+                   val majorEntries =
+                      Vector.keepAll
+                      (entries, fn e =>
+                       let
+                          val name = FunctionEntry.name e
+                          val {doesCallSelf, ...} =
+                             entryInfo (FunctionEntry.name e)
+                          val entrySize =
+                             Function.sizeReachable
+                             (f, fn entry => FuncEntry.equals (entry, name),
+                              {sizeExp = Exp.size,
+                               sizeTransfer = Transfer.size})
+                       in
+                          not (!doesCallSelf)
+                          andalso
+                          entrySize >= funcSize div 2
+                       end)
+                   val majorNumCalls =
+                      Vector.fold
+                      (majorEntries, 0, fn (e, majorNumCalls) =>
+                       let
+                          val {numCalls, ...} =
+                             entryInfo (FunctionEntry.name e)
+                       in
+                          majorNumCalls + !numCalls
+                       end)
+                   val _ =
+                      Vector.foreach
+                      (majorEntries, fn e =>
+                       let
+                          val {numCalls, ...} =
+                             entryInfo (FunctionEntry.name e)
+                       in
+                          numCalls := majorNumCalls
+                       end)
+                in
+                   ()
+                end
+          in
+             if Vector.length entries > 1
+                then doit ()
+                else ()
+          end)
       fun mayInline (setSize: bool,
                      {entry, function, doesCallSelf, numCalls, size, ...}: info): bool =
          Function.mayInline function
