@@ -253,6 +253,7 @@ signature SSA_TREE =
 
             val alphaRename: t * (FuncEntry.t -> bool) -> t
             val blocks: t -> Block.t vector
+            val blocksReachable: t * (FuncEntry.t -> bool) -> Block.t vector
             (* clear the plists for all bound variables and labels that appear
              * in the function, but not the function name's plist.
              *)
