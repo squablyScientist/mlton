@@ -19,132 +19,147 @@ structure Function =
    struct
       open Function
 
-      fun containsCall (f: Function.t): bool =
+      fun containsCall (f: Function.t, entry: FuncEntry.t): bool =
          Exn.withEscape
          (fn escape =>
-          (Vector.foreach
-           (Function.blocks f, fn Block.T {transfer, ...} =>
-            case transfer of
-               Call _ => escape true
-             | _ => ())
+          (Function.dfsReachable
+           (f, fn name => FuncEntry.equals (name, entry),
+            fn Block.T {transfer, ...} =>
+            ((case transfer of
+                 Call _ => escape true
+               | _ => ())
+              ; fn () => ()))
            ; false))
-      fun containsLoop (f: Function.t): bool =
+      fun containsLoop (f: Function.t, entry: FuncEntry.t): bool =
          let
             val {get, set, destroy} =
                Property.destGetSet (Label.plist, Property.initConst false)
          in
             Exn.withEscape
             (fn escape =>
-             let
-                val _ =
-                   Function.dfs
-                   (f, fn (Block.T {label, transfer, ...}) =>
-                    (set (label, true)
-                     ; (case transfer of
-                           Goto {dst, ...} => if get dst then escape true else ()
-                         | _ => ())
-                     ; fn () => set (label, false)))
-             in
-                false
-             end)
+             (Function.dfsReachable
+              (f, fn name => FuncEntry.equals (name, entry),
+               fn (Block.T {label, transfer, ...}) =>
+               (set (label, true)
+                ; (case transfer of
+                      Goto {dst, ...} => if get dst then escape true else ()
+                    | _ => ())
+                ; fn () => set (label, false)))
+              ; false))
             before (destroy ())
          end
    end
 
 local
-   fun 'a make (dontInlineFunc: Function.t * 'a -> bool)
-      (Program.T {functions, ...}, a: 'a): Func.t -> bool =
+   fun 'a make (dontInlineEntry: Function.t * FuncEntry.t * 'a -> bool)
+      (Program.T {functions, ...}, a: 'a):
+      {func: Func.t, entry: FuncEntry.t} -> bool =
       let
-         val {get = shouldInline: Func.t -> bool, 
+         val {get = shouldInline: FuncEntry.t -> bool,
               set = setShouldInline, ...} =
-            Property.getSetOnce (Func.plist, Property.initConst false)
+            Property.getSetOnce (FuncEntry.plist, Property.initConst false)
       in
          List.foreach
          (functions, fn f =>
-          if not (Function.mayInline f) orelse dontInlineFunc (f, a)
-             then ()
-          else setShouldInline (Function.name f, true))
+          Vector.foreach
+          (Function.entries f, fn FunctionEntry.T {name, ...} =>
+           if not (Function.mayInline f) orelse dontInlineEntry (f, name, a)
+              then ()
+              else setShouldInline (name, true)))
          ; Control.diagnostics
            (fn display =>
             let open Layout
             in List.foreach
-               (functions, fn f => 
-                let 
-                   val name = Function.name f
-                   val shouldInline = shouldInline name
-                in 
-                   display
-                   (seq [Func.layout name, str ": ",
-                         record [("shouldInline", Bool.layout shouldInline)]])
-                end)
+               (functions, fn f =>
+                Vector.foreach
+                (Function.entries f, fn e =>
+                 let
+                    val name = FunctionEntry.name e
+                    val shouldInline = shouldInline name
+                 in
+                    display
+                    (seq [FuncEntry.layout name, str ": ",
+                          record [("shouldInline", Bool.layout shouldInline)]])
+                 end))
             end)
-         ; shouldInline
+         ; shouldInline o #entry
       end
 in
-   val leafOnce = make (fn (f, {size}) =>
-                        Option.isNone (Function.sizeMax (f, {max = size,
-                                                             sizeExp = Exp.size,
-                                                             sizeTransfer =Transfer.size}))
-                        orelse Function.containsCall f)
-   val leafOnceNoLoop = make (fn (f, {size}) =>
-                              Option.isNone (Function.sizeMax (f, {max = size,
-                                                                   sizeExp = Exp.size,
-                                                                   sizeTransfer =Transfer.size}))
-                              orelse Function.containsCall f
-                              orelse Function.containsLoop f)
+   val leafOnce = make (fn (f, entry, {size}) =>
+                        Option.isNone (Function.sizeReachableMax
+                                       (f, fn name => FuncEntry.equals (name, entry),
+                                        {max = size,
+                                         sizeExp = Exp.size,
+                                         sizeTransfer = Transfer.size}))
+                        orelse Function.containsCall (f, entry))
+   val leafOnceNoLoop = make (fn (f, entry, {size}) =>
+                              Option.isNone (Function.sizeReachableMax
+                                             (f, fn name => FuncEntry.equals (name, entry),
+                                              {max = size,
+                                               sizeExp = Exp.size,
+                                               sizeTransfer = Transfer.size}))
+                              orelse Function.containsCall (f, entry)
+                              orelse Function.containsLoop (f, entry))
 end
 
 structure Graph = DirectedGraph
 structure Node = Graph.Node
 
 local
-   fun make (dontInline: Function.t -> bool)
-      (Program.T {functions, ...}, {size: int option}) =
+   fun make (dontInline: Function.t * FuncEntry.t -> bool)
+      (Program.T {functions, ...}, {size: int option}):
+      {func: Func.t, entry: FuncEntry.t} -> bool =
       let
          val max = size
          type info = {function: Function.t,
                       node: unit Node.t,
                       shouldInline: bool ref,
                       size: int ref}
-         val {get = funcInfo: Func.t -> info,
-              set = setFuncInfo, ...} =
+         val {get = entryInfo: FuncEntry.t -> info,
+              set = setEntryInfo, ...} =
             Property.getSetOnce
-            (Func.plist, Property.initRaise ("funcInfo", Func.layout))
-         val {get = nodeFunc: unit Node.t -> Func.t,
-              set = setNodeFunc, ...} = 
+            (FuncEntry.plist, Property.initRaise ("entryInfo", FuncEntry.layout))
+         val {get = nodeEntry: unit Node.t -> FuncEntry.t,
+              set = setNodeEntry, ...} =
             Property.getSetOnce 
-            (Node.plist, Property.initRaise ("nodeFunc", Node.layout))
+            (Node.plist, Property.initRaise ("nodeEntry", Node.layout))
          val graph = Graph.new ()
-         (* initialize the info for each func *)
+         (* initialize the info for each entry *)
          val _ = 
             List.foreach
             (functions, fn f =>
-             let 
-                val name = Function.name f
-                val n = Graph.newNode graph
-             in
-                setNodeFunc (n, name)
-                ; setFuncInfo (name, {function = f,
-                                      node = n,
-                                      shouldInline = ref false,
-                                      size = ref 0})
-             end)
+             Vector.foreach
+             (Function.entries f, fn e =>
+              let
+                 val name = FunctionEntry.name e
+                 val n = Graph.newNode graph
+              in
+                 setNodeEntry (n, name)
+                 ; setEntryInfo (name, {function = f,
+                                        node = n,
+                                        shouldInline = ref false,
+                                        size = ref 0})
+              end))
          (* Build the call graph. *)
          val _ =
             List.foreach
-            (functions, fn f => 
-             let 
-                val {name, blocks, ...} = Function.dest f
-                val {node, ...} = funcInfo name
-             in
-                Vector.foreach
-                (blocks, fn Block.T {transfer, ...} =>
-                 case transfer of
-                    Call {func, ...} =>
-                       (ignore o Graph.addEdge)
-                       (graph, {from = node, to = #node (funcInfo func)})
-                  | _ => ())
-             end)
+            (functions, fn f =>
+             Vector.foreach
+             (Function.entries f, fn FunctionEntry.T {name, ...} =>
+              let
+                 val blocks =
+                    Function.blocksReachable
+                    (f, fn entry => FuncEntry.equals (entry, name))
+                 val {node, ...} = entryInfo name
+              in
+                 Vector.foreach
+                 (blocks, fn Block.T {transfer, ...} =>
+                  case transfer of
+                     Call {entry, ...} =>
+                        (ignore o Graph.addEdge)
+                        (graph, {from = node, to = #node (entryInfo entry)})
+                   | _ => ())
+              end))
          (* Compute strongly-connected components.
           * Then start at the leaves of the call graph and work up.
           *)
@@ -154,27 +169,29 @@ local
              fn scc =>
              case scc of 
                 [n] =>
-                   let 
+                   let
+                      val entry = nodeEntry n
                       val {function, shouldInline, size, ...} = 
-                         funcInfo (nodeFunc n)
+                         entryInfo entry
                    in 
                       if Function.mayInline function
-                         andalso not (dontInline function)
+                         andalso not (dontInline (function, entry))
                          then Exn.withEscape
                               (fn escape =>
                                let
                                   val res =
-                                     Function.sizeMax
+                                     Function.sizeReachableMax
                                      (function,
+                                      fn name => FuncEntry.equals (name, entry),
                                       {max = max,
                                        sizeExp = Exp.size,
                                        sizeTransfer =
                                        fn t =>
                                        case t of
-                                          Call {func, ...} =>
+                                          Call {entry, ...} =>
                                              let
                                                 val {shouldInline, size, ...} =
-                                                   funcInfo func
+                                                   entryInfo entry
                                              in
                                                 if !shouldInline
                                                    then !size
@@ -195,25 +212,27 @@ local
             (fn display =>
              let open Layout
              in List.foreach
-                (functions, fn f => 
-                 let 
-                    val name = Function.name f
-                    val {shouldInline, size, ...} = funcInfo name
-                    val shouldInline = !shouldInline
-                    val size = !size
-                 in 
-                    display
-                    (seq [Func.layout name, str ": ",
-                          record [("shouldInline", Bool.layout shouldInline),
-                                  ("size", Int.layout size)]])
-                 end)
+                (functions, fn f =>
+                 Vector.foreach
+                 (Function.entries f, fn e =>
+                  let
+                     val name = FunctionEntry.name e
+                     val {shouldInline, size, ...} = entryInfo name
+                     val shouldInline = !shouldInline
+                     val size = !size
+                  in
+                     display
+                     (seq [FuncEntry.layout name, str ": ",
+                           record [("shouldInline", Bool.layout shouldInline),
+                                   ("size", Int.layout size)]])
+                  end))
              end)
       in
-         ! o #shouldInline o funcInfo
+         ! o #shouldInline o entryInfo o #entry
       end
 in
    val leafRepeat = make (fn _ => false)
-   val leafRepeatNoLoop = make (fn f => Function.containsLoop f)
+   val leafRepeatNoLoop = make (fn (f, e) => Function.containsLoop (f, e))
 end
 
 fun nonRecursive (Program.T {functions, ...}, {small: int, product: int}) =
@@ -508,13 +527,11 @@ fun inlineLeaf (p, {loops, repeat, size}) =
       then p
    else transform {program = p,
                    shouldInline =
-                   (
                    case (loops, repeat) of
                       (false, false) => leafOnce (p, {size = size})
                     | (false, true) => leafRepeat (p, {size = size})
                     | (true, false) => leafOnceNoLoop (p, {size = size})
-                    | (true, true) => leafRepeatNoLoop (p, {size = size})
-                   ) o #func,
+                    | (true, true) => leafRepeatNoLoop (p, {size = size}),
                    inlineIntoMain = true}
 fun inlineNonRecursive (p, arg) =
    transform {program = p,
