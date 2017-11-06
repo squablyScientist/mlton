@@ -1,4 +1,5 @@
-(* Copyright (C) 2013 Matthew Fluet, David Larsen.
+(* Copyright (C) 2017 Matthew Fluet.
+ * Copyright (C) 2013 Matthew Fluet, David Larsen.
  * Copyright (C) 2009 Matthew Fluet.
  * Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
@@ -351,27 +352,35 @@ fun nonRecursive (Program.T {functions, ...}, {small: int, product: int}) =
    end
 
 fun transform {program as Program.T {datatypes, globals, functions, main},
-               shouldInline: Func.t -> bool,
+               shouldInline: {func: Func.t, entry: FuncEntry.t} -> bool,
                inlineIntoMain: bool} =
    let
-      val {get = funcInfo: Func.t -> {function: Function.t,
-                                      isCalledByMain: bool ref},
-           set = setFuncInfo, ...} =
+      val shouldInline = fn {func, entry} =>
+         if Func.equals (func, #func main) andalso FuncEntry.equals (entry, #entry main)
+            then false
+            else shouldInline {func = func, entry = entry}
+      val {get = entryInfo: FuncEntry.t -> {function: Function.t,
+                                            isCalledByMain: bool ref},
+           set = setEntryInfo, ...} =
          Property.getSetOnce
-         (Func.plist, Property.initRaise ("Inline.funcInfo", Func.layout))
-      val isCalledByMain: Func.t -> bool =
-         ! o #isCalledByMain o funcInfo
-      val () = List.foreach (functions, fn f =>
-                             setFuncInfo (Function.name f,
-                                          {function = f,
-                                           isCalledByMain = ref false}))
+         (FuncEntry.plist, Property.initRaise ("Inline.entryInfo", FuncEntry.layout))
+      val isCalledByMain: FuncEntry.t -> bool =
+         ! o #isCalledByMain o entryInfo
+      val () =
+         List.foreach
+         (functions, fn f =>
+          Vector.foreach
+          (Function.entries f, fn e =>
+           setEntryInfo (FunctionEntry.name e,
+                         {function = f,
+                          isCalledByMain = ref false})))
       val () =
          Vector.foreach 
          (#blocks (Function.dest (Program.mainFunction program)),
           fn Block.T {transfer, ...} =>
           case transfer of
-             Transfer.Call {func, ...} =>
-                #isCalledByMain (funcInfo func) := true
+             Transfer.Call {entry, ...} =>
+                #isCalledByMain (entryInfo entry) := true
            | _ => ())
       fun doit (blocks: Block.t vector,
                 return: Return.t) : Block.t vector =
@@ -393,13 +402,13 @@ fun transform {program as Program.T {datatypes, globals, functions, main},
                         let
                            val return = Return.compose (return, return')
                         in
-                           if shouldInline func
+                           if shouldInline {func = func, entry = entry}
                               then 
                               let
                                  local
                                     val {entries, blocks, ...} =
                                        (Function.dest o Function.alphaRename) 
-                                       (#function (funcInfo func))
+                                       (#function (entryInfo entry))
                                     val blocks = doit (blocks, return)
                                     val _ = List.push (newBlocks, blocks)
                                     val calledEntry =
@@ -456,14 +465,24 @@ fun transform {program as Program.T {datatypes, globals, functions, main},
          List.fold
          (functions, [], fn (f, ac) =>
           let
-             val {blocks, entries, mayInline, name, raises, returns} =
+             val {blocks, entries, mayInline, name as func, raises, returns} =
                 Function.dest f
+             val keptEntries =
+                Vector.keepAllMap
+                (entries, fn e as FunctionEntry.T {name = entry, ...} =>
+                 if shouldInline {func = func, entry = entry}
+                    then if inlineIntoMain
+                            then NONE
+                            else if isCalledByMain entry
+                                    then SOME e
+                                    else NONE
+                    else SOME e)
              fun keep () =
                 let
                    val blocks = doit (blocks, Return.Tail)
                 in
                    shrink (Function.new {blocks = blocks,
-                                         entries = entries,
+                                         entries = keptEntries,
                                          mayInline = mayInline,
                                          name = name,
                                          raises = raises,
@@ -471,20 +490,13 @@ fun transform {program as Program.T {datatypes, globals, functions, main},
                    :: ac
                 end
           in
-             if Vector.exists
-                (entries, fn FunctionEntry.T{name, ...} =>
-                 FuncEntry.equals(name, #entry main))
+             if Func.equals (func, #func main)
                 then if inlineIntoMain
                         then keep ()
                      else f :: ac
-             else
-                if shouldInline name
-                   then
-                      if inlineIntoMain
-                         orelse not (isCalledByMain name)
-                         then ac
-                      else keep ()
-                else keep ()
+             else if Vector.isEmpty keptEntries
+                     then ac
+                  else keep ()
           end)
       val program =
          Program.T {datatypes = datatypes,
@@ -500,16 +512,18 @@ fun inlineLeaf (p, {loops, repeat, size}) =
    if size = SOME 0
       then p
    else transform {program = p,
-                   shouldInline = 
+                   shouldInline =
+                   (
                    case (loops, repeat) of
                       (false, false) => leafOnce (p, {size = size})
                     | (false, true) => leafRepeat (p, {size = size})
                     | (true, false) => leafOnceNoLoop (p, {size = size})
-                    | (true, true) => leafRepeatNoLoop (p, {size = size}),
+                    | (true, true) => leafRepeatNoLoop (p, {size = size})
+                   ) o #func,
                    inlineIntoMain = true}
 fun inlineNonRecursive (p, arg) =
    transform {program = p,
-              shouldInline = nonRecursive (p, arg),
+              shouldInline = nonRecursive (p, arg) o #func,
               inlineIntoMain = !Control.inlineIntoMain}
 
 end
