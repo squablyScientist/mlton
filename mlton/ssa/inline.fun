@@ -408,17 +408,12 @@ fun transform {program as Program.T {datatypes, globals, functions, main},
                                  local
                                     val {entries, blocks, ...} =
                                        (Function.dest o Function.alphaRename) 
-                                       (#function (entryInfo entry))
+                                       (#function (entryInfo entry),
+                                        fn name => FuncEntry.equals (name, entry))
                                     val blocks = doit (blocks, return)
                                     val _ = List.push (newBlocks, blocks)
-                                    val calledEntry =
-                                       Vector.peek
-                                       (entries, fn FunctionEntry.T {name, ...} =>
-                                        FuncEntry.equals (entry, name))
                                     val FunctionEntry.T {args, name, start, ...} =
-                                       case calledEntry of
-                                          SOME e => e
-                                        | NONE => Error.bug "Inline.transform: call to a non-existant function entry."
+                                       Vector.first (entries)
                                     val name =
                                        Label.newString (Func.originalName func ^ "$" ^ FuncEntry.originalName name)
                                     val _ = 

@@ -1138,9 +1138,9 @@ structure Function =
          val dominatorForest = make #dominatorForest
       end
 
-      fun dfs (f, v) =
+      fun dfsAux (f, p, v) =
          let
-            val {blocks, entries, ...} = dest f
+            val {entries, blocks, ...} = dest f
             val numBlocks = Vector.length blocks
             val {get = labelIndex, set = setLabelIndex, rem, ...} =
                Property.getSetOnce (Label.plist,
@@ -1168,11 +1168,24 @@ structure Function =
                end
             val _ =
                Vector.foreach
-               (entries, fn FunctionEntry.T {start, ...} =>
-                visit start)
+               (entries, fn FunctionEntry.T {name, start, ...} =>
+                if p name then visit start else ())
             val _ = Vector.foreach (blocks, rem o Block.label)
          in
             ()
+         end
+
+      fun dfs (f, v) = dfsAux (f, fn _ => true, v)
+
+      fun blocksReachable (f, p) =
+         let
+            val blocks = ref []
+            val () =
+               dfsAux
+               (f, p, fn b =>
+                fn () => List.push (blocks, b))
+         in
+            Vector.fromList (!blocks)
          end
 
       local
@@ -1531,7 +1544,7 @@ structure Function =
             ()
          end
 
-      fun alphaRename f =
+      fun alphaRename (f, p) =
          let
             local
                fun make (new, plist) =
@@ -1557,14 +1570,18 @@ structure Function =
                val (bindLabel, lookupLabel, destroyLabel) =
                   make (Label.new, Label.plist)
             end
-            val {blocks, entries, mayInline, name, raises, returns, ...} =
+            val {entries, mayInline, name, raises, returns, ...} =
                dest f
+            val blocks = blocksReachable (f, p)
             val entries : FunctionEntry.t vector =
-               Vector.map
+               Vector.keepAllMap
                (entries, fn FunctionEntry.T {args, name, start} =>
-                FunctionEntry.T {args = Vector.map (args, fn (x, ty) => (bindVar x, ty)),
-                                 name = name,
-                                 start = start})
+                if p name
+                   then (SOME o FunctionEntry.T)
+                        {args = Vector.map (args, fn (x, ty) => (bindVar x, ty)),
+                         name = name,
+                         start = start}
+                   else NONE)
             val bindLabel = ignore o bindLabel
             val bindVar = ignore o bindVar
             val _ = 

@@ -251,7 +251,7 @@ signature SSA_TREE =
          sig
             type t
 
-            val alphaRename: t -> t
+            val alphaRename: t * (FuncEntry.t -> bool) -> t
             val blocks: t -> Block.t vector
             (* clear the plists for all bound variables and labels that appear
              * in the function, but not the function name's plist.
