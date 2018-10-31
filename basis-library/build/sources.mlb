@@ -1,4 +1,4 @@
-(* Copyright (C) 2013,2016-2017 Matthew Fluet.
+(* Copyright (C) 2013,2016-2018 Matthew Fluet.
  * Copyright (C) 2004-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  *
@@ -236,6 +236,14 @@ in
       ../config/c/sys-word.sml
    end end
 
+   ../mlton/pointer.sig
+   ../mlton/pointer.sml
+   ../mlton/call-stack.sig
+   ../mlton/call-stack.sml
+   ../mlton/exit.sml
+   ../mlton/exn.sig
+   ../mlton/exn.sml
+
    ../system/time.sig
    ../system/time.sml
    ../system/date.sig
@@ -291,13 +299,6 @@ in
    ../general/sml90.sig
    ../general/sml90.sml
 
-   ../mlton/pointer.sig
-   ../mlton/pointer.sml
-   ../mlton/call-stack.sig
-   ../mlton/call-stack.sml
-   ../mlton/exit.sml
-   ../mlton/exn.sig
-   ../mlton/exn.sml
    ../mlton/thread.sig
    ../mlton/thread.sml
    ../mlton/signal.sig
