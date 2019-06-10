@@ -1,9 +1,9 @@
-/* Copyright (C) 2012 Matthew Fluet.
+/* Copyright (C) 2012,2016,2019 Matthew Fluet.
  * Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
- * MLton is released under a BSD-style license.
+ * MLton is released under a HPND-style license.
  * See the file MLton-LICENSE for details.
  */
 
@@ -24,7 +24,7 @@ bool isStackEmpty (GC_stack stack) {
 }
 
 bool isStackReservedAligned (GC_state s, size_t reserved) {
-  return isAligned (GC_STACK_HEADER_SIZE + sizeof (struct GC_stack) + reserved,
+  return isAligned (GC_STACK_METADATA_SIZE + sizeof (struct GC_stack) + reserved,
                     s->alignment);
 }
 #endif
@@ -91,26 +91,26 @@ GC_frameIndex getStackTopFrameIndex (GC_state s, GC_stack stack) {
   return res;
 }
 
-GC_frameLayout getStackTopFrameLayout (GC_state s, GC_stack stack) {
-  GC_frameLayout layout;
+GC_frameInfo getStackTopFrameInfo (GC_state s, GC_stack stack) {
+  GC_frameInfo frameInfo;
 
-  layout = getFrameLayoutFromFrameIndex (s, getStackTopFrameIndex (s, stack));
-  return layout;
+  frameInfo = getFrameInfoFromFrameIndex (s, getStackTopFrameIndex (s, stack));
+  return frameInfo;
 }
 
 uint16_t getStackTopFrameSize (GC_state s, GC_stack stack) {
-  GC_frameLayout layout;
+  GC_frameInfo frameInfo;
 
   assert (not (isStackEmpty (stack)));
-  layout = getStackTopFrameLayout (s, stack);
-  return layout->size;
+  frameInfo = getStackTopFrameInfo (s, stack);
+  return frameInfo->size;
 }
 
 
 size_t alignStackReserved (GC_state s, size_t reserved) {
   size_t res;
 
-  res = alignWithExtra (s, reserved, GC_STACK_HEADER_SIZE + sizeof (struct GC_stack));
+  res = alignWithExtra (s, reserved, GC_STACK_METADATA_SIZE + sizeof (struct GC_stack));
   if (DEBUG_STACKS)
     fprintf (stderr, "%"PRIuMAX" = alignStackReserved (%"PRIuMAX")\n",
              (uintmax_t)res, (uintmax_t)reserved);
@@ -118,13 +118,13 @@ size_t alignStackReserved (GC_state s, size_t reserved) {
   return res;
 }
 
-size_t sizeofStackWithHeader (ARG_USED_FOR_ASSERT GC_state s, size_t reserved) {
+size_t sizeofStackWithMetaData (ARG_USED_FOR_ASSERT GC_state s, size_t reserved) {
   size_t res;
 
   assert (isStackReservedAligned (s, reserved));
-  res = GC_STACK_HEADER_SIZE + sizeof (struct GC_stack) + reserved;
+  res = GC_STACK_METADATA_SIZE + sizeof (struct GC_stack) + reserved;
   if (DEBUG_STACKS)
-    fprintf (stderr, "%"PRIuMAX" = sizeofStackWithHeader (%"PRIuMAX")\n",
+    fprintf (stderr, "%"PRIuMAX" = sizeofStackWithMetaData (%"PRIuMAX")\n",
              (uintmax_t)res, (uintmax_t)reserved);
   assert (isAligned (res, s->alignment));
   return res;

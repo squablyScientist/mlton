@@ -1,11 +1,11 @@
-(* Copyright (C) 2017 Matthew Fluet.
+(* Copyright (C) 2017,2019 Matthew Fluet.
  * Copyright (C) 2013 Matthew Fluet, David Larsen.
  * Copyright (C) 2009,2011 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
- * MLton is released under a BSD-style license.
+ * MLton is released under a HPND-style license.
  * See the file MLton-LICENSE for details.
  *)
 
@@ -121,8 +121,7 @@ fun checkScopes (program as
          end
          handle exn => Error.reraiseSuffix (exn, concat [" in ", Layout.toString (Statement.layout s)])
       val loopTransfer =
-         fn Arith {args, ty, ...} => (getVars args; loopType ty)
-          | Bug => ()
+         fn Bug => ()
           | Call {func, entry, args, ...} =>
                (getFuncWithEntry {func = func, entry = entry}
                 ; getVars args)
@@ -519,7 +518,5 @@ fun typeCheck (program as Program.T {datatypes, ...}): unit =
 val typeCheck = fn p =>
    (typeCheck p)
    handle exn => Error.reraisePrefix (exn, "TypeError (SSA): ")
-
-val typeCheck = Control.trace (Control.Pass, "typeCheck") typeCheck
 
 end

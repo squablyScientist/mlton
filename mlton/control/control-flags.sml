@@ -1,9 +1,9 @@
-(* Copyright (C) 2009-2012,2014-2017 Matthew Fluet.
+(* Copyright (C) 2009-2012,2014-2017,2019 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
- * MLton is released under a BSD-style license.
+ * MLton is released under a HPND-style license.
  * See the file MLton-LICENSE for details.
  *)
 
@@ -12,6 +12,18 @@ struct
 
 structure C = Control ()
 open C
+fun layout' {pre, suf} =
+   let
+      open Layout
+      val (pre, suf) = (str pre, str suf)
+   in
+      align
+      ((seq [pre, str "control flags:", suf]) ::
+       (List.map
+        (all (), fn {name, value} =>
+         seq [pre, str "   ", str name, str ": ", str value, suf])))
+   end
+fun layout () = layout' {pre = "", suf = ""}
 
 structure Align =
    struct
@@ -32,25 +44,43 @@ val atMLtons = control {name = "atMLtons",
                         default = Vector.new0 (),
                         toString = fn v => Layout.toString (Vector.layout
                                                             String.layout v)}
+val bounceRssaLimit = control {name = "bounceRssaLimit",
+                               default = SOME 8,
+                               toString = Option.toString Int.toString}
+val bounceRssaLiveCutoff = control {name = "bounceRssaLiveCutoff",
+                               default = SOME 12,
+                               toString = Option.toString Int.toString}
+val bounceRssaLoopCutoff = control {name = "bounceRssaLoopCutoff",
+                               default = SOME 40,
+                               toString = Option.toString Int.toString}
+val bounceRssaUsageCutoff = control {name = "bounceRssaUsageCutoff",
+                               default = SOME 15,
+                               toString = Option.toString Int.toString}
 
-structure Chunk =
+val chunkBatch = control {name = "chunkBatch",
+                          default = Int.pow(2,15),
+                          toString = Int.toString}
+
+structure Chunkify =
    struct
       datatype t =
-         OneChunk
-       | ChunkPerFunc
-       | Coalesce of {limit: int}
+         Coalesce of {limit: int}
+       | One
+       | PerFunc
 
       val toString =
-         fn OneChunk => "one chunk"
-          | ChunkPerFunc => "chunk per function"
+         fn One => "one"
+          | PerFunc => "per function"
           | Coalesce {limit} => concat ["coalesce ", Int.toString limit]
    end
 
-datatype chunk = datatype Chunk.t
+val chunkify = control {name = "chunkify",
+                        default = Chunkify.Coalesce {limit = 4096},
+                        toString = Chunkify.toString}
 
-val chunk = control {name = "chunk",
-                     default = Coalesce {limit = 4096},
-                     toString = Chunk.toString}
+val chunkTailCall = control {name = "chunkTailCall",
+                             default = true,
+                             toString = Bool.toString}
 
 val closureConvertGlobalize = control {name = "closureConvertGlobalize",
                                        default = true,
@@ -742,11 +772,6 @@ structure Elaborate =
 
    end
 
-val elaborateOnly =
-   control {name = "elaborate only",
-            default = false,
-            toString = Bool.toString}
-
 val emitMain =
    control {name = "emit main",
             default = true,
@@ -807,6 +832,22 @@ datatype gcCheck = datatype GcCheck.t
 val gcCheck = control {name = "gc check",
                        default = Limit,
                        toString = GcCheck.toString}
+
+val globalizeArrays = control {name = "globalize arrays",
+                               default = false,
+                               toString = Bool.toString}
+
+val globalizeRefs = control {name = "globalize refs",
+                             default = true,
+                             toString = Bool.toString}
+
+val globalizeSmallIntInf = control {name = "globalize int-inf as small type)",
+                                    default = true,
+                                    toString = Bool.toString}
+
+val globalizeSmallType = control {name = "globalize small type",
+                                  default = 1,
+                                  toString = Int.toString}
 
 val indentation = control {name = "indentation",
                            default = 3,
@@ -914,14 +955,6 @@ val libTargetDir = control {name = "lib target dir",
 
 val libname = ref ""
 
-val loopSsaPasses = control {name = "loop ssa passes",
-                             default = 1,
-                             toString = Int.toString}
-
-val loopSsa2Passes = control {name = "loop ssa2 passes",
-                              default = 1,
-                              toString = Int.toString}
-
 val loopUnrollLimit = control {name = "loop unrolling limit",
                                 default = 150,
                                 toString = Int.toString}
@@ -950,6 +983,10 @@ structure Native =
       val commented = control {name = "native commented",
                                default = 0,
                                toString = Int.toString}
+
+      val elimALRedundant = control {name = "elim AL redundant",
+                                     default = true,
+                                     toString = Bool.toString}
 
       val liveStack = control {name = "native live stack",
                                default = false,
@@ -1126,6 +1163,16 @@ val showBasis = control {name = "show basis",
                          default = NONE,
                          toString = Option.toString File.toString}
 
+val showBasisCompact = control {name = "show basis compact",
+                                default = false,
+                                toString = Bool.toString}
+val showBasisDef = control {name = "show basis def",
+                            default = true,
+                            toString = Bool.toString}
+val showBasisFlat = control {name = "show basis flat",
+                             default = true,
+                             toString = Bool.toString}
+
 val showDefUse = control {name = "show def-use",
                           default = NONE,
                           toString = Option.toString File.toString}
@@ -1134,6 +1181,29 @@ val showTypes = control {name = "show types",
                          default = true,
                          toString = Bool.toString}
 
+structure SplitTypesBool =
+   struct
+      datatype t =
+         Always
+       | Never
+       | Smart (* split only when smaller than two, default *)
+      val toString =
+         fn Always => "always"
+          | Never => "never"
+          | Smart => "smart"
+   end
+
+datatype splitTypesBool = datatype SplitTypesBool.t
+
+val splitTypesBool = control {name = "bool type splitting method",
+                              default = Smart,
+                              toString = SplitTypesBool.toString}
+
+val stopPasses = control {name = "stop passes",
+                          default = [],
+                          toString = List.toString
+                                     (Layout.toString o
+                                      Regexp.Compiled.layout)}
 structure Target =
    struct
       datatype t =
@@ -1182,23 +1252,27 @@ structure Target =
 
       structure Size =
          struct
+            val (sequenceMetaData: unit -> Bits.t, set_sequenceMetaData) = make "Size.sequenceMetaData"
             val (cint: unit -> Bits.t, set_cint) = make "Size.cint"
             val (cpointer: unit -> Bits.t, set_cpointer) = make "Size.cpointer"
             val (cptrdiff: unit -> Bits.t, set_cptrdiff) = make "Size.cptrdiff"
             val (csize: unit -> Bits.t, set_csize) = make "Size.csize"
             val (header: unit -> Bits.t, set_header) = make "Size.header"
             val (mplimb: unit -> Bits.t, set_mplimb) = make "Size.mplimb"
+            val (normalMetaData: unit -> Bits.t, set_normalMetaData) = make "Size.normalMetaData"
             val (objptr: unit -> Bits.t, set_objptr) = make "Size.objptr"
             val (seqIndex: unit -> Bits.t, set_seqIndex) = make "Size.seqIndex"
          end
-      fun setSizes {cint, cpointer, cptrdiff, csize, 
-                    header, mplimb, objptr, seqIndex} =
-         (Size.set_cint cint
+      fun setSizes {sequenceMetaData, cint, cpointer, cptrdiff, csize,
+                    header, mplimb, normalMetaData, objptr, seqIndex} =
+         (Size.set_sequenceMetaData sequenceMetaData
+          ; Size.set_cint cint
           ; Size.set_cpointer cpointer
           ; Size.set_cptrdiff cptrdiff
           ; Size.set_csize csize
           ; Size.set_header header
           ; Size.set_mplimb mplimb
+          ; Size.set_normalMetaData normalMetaData
           ; Size.set_objptr objptr
           ; Size.set_seqIndex seqIndex)
    end
@@ -1221,10 +1295,15 @@ fun mlbPathMap () =
                         32 => "rep32"
                       | 64 => "rep64"
                       | _ => Error.bug "Control.mlbPathMap")},
-            {var = "HEADER_WORD",
-             path = (case Bits.toInt (Target.Size.header ()) of
-                        32 => "word32"
-                      | 64 => "word64"
+            {var = "SEQUENCE_METADATA_SIZE",
+             path = (case Bits.toInt (Target.Size.sequenceMetaData ()) of
+                        96 => "size96"
+                      | 192 => "size192"
+                      | _ => Error.bug "Control.mlbPathMap")},
+            {var = "NORMAL_METADATA_SIZE",
+             path = (case Bits.toInt (Target.Size.normalMetaData ()) of
+                        32 => "size32"
+                      | 64 => "size64"
                       | _ => Error.bug "Control.mlbPathMap")},
             {var = "SEQINDEX_INT",
              path = (case Bits.toInt (Target.Size.seqIndex ()) of
@@ -1260,6 +1339,22 @@ structure Verbosity =
           | Top => "Top"
           | Pass => "Pass"
           | Detail => "Detail"
+
+      fun compare (v1, v2) =
+         case (v1, v2) of
+            (Silent, Silent) => EQUAL
+          | (Silent, _) => LESS
+          | (_, Silent) => GREATER
+          | (Top, Top) => EQUAL
+          | (Top, _) => LESS
+          | (_, Top) => GREATER
+          | (Pass, Pass) => EQUAL
+          | (Pass, _) => LESS
+          | (_, Pass) => GREATER
+          | (Detail, Detail) => EQUAL
+
+      val {<, <=, ...} =
+         Relation.compare compare
    end
 
 datatype verbosity = datatype Verbosity.t

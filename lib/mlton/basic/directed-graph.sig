@@ -2,7 +2,7 @@
  * Copyright (C) 1999-2005 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  *
- * MLton is released under a BSD-style license.
+ * MLton is released under a HPND-style license.
  * See the file MLton-LICENSE for details.
  *)
 
@@ -110,16 +110,20 @@ signature DIRECTED_GRAPH =
          sig 
             type 'a t
 
-            val dest: 'a t -> {loops: {headers: 'a Node.t vector,
+            val dest: 'a t -> {loops: {headers: 'a vector,
                                        child: 'a t} vector,
-                               notInLoop: 'a Node.t vector}
+                               notInLoop: 'a vector}
             val layoutDot:
-               'a t * {nodeName: 'a Node.t -> string,
+               'a t * {name: 'a -> string,
                        options: Dot.GraphOption.t list,
                        title: string}
                -> Layout.t
+
+            val map: 'a t * ('a -> 'b) -> 'b t
          end
-      val loopForestSteensgaard: 'a t * {roots: 'a Node.t vector} -> 'a LoopForest.t
+      val loopForestSteensgaard:
+         'a t * {roots: 'a Node.t vector, nodeValue: 'a Node.t -> 'b}
+         -> 'b LoopForest.t
       val new: unit -> 'a t
       val newNode: 'a t -> 'a Node.t
       val nodes: 'a t -> 'a Node.t list

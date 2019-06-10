@@ -3,7 +3,7 @@
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
- * MLton is released under a BSD-style license.
+ * MLton is released under a HPND-style license.
  * See the file MLton-LICENSE for details.
  *)
 
@@ -530,26 +530,24 @@ structure Transform =
 
                      fun contify prefixes
                        = let
-                           val f_name = Func.originalName f
                            val e_blocks =
                               Vector.map
                               (f_entries,
                                fn FunctionEntry.T {name = e, args = e_args, start = e_start} =>
                                let
-                                  val e_name = FuncEntry.originalName e
-                                  val fe_label = Label.newString (f_name ^ "$" ^ e_name)
+                                  val e_label = Label.newString (FuncEntry.originalName e)
                                   val _ = Control.diagnostics
                                           (fn display
                                            => let open Layout
                                               in display (seq [Func.layout f,
-                                                               str "@",
+                                                               str " @ ",
                                                                FuncEntry.layout e,
                                                                str " -> ",
-                                                               Label.layout fe_label])
+                                                               Label.layout e_label])
                                               end)
-                                  val _ = setEntryToLabel (e, fe_label)
+                                  val _ = setEntryToLabel (e, e_label)
                                in
-                                  Block.T {label = fe_label,
+                                  Block.T {label = e_label,
                                            args = e_args,
                                            statements = Vector.new0 (),
                                            transfer = Goto {dst = e_start,

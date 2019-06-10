@@ -3,7 +3,7 @@
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
- * MLton is released under a BSD-style license.
+ * MLton is released under a HPND-style license.
  * See the file MLton-LICENSE for details.
  *)
 
@@ -130,11 +130,7 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
                         | _ => ())
                    val _ =
                       case transfer of
-                         Arith {args, overflow, success, ...} =>
-                            (forces args
-                             ; forceArgs overflow
-                             ; forceArgs success) 
-                       | Bug => ()
+                         Bug => ()
                        | Call {args, return, ...} =>
                             (forces args
                              ; Return.foreachLabel (return, forceArgs))

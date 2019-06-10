@@ -1,9 +1,9 @@
-(* Copyright (C) 2009,2013,2017 Matthew Fluet.
+(* Copyright (C) 2009,2013,2017,2019 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
- * MLton is released under a BSD-style license.
+ * MLton is released under a HPND-style license.
  * See the file MLton-LICENSE for details.
  *)
 
@@ -18,6 +18,7 @@ structure CommonSubexp = CommonSubexp (S)
 structure CombineConversions = CombineConversions (S)
 structure ConstantPropagation = ConstantPropagation (S)
 structure Contify = Contify (S)
+structure DuplicateGlobals = DuplicateGlobals (S)
 structure Flatten = Flatten (S)
 structure DuplicateEntries = DuplicateEntries (S)
 structure Inline = Inline (S)
@@ -40,6 +41,7 @@ structure RemoveUnused = RemoveUnused (S)
 structure ShareZeroVec = ShareZeroVec (S)
 structure SimplifyTypes = SimplifyTypes (S)
 structure SplitEntries = SplitEntries (S)
+structure SplitTypes = SplitTypes (S)
 structure Useless = Useless (S)
 
 type pass = {name: string,
@@ -54,13 +56,15 @@ val ssaPassesDefault =
    {name = "introduceLoops1", doit = IntroduceLoops.transform, execute = true} ::
    {name = "loopInvariant1", doit = LoopInvariant.transform, execute = true} ::
    {name = "splitEntries1", doit = SplitEntries.transform, execute = false} ::
-   {name = "inlineLeaf1", doit = fn p => 
+   {name = "inlineLeaf1", doit = fn p =>
     Inline.inlineLeaf (p, !Control.inlineLeafA), execute = true} ::
-   {name = "inlineLeaf2", doit = fn p => 
+   {name = "inlineLeaf2", doit = fn p =>
     Inline.inlineLeaf (p, !Control.inlineLeafB), execute = true} ::
    {name = "contify1", doit = Contify.transform, execute = true} ::
    {name = "localFlatten1", doit = LocalFlatten.transform, execute = true} ::
    {name = "constantPropagation", doit = ConstantPropagation.transform, execute = true} ::
+   {name = "duplicateGlobals1", doit = DuplicateGlobals.transform, execute = false} ::
+   {name = "splitTypes1", doit = SplitTypes.transform, execute = true} ::
    (* useless should run 
     *   - after constant propagation because constant propagation makes
     *     slots of tuples that are constant useless
@@ -72,6 +76,8 @@ val ssaPassesDefault =
    {name = "loopUnroll1", doit = LoopUnroll.transform, execute = false} ::
    {name = "duplicateEntries2", doit = DuplicateEntries.transform, execute = false} ::
    {name = "removeUnused2", doit = RemoveUnused.transform, execute = true} ::
+   {name = "duplicateGlobals2", doit = DuplicateGlobals.transform, execute = true} ::
+   {name = "splitTypes2", doit = SplitTypes.transform, execute = true} ::
    {name = "simplifyTypes", doit = SimplifyTypes.transform, execute = true} ::
    (* polyEqual should run
     *   - after types are simplified so that many equals are turned into eqs
@@ -239,6 +245,7 @@ local
                  ("constantPropagation", ConstantPropagation.transform),
                  ("contify", Contify.transform),
                  ("duplicateEntries", DuplicateEntries.transform),
+                 ("duplicateGlobals", DuplicateGlobals.transform),
                  ("flatten", Flatten.transform),
                  ("introduceLoops", IntroduceLoops.transform),
                  ("knownCase", KnownCase.transform),
@@ -257,6 +264,7 @@ local
                  ("shareZeroVec", ShareZeroVec.transform),
                  ("simplifyTypes", SimplifyTypes.transform),
                  ("splitEntries", SplitEntries.transform),
+                 ("splitTypes", SplitTypes.transform),
                  ("useless", Useless.transform),
                  ("ssaAddProfile", Profile.addProfile),
                  ("ssaDropProfile", Profile.dropProfile),
@@ -297,76 +305,35 @@ val ssaPassesSet = fn s =>
 val _ = List.push (Control.optimizationPasses,
                    {il = "ssa", get = ssaPassesGet, set = ssaPassesSet})
 
-fun pass ({name, doit, midfix}, p) =
-   let
-      val _ =
-         let open Control
-         in maybeSaveToFile
-            ({name = name, 
-              suffix = midfix ^ "pre.ssa"},
-             Control.No, p, Control.Layouts Program.layouts)
-         end
-      val p =
-         Control.passTypeCheck
-         {display = Control.Layouts Program.layouts,
-          name = name,
-          stats = Program.layoutStats,
-          style = Control.No,
-          suffix = midfix ^ "post.ssa",
-          thunk = fn () => doit p,
-          typeCheck = typeCheck}
-   in
-      p
-   end 
-fun maybePass ({name, doit, execute, midfix}, p) =
-   if List.foldr (!Control.executePasses, execute, fn ((re, new), old) =>
-                  if Regexp.Compiled.matchesAll (re, name)
-                     then new
-                     else old)
-      then pass ({name = name, doit = doit, midfix = midfix}, p)
-      else (Control.messageStr (Control.Pass, name ^ " skipped"); p)
-
 fun simplify p =
    let
-      fun simplify' n p =
-         let
-            val midfix = if !Control.loopSsaPasses = 1
-                            then ""
-                         else concat [Int.toString n, "."]
-         in
-            if n = !Control.loopSsaPasses
-               then p
-            else simplify' 
-                 (n + 1)
-                 (List.fold
-                  (!ssaPasses, p, fn ({name, doit, execute}, p) =>
-                   maybePass ({name = name, doit = doit, execute = execute, midfix = midfix}, p)))
-         end
-      val p = simplify' 0 p
+      val ssaPasses = AppendList.fromList (!ssaPasses)
+      val ssaPasses =
+         if !Control.profile <> Control.ProfileNone
+            andalso !Control.profileIL = Control.ProfileSSA
+            then AppendList.snoc (ssaPasses,
+                                  {name = "ssaAddProfile",
+                                   doit = Profile.addProfile,
+                                   execute = true})
+            else ssaPasses
+      val ssaPasses =
+         AppendList.snoc (ssaPasses, {name = "ssaOrderFunctions",
+                                      doit = S.orderFunctions,
+                                      execute = true})
+      val ssaPasses = AppendList.toList ssaPasses
+      (* Always want to type check the initial and final SSA programs,
+       * even if type checking is turned off, just to catch bugs.
+       *)
+      val () = Control.trace (Control.Pass, "ssaTypeCheck") typeCheck p
+      val p =
+         Control.simplifyPasses
+         {arg = p,
+          passes = ssaPasses,
+          stats = Program.layoutStats,
+          toFile = Program.toFile,
+          typeCheck = typeCheck}
+      val () = Control.trace (Control.Pass, "ssaTypeCheck") typeCheck p
    in
       p
    end
-
-val simplify = fn p => let
-                         (* Always want to type check the initial and final SSA 
-                          * programs, even if type checking is turned off, just
-                          * to catch bugs.
-                          *)
-                         val _ = typeCheck p
-                         val p = simplify p
-                         val p =
-                            if !Control.profile <> Control.ProfileNone
-                               andalso !Control.profileIL = Control.ProfileSSA
-                               then pass ({name = "ssaAddProfile",
-                                           doit = Profile.addProfile,
-                                           midfix = ""}, p)
-                            else p
-                         val p = maybePass ({name = "ssaOrderFunctions",
-                                             doit = S.orderFunctions,
-                                             execute = true,
-                                             midfix = ""}, p)
-                         val _ = typeCheck p
-                       in
-                         p
-                       end
 end

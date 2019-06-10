@@ -5,7 +5,7 @@
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
- * MLton is released under a BSD-style license.
+ * MLton is released under a HPND-style license.
  * See the file MLton-LICENSE for details.
  *)
 
@@ -78,7 +78,7 @@ local
                     val shouldInline = shouldInline name
                  in
                     display
-                    (seq [Func.layout (Function.name f), str "@",
+                    (seq [Func.layout (Function.name f), str " @ ",
                           FuncEntry.layout name, str ": ",
                           record [("shouldInline", Bool.layout shouldInline)]])
                  end))
@@ -223,7 +223,7 @@ local
                      val size = !size
                   in
                      display
-                     (seq [Func.layout (Function.name f), str "@",
+                     (seq [Func.layout (Function.name f), str " @ ",
                            FuncEntry.layout name, str ": ",
                            record [("shouldInline", Bool.layout shouldInline),
                                    ("size", Int.layout size)]])
@@ -439,7 +439,7 @@ fun nonRecursive
                   val size = !size
                in
                   display
-                  (seq [Func.layout (Function.name f), str "@",
+                  (seq [Func.layout (Function.name f), str " @ ",
                         FuncEntry.layout name, str ": ",
                         record [("numCalls", Int.layout numCalls),
                                 ("shouldInline", Bool.layout shouldInline),
@@ -514,7 +514,7 @@ fun transform {program as Program.T {datatypes, globals, functions, main},
                                     val FunctionEntry.T {args, name, start, ...} =
                                        Vector.first (entries)
                                     val name =
-                                       Label.newString (Func.originalName func ^ "$" ^ FuncEntry.originalName name)
+                                       Label.newString (FuncEntry.originalName name)
                                     val _ = 
                                        List.push 
                                        (newBlocks,

@@ -1,8 +1,9 @@
-/* Copyright (C) 1999-2005 Henry Cejtin, Matthew Fluet, Suresh
+/* Copyright (C) 2019 Matthew Fluet.
+ * Copyright (C) 1999-2005 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
- * MLton is released under a BSD-style license.
+ * MLton is released under a HPND-style license.
  * See the file MLton-LICENSE for details.
  */
 
@@ -38,7 +39,7 @@ void GC_callStack (GC_state s, pointer p) {
 uint32_t* GC_frameIndexSourceSeq (GC_state s, GC_frameIndex frameIndex) {
   uint32_t *res;
 
-  res = s->sourceMaps.sourceSeqs[s->sourceMaps.frameSources[frameIndex]];
+  res = s->sourceMaps.sourceSeqs[s->frameInfos[frameIndex].sourceSeqIndex];
   if (DEBUG_CALL_STACK)
     fprintf (stderr, FMTPTR" = GC_frameIndexSourceSeq ("FMTFI")\n",
              (uintptr_t)res, frameIndex);

@@ -1,9 +1,9 @@
-/* Copyright (C) 2009,2012,2015,2017 Matthew Fluet.
+/* Copyright (C) 2009,2012,2015,2017,2019 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
- * MLton is released under a BSD-style license.
+ * MLton is released under a HPND-style license.
  * See the file MLton-LICENSE for details.
  */
 
@@ -283,7 +283,7 @@ int GC_init (GC_state s, int argc, char **argv) {
   s->controls.mayPageHeap = FALSE;
   s->controls.mayProcessAtMLton = TRUE;
   s->controls.messages = FALSE;
-  s->controls.oldGenArraySize = 0x100000;
+  s->controls.oldGenSequenceSize = 0x100000;
   s->controls.ratios.copy = 4.0f;
   s->controls.ratios.copyGenerational = 4.0f;
   s->controls.ratios.grow = 8.0f;
@@ -374,11 +374,11 @@ int GC_init (GC_state s, int argc, char **argv) {
              100.0 * ((double)ram / (double)(s->sysvals.physMem)));
   if (DEBUG_SOURCES or DEBUG_PROFILE) {
     uint32_t i;
-    for (i = 0; i < s->sourceMaps.frameSourcesLength; i++) {
+    for (i = 0; i < s->frameInfosLength; i++) {
       uint32_t j;
       uint32_t *sourceSeq;
       fprintf (stderr, "%"PRIu32"\n", i);
-      sourceSeq = s->sourceMaps.sourceSeqs[s->sourceMaps.frameSources[i]];
+      sourceSeq = s->sourceMaps.sourceSeqs[s->frameInfos[i].sourceSeqIndex];
       for (j = 1; j <= sourceSeq[0]; j++)
         fprintf (stderr, "\t%s\n",
                  s->sourceMaps.sourceNames[

@@ -5,7 +5,7 @@
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
- * MLton is released under a BSD-style license.
+ * MLton is released under a HPND-style license.
  * See the file MLton-LICENSE for details.
  *)
 
@@ -575,9 +575,7 @@ fun restoreFunction {globals: Statement.t vector}
                   else let
                          val phiArgs = Vector.map
                                         (phiArgs, valOf o VarInfo.peekVar o varInfo)
-                         val hash = Vector.fold
-                                    (phiArgs, Label.hash dst, fn (x, h) =>
-                                     Word.xorb(Var.hash x, h))
+                         val hash = Hash.combine (Label.hash dst, Hash.vectorMap (phiArgs, Var.hash))
                          val {route, ...} 
                            = HashSet.lookupOrInsert
                              (routeTable, hash, 

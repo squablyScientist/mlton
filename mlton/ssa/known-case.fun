@@ -4,7 +4,7 @@
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
- * MLton is released under a BSD-style license.
+ * MLton is released under a HPND-style license.
  * See the file MLton-LICENSE for details.
  *)
 
@@ -430,11 +430,9 @@ fun transform (Program.T {globals, datatypes, functions, main})
              fun addNewBlock (block as Block.T {label, ...}) 
                = (setLabelInfo (label, LabelInfo.new block); 
                   addBlock block)
-             local 
-               val table: {hash: word,
-                           transfer: Transfer.t,
-                           label: Label.t} HashSet.t
-                 = HashSet.new {hash = #hash}
+             local
+               val table: (Transfer.t, Label.t) HashTable.t =
+                  HashTable.new {hash = Transfer.hash, equals = Transfer.equals}
              in
                 fun newBlock transfer =
                    let
@@ -455,20 +453,9 @@ fun transform (Program.T {globals, datatypes, functions, main})
                  * I left the code in case we want to enable it when compiling
                  * without profiling.
                  *)
-                fun newBlock' transfer
-                 = let
-                     val hash = Transfer.hash transfer
-                     val {label, ...}
-                       = HashSet.lookupOrInsert
-                         (table, hash,
-                          fn {transfer = transfer', ...} =>
-                          Transfer.equals (transfer, transfer'),
-                          fn () => {hash = hash,
-                                    label = newBlock transfer,
-                                    transfer = transfer})
-                   in
-                     label
-                   end
+                fun newBlock' transfer =
+                   HashTable.lookupOrInsert
+                   (table, transfer, fn () => newBlock transfer)
                 val _ = newBlock' (* quell unused variable warning *)
                fun bugBlock () = newBlock Bug
              end

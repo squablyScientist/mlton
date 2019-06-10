@@ -1,9 +1,10 @@
-(* Copyright (C) 2013 Matthew Fluet, David Larsen.
+(* Copyright (C) 2019 Matthew Fluet.
+ * Copyright (C) 2013 Matthew Fluet, David Larsen.
  * Copyright (C) 1999-2006 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
- * MLton is released under a BSD-style license.
+ * MLton is released under a HPND-style license.
  * See the file MLton-LICENSE for details.
  *)
 
@@ -11,7 +12,6 @@ functor ImplementHandlers (S: RSSA_TRANSFORM_STRUCTS): RSSA_TRANSFORM =
 struct
 
 open S
-open Rssa
 datatype z = datatype Statement.t
 datatype z = datatype Transfer.t
 
@@ -221,10 +221,11 @@ fun flow (f: Function.t): Function.t =
                     returns = returns}
    end
 
-fun transform (Program.T {functions, handlesSignals, main, objectTypes}) =
+fun transform (Program.T {functions, handlesSignals, main, objectTypes, profileInfo}) =
    Program.T {functions = List.revMap (functions, flow),
               handlesSignals = handlesSignals,
               main = flow main,
-              objectTypes = objectTypes}
+              objectTypes = objectTypes,
+              profileInfo = profileInfo}
 
 end

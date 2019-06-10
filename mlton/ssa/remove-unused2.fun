@@ -4,7 +4,7 @@
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
- * MLton is released under a BSD-style license.
+ * MLton is released under a HPND-style license.
  * See the file MLton-LICENSE for details.
  *)
 
@@ -390,8 +390,8 @@ fun transform2 (Program.T {datatypes, globals, functions, main}) =
                                 val () =
                                    case con of
                                       Con con => visitCon con
+                                    | Sequence => ()
                                     | Tuple => ()
-                                    | Vector => ()
                              in
                                 ()
                              end
@@ -488,8 +488,8 @@ fun transform2 (Program.T {datatypes, globals, functions, main}) =
                                             val () =
                                                case con of
                                                   Con con => deconCon con
+                                                | Sequence => default ()
                                                 | Tuple => default ()
-                                                | Vector => default ()
                                          in
                                             ()
                                          end
@@ -558,15 +558,15 @@ fun transform2 (Program.T {datatypes, globals, functions, main}) =
                                            in
                                               ()
                                            end
-                                      | Tuple => ()
-                                      | Vector => Error.bug "RemoveUnused2.visitExp: Select:non-Con|Tuple")
+                                      | Sequence => Error.bug "RemoveUnused2.visitExp: Select:non-Con|Tuple"
+                                      | Tuple => ())
                                | _ => Error.bug "RemovUnused2.visitExp: Select:non-Object"
                         in
                            ()
                         end
-                   | VectorSub {index, vector} =>
+                   | SequenceSub {index, sequence} =>
                         (visitVar index
-                         ; visitVar vector)
+                         ; visitVar sequence)
                end
           | Var x => visitVar x
       val visitExpTh = fn e => fn () => visitExp e
@@ -605,24 +605,19 @@ fun transform2 (Program.T {datatypes, globals, functions, main}) =
                                            ; visitVar base
                                            ; visitVar value))
                                       end
+                                 | Sequence => Error.bug "RemoveUnused2.visitStatement: Update:non-Con|Tuple"
                                  | Tuple =>
                                       (visitVar base
-                                       ; visitVar value)
-                                 | Vector => Error.bug "RemoveUnused2.visitStatement: Update:non-Con|Tuple")
+                                       ; visitVar value))
                           | _ => Error.bug "RemoveUnused2.visitStatement: Update:non-Object")
-                   | VectorSub {index, vector} =>
+                   | SequenceSub {index, sequence} =>
                         (visitVar index
-                         ; visitVar vector
+                         ; visitVar sequence
                          ; visitVar value)
                end
       fun visitTransfer (t: Transfer.t, fi: FuncInfo.t) =
          case t of
-            Arith {args, overflow, success, ty, ...} =>
-               (visitVars args
-                ; visitLabel overflow
-                ; visitLabel success
-                ; visitType ty)
-          | Bug => ()
+            Bug => ()
           | Call {func, entry, args, return} =>
                let
                   datatype u = None
@@ -978,8 +973,6 @@ fun transform2 (Program.T {datatypes, globals, functions, main}) =
                          in
                             (x, t)
                          end))
-      val getArithOverflowWrapperLabel = getOriginalWrapperLabel
-      val getArithSuccessWrapperLabel = getOriginalWrapperLabel
       val getRuntimeWrapperLabel = getOriginalWrapperLabel
       fun getBugFunc (fi: FuncInfo.t): Label.t =
          (* Can't share the Bug block across different places because the
@@ -1199,8 +1192,8 @@ fun transform2 (Program.T {datatypes, globals, functions, main}) =
                                            Select {base = Base.Object base,
                                                    offset = offset}
                                         end
-                                   | Tuple => e
-                                   | Vector => Error.bug "RemoveUnused2.simplifyExp: Update:non-Con|Tuple")
+                                   | Sequence => Error.bug "RemoveUnused2.simplifyExp: Update:non-Con|Tuple"
+                                   | Tuple => e)
                             | _ => Error.bug "RemoveUnused2.simplifyExp:Select:non-Object"
                         end
                    | _ => e
@@ -1269,8 +1262,8 @@ fun transform2 (Program.T {datatypes, globals, functions, main}) =
                                                  end
                                            else NONE
                                         end
-                                   | Tuple => SOME s
-                                   | Vector => Error.bug "RemoveUnused2.simplifyStatement: Update:non-Con|Tuple")
+                                   | Sequence => Error.bug "RemoveUnused2.simplifyStatement: Update:non-Con|Tuple"
+                                   | Tuple => SOME s)
                             | _ => Error.bug "RemoveUnused2.simplifyStatement: Select:non-Object"
                         end
                    | _ => SOME s
@@ -1279,13 +1272,7 @@ fun transform2 (Program.T {datatypes, globals, functions, main}) =
          Vector.keepAllMap (ss, simplifyStatement)
       fun simplifyTransfer (t: Transfer.t, fi: FuncInfo.t): Transfer.t =
          case t of
-            Arith {prim, args, overflow, success, ty} =>
-               Arith {prim = prim,
-                      args = args,
-                      overflow = getArithOverflowWrapperLabel overflow,
-                      success = getArithSuccessWrapperLabel success,
-                      ty = simplifyType ty}
-          | Bug => Bug
+            Bug => Bug
           | Call {func, entry, args, return} =>
                let
                   val fi' = funcInfo func

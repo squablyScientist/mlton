@@ -1,10 +1,10 @@
-(* Copyright (C) 2017 Matthew Fluet.
+(* Copyright (C) 2017,2019 Matthew Fluet.
  * Copyright (C) 2013 David Larsen.
  * Copyright (C) 1999-2007 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
- * MLton is released under a BSD-style license.
+ * MLton is released under a HPND-style license.
  * See the file MLton-LICENSE for details.
  *)
 
@@ -23,6 +23,7 @@ in
    structure Function = Function
    structure Kind = Kind
    structure Label = Label
+   structure Live = Live
    structure Type = Type
    structure Var = Var
 end
@@ -36,8 +37,6 @@ in
    structure Runtime = Runtime
    structure StackOffset = StackOffset
 end
-
-structure Live = Live (Rssa)
 
 structure Allocation:
    sig
@@ -449,7 +448,20 @@ fun allocate {formalsStackOffsets,
                end
          else NONE
       fun getOperands (xs: Var.t vector): Operand.t vector =
-         Vector.map (xs, fn x => valOf (! (valOf (#operand (varInfo x)))))
+         Vector.map
+         (xs, fn x =>
+          let
+             open Layout
+          in
+             case (#operand (varInfo x)) of
+                NONE => (Error.bug o toString o seq)
+                        [str "AllocateRegisters.getOperands_1", Var.layout x]
+              | SOME r =>
+                   (case !r of
+                       NONE => (Error.bug o toString o seq)
+                               [str "AllocateRegisters.getOperands_2", Var.layout x]
+                     | SOME oper => oper)
+          end)
       val getOperands =
          Trace.trace 
          ("AllocateRegisters.getOperands",
@@ -466,7 +478,7 @@ fun allocate {formalsStackOffsets,
       (* Do a DFS of the control-flow graph. *)
       val () =
          Function.dfs
-         (f, fn R.Block.T {args, label, kind, statements, transfer, ...} =>
+         (f, fn R.Block.T {args, label, kind, statements, ...} =>
           let
              val {begin, beginNoFormals, handler = handlerLive,
                   link = linkLive} = labelLive label
@@ -537,7 +549,11 @@ fun allocate {formalsStackOffsets,
                                         "bad size ",
                                         Bytes.toString size,
                                         " in ", Label.toString label])
-             val _ = Vector.foreach (args, fn (x, _) => allocateVar (x, a))
+             val _ = Vector.foreach (args, fn (x, _) =>
+                                     if Vector.exists (begin, fn y =>
+                                                       Var.equals (x, y))
+                                        then allocateVar (x, a)
+                                        else ())
              (* Must compute live after allocateVar'ing the args, since that
               * sets the operands for the args.
               *)
@@ -546,7 +562,6 @@ fun allocate {formalsStackOffsets,
              val _ =
                 Vector.foreach (statements, fn statement =>
                                 R.Statement.foreachDef (statement, one))
-             val _ = R.Transfer.foreachDef (transfer, one)
              val _ =
                 setLabelInfo (label, {live = addHS live,
                                       liveNoFormals = addHS liveNoFormals,

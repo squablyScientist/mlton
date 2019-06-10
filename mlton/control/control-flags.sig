@@ -1,9 +1,9 @@
-(* Copyright (C) 2009-2012,2014-2017 Matthew Fluet.
+(* Copyright (C) 2009-2012,2014-2017,2019 Matthew Fluet.
  * Copyright (C) 1999-2008 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  * Copyright (C) 1997-2000 NEC Research Institute.
  *
- * MLton is released under a BSD-style license.
+ * MLton is released under a HPND-style license.
  * See the file MLton-LICENSE for details.
  *)
 
@@ -15,6 +15,9 @@ signature CONTROL_FLAGS =
       val all : unit -> {name: string, 
                          value: string} list
 
+      val layout': {pre: string, suf: string} -> Layout.t
+      val layout: unit -> Layout.t
+
       (*------------------------------------*)
       (*            Begin Flags             *)
       (*------------------------------------*)
@@ -24,12 +27,22 @@ signature CONTROL_FLAGS =
 
       val atMLtons: string vector ref
 
-      datatype chunk =
-         OneChunk
-       | ChunkPerFunc
-       | Coalesce of {limit: int}
+      val bounceRssaLimit: int option ref
+      val bounceRssaLiveCutoff: int option ref
+      val bounceRssaLoopCutoff: int option ref
+      val bounceRssaUsageCutoff: int option ref
 
-      val chunk: chunk ref
+      val chunkBatch: int ref
+
+      structure Chunkify:
+         sig
+            datatype t = Coalesce of {limit: int}
+                       | One
+                       | PerFunc
+         end
+      val chunkify: Chunkify.t ref
+
+      val chunkTailCall: bool ref
 
       val closureConvertGlobalize: bool ref
       val closureConvertShrink: bool ref
@@ -163,11 +176,6 @@ signature CONTROL_FLAGS =
             val snapshot: unit -> (unit -> 'a) -> 'a
          end
 
-      (* stop after elaboration.  So, no need for the elaborator to generate
-       * valid CoreML.
-       *)
-      val elaborateOnly: bool ref
-
       val emitMain: bool ref
 
       val exportHeader: File.t option ref
@@ -195,6 +203,14 @@ signature CONTROL_FLAGS =
        | First
        | Every
       val gcCheck: gcCheck ref
+
+      val globalizeArrays: bool ref
+
+      val globalizeRefs: bool ref
+
+      val globalizeSmallIntInf: bool ref
+
+      val globalizeSmallType: int ref
 
       (* Indentation used in laying out ILs. *)
       val indentation: int ref
@@ -249,10 +265,6 @@ signature CONTROL_FLAGS =
       (* name of the output library *)
       val libname : string ref
 
-      (* Number of times to loop through optimization passes. *)
-      val loopSsaPasses: int ref
-      val loopSsa2Passes: int ref
-
       (* Limit the code growth loop unrolling/unswitching will allow. *)
       val loopUnrollLimit: int ref
       val loopUnswitchLimit: int ref
@@ -271,6 +283,9 @@ signature CONTROL_FLAGS =
          sig
             (* whether or not to use comments in native codegen *)
             val commented: int ref
+
+            (* whether to eliminate redundant AL ops in native codegen *)
+            val elimALRedundant: bool ref
 
             (* whether or not to track liveness of stack slots *)
             val liveStack: bool ref 
@@ -358,11 +373,24 @@ signature CONTROL_FLAGS =
       (* Show the basis library. *)
       val showBasis: File.t option ref
 
+      val showBasisCompact: bool ref
+      val showBasisDef: bool ref
+      val showBasisFlat: bool ref
+
       (* Show def-use information. *)
       val showDefUse: File.t option ref
 
       (* Should types be printed in ILs. *)
       val showTypes: bool ref
+
+      datatype splitTypesBool =
+         Never
+       | Smart (* split only when smaller than two, default *)
+       | Always
+      val splitTypesBool: splitTypesBool ref
+
+      (* List of pass names to stop at. *)
+      val stopPasses: Regexp.Compiled.t list ref
 
       datatype target =
          Cross of string
@@ -388,8 +416,10 @@ signature CONTROL_FLAGS =
                   val csize: unit -> Bits.t
                   val header: unit -> Bits.t
                   val mplimb: unit -> Bits.t
+                  val normalMetaData: unit -> Bits.t
                   val objptr: unit -> Bits.t
                   val seqIndex: unit -> Bits.t
+                  val sequenceMetaData: unit -> Bits.t
                end
             val setSizes: {cint: Bits.t,
                            cpointer: Bits.t,
@@ -397,18 +427,26 @@ signature CONTROL_FLAGS =
                            csize: Bits.t,
                            header: Bits.t,
                            mplimb: Bits.t,
+                           normalMetaData: Bits.t,
                            objptr: Bits.t,
-                           seqIndex: Bits.t} -> unit
+                           seqIndex: Bits.t,
+                           sequenceMetaData: Bits.t} -> unit
          end
 
       (* Type check ILs. *)
       val typeCheck: bool ref
 
-      datatype verbosity = 
-         Silent
-       | Top
-       | Pass
-       | Detail
+      structure Verbosity:
+         sig
+            datatype t =
+               Silent
+             | Top
+             | Pass
+             | Detail
+            val < : t * t -> bool
+            val <= : t * t -> bool
+         end
+      datatype verbosity = datatype Verbosity.t
       val verbosity: verbosity ref
 
       val warnAnn: bool ref
