@@ -16,9 +16,9 @@ is
 ../../lib/mlton/sources.cm
 ../ast/sources.cm
 ../atoms/sources.cm
-../backend/sources.cm
+(* ../backend/sources.cm *)
 ../closure-convert/sources.cm
-../codegen/sources.cm
+(* ../codegen/sources.cm *)
 ../control/sources.cm
 ../core-ml/sources.cm
 ../defunctorize/sources.cm

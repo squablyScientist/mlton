@@ -45,10 +45,10 @@ structure CoreML = CoreML (open Atoms
 structure Xml = Xml (open Atoms)
 structure Sxml = Sxml (open Xml)
 structure Ssa = Ssa (open Atoms)
-structure Ssa2 = Ssa2 (open Atoms)
-structure BackendAtoms = BackendAtoms (open Atoms)
-structure Rssa = Rssa (open BackendAtoms)
-structure Machine = Machine (open BackendAtoms)
+(* structure Ssa2 = Ssa2 (open Atoms) *)
+(* structure BackendAtoms = BackendAtoms (open Atoms) *)
+(* structure Rssa = Rssa (open BackendAtoms) *)
+(* structure Machine = Machine (open BackendAtoms) *)
 
 (*---------------------------------------------------*)
 (*                  Compiler Passes                  *)
@@ -72,20 +72,20 @@ structure Monomorphise = Monomorphise (structure Xml = Xml
                                        structure Sxml = Sxml)
 structure ClosureConvert = ClosureConvert (structure Ssa = Ssa
                                            structure Sxml = Sxml)
-structure SsaToSsa2 = SsaToSsa2 (structure Ssa = Ssa
-                                 structure Ssa2 = Ssa2)
-structure Ssa2ToRssa = Ssa2ToRssa (structure Rssa = Rssa
-                                   structure Ssa2 = Ssa2)
-structure Backend = Backend (structure Machine = Machine
-                             structure Rssa = Rssa
-                             fun funcToLabel f = f)
-structure CCodegen = CCodegen (structure Machine = Machine)
-structure LLVMCodegen = LLVMCodegen (structure CCodegen = CCodegen
-                                     structure Machine = Machine)
-structure x86Codegen = x86Codegen (structure CCodegen = CCodegen
-                                   structure Machine = Machine)
-structure amd64Codegen = amd64Codegen (structure CCodegen = CCodegen
-                                       structure Machine = Machine)
+(* structure SsaToSsa2 = SsaToSsa2 (structure Ssa = Ssa *)
+(*                                  structure Ssa2 = Ssa2) *)
+(* structure Ssa2ToRssa = Ssa2ToRssa (structure Rssa = Rssa *)
+(*                                    structure Ssa2 = Ssa2) *)
+(* structure Backend = Backend (structure Machine = Machine *)
+(*                              structure Rssa = Rssa *)
+(*                              fun funcToLabel f = f) *)
+(* structure CCodegen = CCodegen (structure Machine = Machine) *)
+(* structure LLVMCodegen = LLVMCodegen (structure CCodegen = CCodegen *)
+(*                                      structure Machine = Machine) *)
+(* structure x86Codegen = x86Codegen (structure CCodegen = CCodegen *)
+(*                                    structure Machine = Machine) *)
+(* structure amd64Codegen = amd64Codegen (structure CCodegen = CCodegen *)
+(*                                        structure Machine = Machine) *)
 
 (* ------------------------------------------------- *)   
 (*                   Primitive Env                   *)
@@ -436,12 +436,14 @@ fun mkCompile {outputC, outputLL, outputS} =
           stats = Ssa.Program.layoutStats,
           toFile = Ssa.Program.toFile,
           typeCheck = Ssa.typeCheck}
-      val ssa2Frontend =
-         mkFrontend
-         {parse = Ssa2.Program.parse,
-          stats = Ssa2.Program.layoutStats,
-          toFile = Ssa2.Program.toFile,
-          typeCheck = Ssa2.typeCheck}
+      (* val ssa2Frontend = *)
+      (*    mkFrontend *)
+      (*    {parse = Ssa2.Program.parse, *)
+      (*     stats = Ssa2.Program.layoutStats, *)
+      (*     toFile = Ssa2.Program.toFile, *)
+      (*     typeCheck = Ssa2.typeCheck} *)
+      val ssa2Frontend = fn _ =>
+         Error.bug "Compile.ssa2Frontend: unimplemented"
 
       fun xmlSimplify xml =
          let
@@ -511,138 +513,140 @@ fun mkCompile {outputC, outputLL, outputS} =
          in
             ssa
          end
-      fun toSsa2 ssa =
-         Control.translatePass
-         {arg = ssa,
-          doit = SsaToSsa2.convert,
-          keepIL = false,
-          name = "toSsa2",
-          srcToFile = SOME Ssa.Program.toFile,
-          tgtStats = SOME Ssa2.Program.layoutStats,
-          tgtToFile = SOME Ssa2.Program.toFile,
-          tgtTypeCheck = SOME (Ssa2.typeCheck, SOME true)}
-      fun ssa2Simplify ssa2 =
-         let
-            val ssa2 =
-               Control.simplifyPass
-               {arg = ssa2,
-                doit = Ssa2.simplify,
-                forceTypeCheck = SOME true,
-                execute = true,
-                keepIL = !Control.keepSSA2,
-                name = "ssa2Simplify",
-                stats = Ssa2.Program.layoutStats,
-                toFile = Ssa2.Program.toFile,
-                typeCheck = Ssa2.typeCheck}
-         in
-            ssa2
-         end
-      fun toRssa ssa2 =
-         let
-            val codegenImplementsPrim =
-               case !Control.codegen of
-                  Control.AMD64Codegen => amd64Codegen.implementsPrim
-                | Control.CCodegen => CCodegen.implementsPrim
-                | Control.LLVMCodegen => LLVMCodegen.implementsPrim
-                | Control.X86Codegen => x86Codegen.implementsPrim
-            fun toRssa ssa2 =
-               Ssa2ToRssa.convert
-               (ssa2, {codegenImplementsPrim = codegenImplementsPrim})
-            val rssa =
-               Control.translatePass
-               {arg = ssa2,
-                doit = toRssa,
-                keepIL = false,
-                name = "toRssa",
-                srcToFile = SOME Ssa2.Program.toFile,
-                tgtStats = SOME Rssa.Program.layoutStats,
-                tgtToFile = SOME Rssa.Program.toFile,
-                (* RSSA type check is too slow to run by default. *)
-                tgtTypeCheck = SOME (Rssa.typeCheck, SOME false)}
-         in
-            rssa
-         end
-      fun rssaSimplify rssa =
-         Control.simplifyPass
-         {arg = rssa,
-          doit = Rssa.simplify,
-          execute = true,
-          (* RSSA type check is too slow to run by default. *)
-          forceTypeCheck = SOME false,
-          keepIL = !Control.keepRSSA,
-          name = "rssaSimplify",
-          stats = Rssa.Program.layoutStats,
-          toFile = Rssa.Program.toFile,
-          typeCheck = Rssa.typeCheck}
-      fun toMachine rssa =
-         let
-            val machine =
-               Control.translatePass
-               {arg = rssa,
-                doit = Backend.toMachine,
-                keepIL = false,
-                name = "backend",
-                srcToFile = SOME Rssa.Program.toFile,
-                tgtStats = SOME Machine.Program.layoutStats,
-                tgtToFile = SOME Machine.Program.toFile,
-                (* Machine type check is too slow to run by default. *)
-                tgtTypeCheck = SOME (Machine.Program.typeCheck, SOME false)}
-         in
-            machine
-         end
-      fun machineSimplify machine =
-         Control.simplifyPass
-         {arg = machine,
-          doit = Machine.simplify,
-          execute = true,
-          (* Machine type check is too slow to run by default. *)
-          forceTypeCheck = SOME false,
-          keepIL = !Control.keepMachine,
-          name = "machineSimplify",
-          stats = Machine.Program.layoutStats,
-          toFile = Machine.Program.toFile,
-          typeCheck = Machine.Program.typeCheck}
-      fun codegen machine =
-         let
-            val _ = Machine.Program.clearLabelNames machine
-            val _ = Machine.Label.printNameAlphaNumeric := true
-            fun codegen machine =
-               case !Control.codegen of
-                  Control.AMD64Codegen =>
-                     amd64Codegen.output {program = machine,
-                                          outputC = outputC,
-                                          outputS = outputS}
-                | Control.CCodegen =>
-                     CCodegen.output {program = machine,
-                                      outputC = outputC}
-                | Control.LLVMCodegen =>
-                     LLVMCodegen.output {program = machine,
-                                         outputC = outputC,
-                                         outputLL = outputLL}
-                | Control.X86Codegen =>
-                     x86Codegen.output {program = machine,
-                                        outputC = outputC,
-                                        outputS = outputS}
-         in
-            Control.translatePass
-            {arg = machine,
-             doit = codegen,
-             keepIL = false,
-             name = concat [Control.Codegen.toString (!Control.codegen), "Codegen"],
-             srcToFile = SOME Machine.Program.toFile,
-             tgtStats = NONE,
-             tgtToFile = NONE,
-             tgtTypeCheck = NONE}
-         end
+      (* fun toSsa2 ssa = *)
+      (*    Control.translatePass *)
+      (*    {arg = ssa, *)
+      (*     doit = SsaToSsa2.convert, *)
+      (*     keepIL = false, *)
+      (*     name = "toSsa2", *)
+      (*     srcToFile = SOME Ssa.Program.toFile, *)
+      (*     tgtStats = SOME Ssa2.Program.layoutStats, *)
+      (*     tgtToFile = SOME Ssa2.Program.toFile, *)
+      (*     tgtTypeCheck = SOME (Ssa2.typeCheck, SOME true)} *)
+      (* fun ssa2Simplify ssa2 = *)
+      (*    let *)
+      (*       val ssa2 = *)
+      (*          Control.simplifyPass *)
+      (*          {arg = ssa2, *)
+      (*           doit = Ssa2.simplify, *)
+      (*           forceTypeCheck = SOME true, *)
+      (*           execute = true, *)
+      (*           keepIL = !Control.keepSSA2, *)
+      (*           name = "ssa2Simplify", *)
+      (*           stats = Ssa2.Program.layoutStats, *)
+      (*           toFile = Ssa2.Program.toFile, *)
+      (*           typeCheck = Ssa2.typeCheck} *)
+      (*    in *)
+      (*       ssa2 *)
+      (*    end *)
+      (* fun toRssa ssa2 = *)
+      (*    let *)
+      (*       val codegenImplementsPrim = *)
+      (*          case !Control.codegen of *)
+      (*             Control.AMD64Codegen => amd64Codegen.implementsPrim *)
+      (*           | Control.CCodegen => CCodegen.implementsPrim *)
+      (*           | Control.LLVMCodegen => LLVMCodegen.implementsPrim *)
+      (*           | Control.X86Codegen => x86Codegen.implementsPrim *)
+      (*       fun toRssa ssa2 = *)
+      (*          Ssa2ToRssa.convert *)
+      (*          (ssa2, {codegenImplementsPrim = codegenImplementsPrim}) *)
+      (*       val rssa = *)
+      (*          Control.translatePass *)
+      (*          {arg = ssa2, *)
+      (*           doit = toRssa, *)
+      (*           keepIL = false, *)
+      (*           name = "toRssa", *)
+      (*           srcToFile = SOME Ssa2.Program.toFile, *)
+      (*           tgtStats = SOME Rssa.Program.layoutStats, *)
+      (*           tgtToFile = SOME Rssa.Program.toFile, *)
+      (*           (\* RSSA type check is too slow to run by default. *\) *)
+      (*           tgtTypeCheck = SOME (Rssa.typeCheck, SOME false)} *)
+      (*    in *)
+      (*       rssa *)
+      (*    end *)
+      (* fun rssaSimplify rssa = *)
+      (*    Control.simplifyPass *)
+      (*    {arg = rssa, *)
+      (*     doit = Rssa.simplify, *)
+      (*     execute = true, *)
+      (*     (\* RSSA type check is too slow to run by default. *\) *)
+      (*     forceTypeCheck = SOME false, *)
+      (*     keepIL = !Control.keepRSSA, *)
+      (*     name = "rssaSimplify", *)
+      (*     stats = Rssa.Program.layoutStats, *)
+      (*     toFile = Rssa.Program.toFile, *)
+      (*     typeCheck = Rssa.typeCheck} *)
+      (* fun toMachine rssa = *)
+      (*    let *)
+      (*       val machine = *)
+      (*          Control.translatePass *)
+      (*          {arg = rssa, *)
+      (*           doit = Backend.toMachine, *)
+      (*           keepIL = false, *)
+      (*           name = "backend", *)
+      (*           srcToFile = SOME Rssa.Program.toFile, *)
+      (*           tgtStats = SOME Machine.Program.layoutStats, *)
+      (*           tgtToFile = SOME Machine.Program.toFile, *)
+      (*           (\* Machine type check is too slow to run by default. *\) *)
+      (*           tgtTypeCheck = SOME (Machine.Program.typeCheck, SOME false)} *)
+      (*    in *)
+      (*       machine *)
+      (*    end *)
+      (* fun machineSimplify machine = *)
+      (*    Control.simplifyPass *)
+      (*    {arg = machine, *)
+      (*     doit = Machine.simplify, *)
+      (*     execute = true, *)
+      (*     (\* Machine type check is too slow to run by default. *\) *)
+      (*     forceTypeCheck = SOME false, *)
+      (*     keepIL = !Control.keepMachine, *)
+      (*     name = "machineSimplify", *)
+      (*     stats = Machine.Program.layoutStats, *)
+      (*     toFile = Machine.Program.toFile, *)
+      (*     typeCheck = Machine.Program.typeCheck} *)
+      (* fun codegen machine = *)
+      (*    let *)
+      (*       val _ = Machine.Program.clearLabelNames machine *)
+      (*       val _ = Machine.Label.printNameAlphaNumeric := true *)
+      (*       fun codegen machine = *)
+      (*          case !Control.codegen of *)
+      (*             Control.AMD64Codegen => *)
+      (*                amd64Codegen.output {program = machine, *)
+      (*                                     outputC = outputC, *)
+      (*                                     outputS = outputS} *)
+      (*           | Control.CCodegen => *)
+      (*                CCodegen.output {program = machine, *)
+      (*                                 outputC = outputC} *)
+      (*           | Control.LLVMCodegen => *)
+      (*                LLVMCodegen.output {program = machine, *)
+      (*                                    outputC = outputC, *)
+      (*                                    outputLL = outputLL} *)
+      (*           | Control.X86Codegen => *)
+      (*                x86Codegen.output {program = machine, *)
+      (*                                   outputC = outputC, *)
+      (*                                   outputS = outputS} *)
+      (*    in *)
+      (*       Control.translatePass *)
+      (*       {arg = machine, *)
+      (*        doit = codegen, *)
+      (*        keepIL = false, *)
+      (*        name = concat [Control.Codegen.toString (!Control.codegen), "Codegen"], *)
+      (*        srcToFile = SOME Machine.Program.toFile, *)
+      (*        tgtStats = NONE, *)
+      (*        tgtToFile = NONE, *)
+      (*        tgtTypeCheck = NONE} *)
+      (*    end *)
 
-      val goCodegen = codegen
-      val goMachineSimplify = goCodegen o machineSimplify
-      val goToMachine = goMachineSimplify o toMachine
-      val goRssaSimplify = goToMachine o rssaSimplify
-      val goToRssa = goRssaSimplify o toRssa
-      val goSsa2Simplify = goToRssa o ssa2Simplify
-      val goToSsa2 = goSsa2Simplify o toSsa2
-      val goSsaSimplify = goToSsa2 o ssaSimplify
+      (* val goCodegen = codegen *)
+      (* val goMachineSimplify = goCodegen o machineSimplify *)
+      (* val goToMachine = goMachineSimplify o toMachine *)
+      (* val goRssaSimplify = goToMachine o rssaSimplify *)
+      (* val goToRssa = goRssaSimplify o toRssa *)
+      (* val goSsa2Simplify = goToRssa o ssa2Simplify *)
+      val goSsa2Simplify = fn _ => Error.bug "Compile.goSsa2Simplify: unimplemented"
+      (* val goToSsa2 = goSsa2Simplify o toSsa2 *)
+      (* val goSsaSimplify = goToSsa2 o ssaSimplify *)
+      val goSsaSimplify = ignore o ssaSimplify o (fn p => (List.push (Control.stopPasses, Regexp.compileDFA (#1 (valOf (Regexp.fromString "ssaSimplify")))) ; p))
       val goToSsa = goSsaSimplify o toSsa
       val goSxmlSimplify = goToSsa o sxmlSimplify
       val goToSxml = goSxmlSimplify o toSxml

@@ -11,9 +11,9 @@ local
    ../../lib/mlton/sources.mlb
    ../ast/sources.mlb
    ../atoms/sources.mlb
-   ../backend/sources.mlb
+   (* ../backend/sources.mlb *)
    ../closure-convert/sources.mlb
-   ../codegen/sources.mlb
+   (* ../codegen/sources.mlb *)
    ../control/sources.mlb
    ../core-ml/sources.mlb
    ../defunctorize/sources.mlb
