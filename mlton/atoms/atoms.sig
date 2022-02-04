@@ -27,7 +27,6 @@ signature ATOMS' =
       structure Ffi: FFI
       structure Field: FIELD
       structure Func: FUNC
-      structure Handler: HANDLER
       structure IntSize: INT_SIZE
       structure Label: LABEL
       structure Prim: PRIM
@@ -58,9 +57,8 @@ signature ATOMS' =
       sharing Con = Prim.Con
       sharing Const = Prim.Const
       sharing Field = Record.Field = SortedRecord.Field
-      sharing Handler = Return.Handler
       sharing IntSize = Tycon.IntSize
-      sharing Label = Handler.Label = Return.Label
+      sharing Label = Return.Label
       sharing RealSize = CType.RealSize = Prim.RealSize = RealX.RealSize
          = Tycon.RealSize
       sharing RealX = Const.RealX
@@ -98,7 +96,6 @@ signature ATOMS =
       sharing Ffi = Atoms.Ffi
       sharing Field = Atoms.Field
       sharing Func = Atoms.Func
-      sharing Handler = Atoms.Handler
       sharing IntSize = Atoms.IntSize
       sharing Label = Atoms.Label
       sharing Prim = Atoms.Prim

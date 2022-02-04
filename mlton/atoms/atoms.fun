@@ -81,9 +81,7 @@ structure Atoms =
                              structure WordSize = WordSize)
 
       structure Prod = Prod ()
-      structure Handler = Handler (structure Label = Label)
-      structure Return = Return (structure Label = Label
-                                 structure Handler = Handler)
+      structure Return = Return (structure Label = Label)
 
       structure SourceInfo = SourceInfo ()
       structure ProfileExp = ProfileExp (structure SourceInfo = SourceInfo)
