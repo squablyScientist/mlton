@@ -41,8 +41,7 @@ signature ANALYZE =
          -> {
              value: Var.t -> 'a,
              func: Func.t -> {args: 'a vector,
-                              raises: 'a vector option,
-                              returns: 'a vector option},
+                              returns: 'a vector vector},
              label: Label.t -> 'a vector
             }
    end

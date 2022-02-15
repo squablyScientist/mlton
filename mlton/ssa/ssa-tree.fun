@@ -551,14 +551,13 @@ structure Transfer =
          Bug (* MLton thought control couldn't reach here. *)
        | Call of {args: Var.t vector,
                   func: Func.t,
-                  return: Return.t}
+                  returns: Return.t vector}
        | Case of {test: Var.t,
                   cases: (Con.t, Label.t) Cases.t,
                   default: Label.t option} (* Must be nullary. *)
        | Goto of {dst: Label.t,
                   args: Var.t vector}
-       | Raise of Var.t vector
-       | Return of Var.t vector
+       | Return of int * Var.t vector
        | Runtime of {prim: Type.t Prim.t,
                      args: Var.t vector,
                      return: Label.t}
@@ -569,8 +568,7 @@ structure Transfer =
           | Call {args, ...} => 1 + Vector.length args
           | Case {cases, ...} => 1 + Cases.length cases
           | Goto {args, ...} => 1 + Vector.length args
-          | Raise xs => 1 + Vector.length xs
-          | Return xs => 1 + Vector.length xs
+          | Return (_, xs) => 1 + Vector.length xs
           | Runtime {args, ...} => 1 + Vector.length args
 
       fun foreachFuncLabelVar (t, func: Func.t -> unit, label: Label.t -> unit, var) =
@@ -579,17 +577,16 @@ structure Transfer =
          in
             case t of
                Bug => ()
-             | Call {func = f, args, return, ...} =>
+             | Call {func = f, args, returns, ...} =>
                   (func f
-                   ; Return.foreachLabel (return, label)
+                   ; Vector.foreach (returns, (fn r => Return.foreachLabel (r, label)))
                    ; vars args)
              | Case {test, cases, default, ...} =>
                   (var test
                    ; Cases.foreach (cases, label)
                    ; Option.app (default, label))
              | Goto {dst, args, ...} => (vars args; label dst)
-             | Raise xs => vars xs
-             | Return xs => vars xs
+             | Return (_, xs) => vars xs
              | Runtime {args, return, ...} =>
                   (vars args
                    ; label return)
@@ -610,10 +607,10 @@ structure Transfer =
          in
             case t of
                Bug => Bug
-             | Call {func, args, return} =>
+             | Call {func, args, returns} =>
                   Call {func = func, 
                         args = fxs args,
-                        return = Return.map (return, fl)}
+                        returns = Vector.map (returns, fn r => Return.mapLabel(r, fl))}
              | Case {test, cases, default} =>
                   Case {test = fx test, 
                         cases = Cases.map(cases, fl),
@@ -621,8 +618,7 @@ structure Transfer =
              | Goto {dst, args} => 
                   Goto {dst = fl dst, 
                         args = fxs args}
-             | Raise xs => Raise (fxs xs)
-             | Return xs => Return (fxs xs)
+             | Return (i, xs) => Return (i, (fxs xs))
              | Runtime {prim, args, return} =>
                   Runtime {prim = prim,
                            args = fxs args,
@@ -662,27 +658,17 @@ structure Transfer =
          in
             case t of
                Bug => str "bug"
-             | Call {func, args, return} =>
+             | Call {func, args, returns} =>
                   let
                      val call = seq [Func.layout func, str " ", layoutArgs args]
                   in
-                     case return of
-                        Return.Dead => seq [str "call dead ", call]
-                      | Return.NonTail {cont, handler} =>
-                           seq [str "call ", Label.layout cont, str " ",
-                                paren call,
-                                str " handle _ => ",
-                                case handler of
-                                   Handler.Caller => str "raise"
-                                 | Handler.Dead => str "dead"
-                                 | Handler.Handle l => Label.layout l]
-                      | Return.Tail => seq [str "call tail ", call]
+                     seq [call, Vector.layout Return.layout returns]
                   end
+
              | Case arg => layoutCase arg
              | Goto {dst, args} =>
                   seq [str "goto ", Label.layout dst, str " ", layoutArgs args]
-             | Raise xs => seq [str "raise ", layoutArgs xs]
-             | Return xs => seq [str "return ", layoutArgs xs]
+             | Return (_, xs) => seq [str "return ", layoutArgs xs]
              | Runtime {prim, args, return} =>
                   seq [str "runtime ", Label.layout return, str " ",
                        paren (layoutPrim {prim = prim, args = args})]
@@ -714,6 +700,9 @@ structure Transfer =
          in
             mlSpaces *> any
             [Bug <$ kw "bug",
+            (* TODO : ctod: make this parsing work with multi-return functions
+            *  TODO : ctod: also make sure to better understand these parsing
+            *  combinators.
              Call <$>
              (kw "call" *>
               any [kw "dead" *> parseCall >>= (fn mkCall => mkCall Return.Dead),
@@ -724,6 +713,7 @@ structure Transfer =
                    any [kw "raise" *> mkCall (Return.NonTail {cont = cont, handler = Handler.Caller}),
                         kw "dead" *> mkCall (Return.NonTail {cont = cont, handler = Handler.Dead}),
                         Label.parse >>= (fn h => mkCall (Return.NonTail {cont = cont, handler = Handler.Handle h}))]))]),
+                        *)
              Case <$>
              any ((kw "case" *> parseCase (Con.parse, Cases.Con)) ::
                   (List.map (WordSize.all, fn ws =>
@@ -734,8 +724,8 @@ structure Transfer =
               Label.parse >>= (fn dst =>
               parseArgs >>= (fn args =>
               pure {dst = dst, args = args}))),
-             Raise <$> (kw "raise" *> parseArgs),
-             Return <$> (kw "return" *> parseArgs),
+             (*Return <$> (kw "return" *> parseArgs), 
+             * TODO : ctod: figure out how to parse this *)
              Runtime <$>
              (kw "runtime" *>
               Label.parse >>= (fn return =>
@@ -750,11 +740,11 @@ structure Transfer =
       fun equals (e: t, e': t): bool =
          case (e, e') of
             (Bug, Bug) => true
-          | (Call {func, args, return}, 
-             Call {func = func', args = args', return = return'}) =>
+          | (Call {func, args, returns}, 
+             Call {func = func', args = args', returns = returns'}) =>
                Func.equals (func, func') andalso
                varsEquals (args, args') andalso
-               Return.equals (return, return')
+               Vector.equals (returns, returns', Return.equals)
           | (Case {test, cases, default},
              Case {test = test', cases = cases', default = default'}) =>
                Var.equals (test, test')
@@ -763,8 +753,7 @@ structure Transfer =
           | (Goto {dst, args}, Goto {dst = dst', args = args'}) =>
                Label.equals (dst, dst') andalso
                varsEquals (args, args')
-          | (Raise xs, Raise xs') => varsEquals (xs, xs')
-          | (Return xs, Return xs') => varsEquals (xs, xs')
+          | (Return (i, xs), Return (i', xs')) => i = i' andalso varsEquals (xs, xs')
           | (Runtime {prim, args, return},
              Runtime {prim = prim', args = args', return = return'}) =>
                Prim.equals (prim, prim') andalso
@@ -779,12 +768,14 @@ structure Transfer =
          val return = newHash ()
          fun hashVars (xs: Var.t vector, w: Word.t): Word.t =
             Hash.combine (w, Hash.vectorMap (xs, Var.hash))
+         fun hashRets (rs: Return.t vector) : Word.t =
+            Hash.vectorMap (rs, Return.hash)
          fun hash2 (w1: Word.t, w2: Word.t) = Hash.combine (w1, w2)
       in
          val hash: t -> Word.t =
             fn Bug => bug
-             | Call {func, args, return} =>
-                  hashVars (args, hash2 (Func.hash func, Return.hash return))
+             | Call {func, args, returns} =>
+                  hashVars (args, hash2 (Func.hash func, hashRets returns))
              | Case {test, cases, default} =>
                   hash2 (Var.hash test, 
                          Cases.fold
@@ -797,8 +788,7 @@ structure Transfer =
                           hash2 (Label.hash l, w)))
              | Goto {dst, args} =>
                   hashVars (args, Label.hash dst)
-             | Raise xs => hashVars (xs, raisee)
-             | Return xs => hashVars (xs, return)
+             | Return (i, xs) => hash2 ((Word.fromInt i), hashVars (xs, return))
              | Runtime {args, return, ...} => hashVars (args, Label.hash return)
       end
 
@@ -962,8 +952,7 @@ structure Function =
                    blocks: Block.t vector,
                    mayInline: bool,
                    name: Func.t,
-                   raises: Type.t vector option,
-                   returns: Type.t vector option,
+                   returns: Type.t vector vector,
                    start: Label.t}
 
       (* There is a messy interaction between the laziness used in controlFlow
@@ -1129,7 +1118,7 @@ structure Function =
                     | _ => Transfer.layout' (t, layoutVar))
                fun toStringFormals args = Layout.toString (layoutFormals args)
                fun toStringHeader (name, args) = concat [name, " ", toStringFormals args]
-               val {name, args, start, blocks, returns, raises, ...} = dest f
+               val {name, args, start, blocks, returns, ...} = dest f
                open Dot
                val graph = Graph.new ()
                val {get = nodeOptions, ...} =
@@ -1161,8 +1150,8 @@ structure Function =
                       val () =
                          case transfer of
                             Bug => ()
-                          | Call {return, ...} =>
-                               let
+                          | Call {returns, ...} => () (* <- TODO : ctod delete '()' *)
+                               (*let TODO : ctod make this work with multi-return
                                   val _ =
                                      case return of
                                         Return.Dead => ()
@@ -1174,7 +1163,7 @@ structure Function =
                                       | Return.Tail => ()
                                in
                                   ()
-                               end
+                               end*)
                           | Case {cases, default, ...} =>
                                let
                                   fun doit (v, toString) =
@@ -1196,7 +1185,6 @@ structure Function =
                                   ()
                                end
                           | Goto {dst, ...} => edge (dst, "", Solid)
-                          | Raise _ => ()
                           | Return _ => ()
                           | Runtime {return, ...} => edge (return, "", Dotted)
                       val lab =
@@ -1223,13 +1211,9 @@ structure Function =
                            then ((Layout.toString o Layout.seq)
                                  [Layout.str ": ",
                                   Layout.record [("returns",
-                                                  Option.layout
+                                                  Vector.layout
                                                   (Vector.layout Type.layout)
-                                                  returns),
-                                                 ("raises",
-                                                  Option.layout
-                                                  (Vector.layout Type.layout)
-                                                  raises)]],
+                                                  returns)]],
                                  Left)::lab
                            else lab
                      val lab =
@@ -1319,19 +1303,15 @@ structure Function =
 
       fun layoutHeader (f: t): Layout.t =
          let
-            val {args, name, mayInline, raises, returns, start, ...} = dest f
+            val {args, name, mayInline, returns, start, ...} = dest f
             open Layout
             val (sep, rty) =
                if !Control.showTypes
                   then (str ":",
                         indent (seq [record [("returns",
-                                              Option.layout
+                                              Vector.layout
                                               (Vector.layout Type.layout)
-                                              returns),
-                                             ("raises",
-                                              Option.layout
-                                              (Vector.layout Type.layout)
-                                              raises)],
+                                              returns)],
                                      str " ="],
                                 2))
                   else (str " =", empty)
@@ -1380,13 +1360,12 @@ structure Function =
             open Parse
          in
             new <$>
-            (parseHeader >>= (fn (mayInline, name, args, returns, raises, start) =>
+            (parseHeader >>= (fn (mayInline, name, args, returns, start) =>
              many Block.parse >>= (fn blocks =>
              pure {mayInline = mayInline,
                    name = name,
                    args = args,
                    returns = returns,
-                   raises = raises,
                    start = start,
                    blocks = Vector.fromList blocks})))
          end
@@ -1455,7 +1434,7 @@ structure Function =
                val (bindLabel, lookupLabel, destroyLabel) =
                   make (Label.new, Label.plist)
             end
-            val {args, blocks, mayInline, name, raises, returns, start, ...} =
+            val {args, blocks, mayInline, name, returns, start, ...} =
                dest f
             val args = Vector.map (args, fn (x, ty) => (bindVar x, ty))
             val bindLabel = ignore o bindLabel
@@ -1492,7 +1471,6 @@ structure Function =
                  blocks = blocks,
                  mayInline = mayInline,
                  name = name,
-                 raises = raises,
                  returns = returns,
                  start = start}
          end
@@ -1504,7 +1482,7 @@ structure Function =
          else 
          let
             val _ = Control.diagnostic (fn () => layout f)
-            val {args, blocks, mayInline, name, raises, returns, start} = dest f
+            val {args, blocks, mayInline, name, returns, start} = dest f
             val extraBlocks = ref []
             val {get = labelBlock, set = setLabelBlock, rem} =
                Property.getSetOnce
@@ -1550,6 +1528,7 @@ structure Function =
                       in
                          c
                       end
+                   (* TODO : ctod uncomment and/or delete this 
                    fun genHandler (cont: Label.t)
                       : Statement.t vector * Label.t * Handler.t =
                       case raises of
@@ -1571,12 +1550,14 @@ structure Function =
                                 prefix (cont, Vector.new0 ()),
                                 Handler.Handle l)
                             end
+                   *)
                    fun addLeave () =
                       (Vector.concat [statements,
                                       Vector.new1 (leave ())],
                        transfer)
                    val (statements, transfer) =
                       case transfer of
+                         (* FIXME make this work with multi return
                          Call {args, func, return} =>
                             let
                                datatype z = datatype Return.t
@@ -1604,8 +1585,8 @@ structure Function =
                                             (statements, transfer))
                                 | Tail => addLeave ()
                             end
-                       | Raise _ => addLeave ()
-                       | Return _ => addLeave ()
+                        TODO : ctod: make sure this is correct for profiling
+                       |*) Return _ => addLeave ()
                        | _ => (statements, transfer)
                 in
                    Block.T {args = args,
@@ -1620,7 +1601,6 @@ structure Function =
                     blocks = blocks,
                     mayInline = mayInline,
                     name = name,
-                    raises = raises,
                     returns = returns,
                     start = start}
             val _ = Control.diagnostic (fn () => layout f)
@@ -1693,16 +1673,18 @@ structure Program =
                          Vector.foreach
                          (blocks, fn Block.T {transfer, ...} =>
                           case transfer of
-                             Call {func, return, ...} =>
+                             Call {func, returns, ...} =>
                                 let
                                    val to = funcNode func
                                    val {tail, nontail} = get to
                                    datatype z = datatype Return.t
-                                   val is =
+                                   val is = false
+                                     (* TODO : ctod ask fluet about this behaviour
                                       case return of
                                          Dead => false
                                        | NonTail _ => true
                                        | Tail => false
+                                     *)
                                    val r = if is then nontail else tail
                                 in
                                    if !r
