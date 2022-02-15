@@ -10,8 +10,6 @@
 signature RETURN_STRUCTS =
    sig
       structure Label: LABEL
-      structure Handler: HANDLER
-      sharing Label = Handler.Label
    end
 
 signature RETURN =
@@ -19,17 +17,21 @@ signature RETURN =
       include RETURN_STRUCTS
 
       datatype t =
-         Dead
-       | NonTail of {cont: Label.t,
-                     handler: Handler.t}
-       | Tail
+         NonTail of Label.t
+       | Tail of int
 
-      val compose: t * t -> t
+      (* TODO figure out if compose is needed *)
+      (*val compose: t * t -> t*)
       val equals: t * t -> bool
       val foldLabel: t * 'a * (Label.t * 'a -> 'a) -> 'a
-      val foreachHandler: t * (Label.t -> unit) -> unit
+      val foldInt: t * 'a * (int * 'a -> 'a) -> 'a
       val foreachLabel: t * (Label.t -> unit) -> unit
+      val foreachInt: t * (int -> unit) -> unit
       val hash: t -> word
       val layout: t -> Layout.t
-      val map: t * (Label.t -> Label.t) -> t
+
+      (* TODO figyre out if there should be two of these functions *)
+      (*val map: t * (Label.t -> Label.t) -> t *)
+      val mapLabel: t * (Label.t -> Label.t) -> t
+      val mapInt: t * (int -> int) -> t
    end

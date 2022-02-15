@@ -12,49 +12,43 @@ functor Return (S: RETURN_STRUCTS): RETURN =
       open S
 
       datatype t =
-         Dead
-       | NonTail of {cont: Label.t,
-                     handler: Handler.t}
-       | Tail
+         NonTail of Label.t
+       | Tail of int
 
       fun layout r =
          let
             open Layout
          in
             case r of
-               Dead => str "Dead"
-             | NonTail {cont, handler} =>
-                  seq [str "NonTail ",
-                       Layout.record
-                       [("cont", Label.layout cont),
-                        ("handler", Handler.layout handler)]]
-             | Tail => str "Tail"
+               NonTail l => seq [str "NonTail ", Label.layout l]
+             | Tail i => seq [str "Tail #", Int.layout i]
          end
 
       fun equals (r, r'): bool =
          case (r, r') of
-            (Dead, Dead) => true
-          | (NonTail {cont = c, handler = h},
-             NonTail {cont = c', handler = h'}) =>
-               Label.equals (c, c') andalso Handler.equals (h, h')
-           | (Tail, Tail) => true
-           | _ => false
-
-      fun foldLabel (r: t, a, f) =
+            (NonTail l, NonTail l') => Label.equals (l, l')
+          | (Tail i, Tail i') => i = i'
+          | _ => false
+       
+      (* TODO check with Fluet to determine if this is correct *)
+      fun foldLabel (r, a, f) =
          case r of
-            Dead => a
-          | NonTail {cont, handler} =>
-               Handler.foldLabel (handler, f (cont, a), f)
-          | Tail => a
+            NonTail l => f (l, a)
+          | Tail i => a
 
       fun foreachLabel (r, f) = foldLabel (r, (), f o #1)
 
-      fun foreachHandler (r, f) =
-         case r of
-            Dead => ()
-          | NonTail {handler, ...} => Handler.foreachLabel (handler, f)
-          | Tail => ()
+      fun foldInt (r, a, f) = 
+         case r of 
+            NonTail l => a
+          | Tail i => f (i, a)
 
+      fun foreachInt (r, f) = foldInt (r, (), f o #1)
+
+      (* TODO figure out if we still need map or should be done in case analysis
+      * somewhere else, or split into two functions maybe (one for int one for
+      * label)?*)
+      (*
       fun map (r, f) =
          case r of
             Dead => Dead
@@ -62,7 +56,20 @@ functor Return (S: RETURN_STRUCTS): RETURN =
                NonTail {cont = f cont,
                         handler = Handler.map (handler, f)}
           | Tail => Tail
+      *)
 
+      fun mapLabel (r, f) = 
+         case r of 
+            NonTail l => NonTail (f l)
+          | Tail i => Tail i
+
+      fun mapInt (r, f) = 
+         case r of 
+            NonTail l => NonTail l
+          | Tail i => Tail (f i)
+
+      (* TODO figure out if we still need compose or should be doing it otf *)
+      (*
       fun compose (r, r') =
          case r' of
             Dead => Dead
@@ -78,18 +85,16 @@ functor Return (S: RETURN_STRUCTS): RETURN =
                             | Handler.Dead => handler
                             | Handler.Handle _ => handler)}
           | Tail => r
+      *)
 
       local
          val newHash = Random.word
-         val dead = newHash ()
-         val nonTail = newHash ()
-         val tail = newHash ()
+         val localHash = newHash ()
+         val tailHash = newHash ()
       in
          fun hash r =
             case r of
-               Dead => dead
-             | NonTail {cont, handler} =>
-                  Hash.combine3 (nonTail, Label.hash cont, Handler.hash handler)
-             | Tail => tail
+               NonTail l => Hash.combine (localHash, Label.hash l)
+             | Tail i  => Hash.combine (tailHash, Word.fromInt i)
       end
    end
