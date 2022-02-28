@@ -295,8 +295,8 @@ structure Cont:
           | ReceiveVar f => f (x, ty)
           | Prefix (k, s) => Res.prefix (sendVar (k, ty, x), s)
           | Return => {statements = [],
-                       transfer = Transfer.Return (Vector.new1 x)}
-      and sendBindExp ({arg, statements, transfer}, ty, e: Exp.t) = 
+                       transfer = Transfer.Return (0, Vector.new1 x)}
+      and sendBindExp ({arg, statements, transfer}, ty, e: Exp.t) =
          {statements = Statement.T {var = SOME arg,
                                     ty = ty,
                                     exp = e} :: statements,
@@ -348,16 +348,19 @@ fun selects (tuple: Var.t, ty: Type.t, components: Var.t vector)
        :: ss)
    end
 
-fun linearize' (e: t, h: Handler.t, k: Cont.t): Label.t * Block.t list =
+fun linearize' (e: t, h: Return.t option, k: Cont.t): Label.t * Block.t list =
    let
       val traceLinearizeLoop =
-         Trace.trace3 ("DirectExp.linearize'.loop", layout, Handler.layout, Cont.layout,
+         Trace.trace3 ("DirectExp.linearize'.loop",
+                       layout,
+                       Option.layout Return.layout,
+                       Cont.layout,
                        Res.layout)
       val blocks: Block.t list ref = ref []
       fun newBlock (args: (Var.t * Type.t) vector,
                     {statements: Statement.t list,
                      transfer: Transfer.t}): Label.t =
-         let 
+         let
             val label = Label.newNoname ()
             val _ = List.push (blocks,
                                Block.T {label = label,
@@ -376,15 +379,15 @@ fun linearize' (e: t, h: Handler.t, k: Cont.t): Label.t * Block.t list =
          end
       fun newLabel (args: (Var.t * Type.t) vector,
                     e: t,
-                    h: Handler.t,
+                    h: Return.t option,
                     k: Cont.t): Label.t =
          newBlock (args, loop (e, h, k))
       and newLabel0 (e, h, k) = newLabel (Vector.new0 (), e, h, k)
-      and loopf (e: t, h: Handler.t, f: Var.t * Type.t -> Res.t) =
+      and loopf (e: t, h: Return.t option, f: Var.t * Type.t -> Res.t) =
          loop (e, h, Cont.receiveVar f)
       and loop arg : Res.t =
          traceLinearizeLoop
-         (fn (e: t, h: Handler.t, k: Cont.t) =>
+         (fn (e: t, h: Return.t option, k: Cont.t) =>
          case e of
             Bug => {statements = [],
                     transfer = Transfer.Bug}
@@ -395,8 +398,14 @@ fun linearize' (e: t, h: Handler.t, k: Cont.t): Label.t * Block.t list =
                  transfer = (Transfer.Call
                              {func = func,
                               args = xs,
-                              return = Return.NonTail {cont = reify (k, ty),
-                                                       handler = h}})})
+                              returns =
+                                 (case h of
+                                    NONE =>
+                                       Vector.new1
+                                          (Return.NonTail (reify (k, ty)))
+                                  | SOME r =>
+                                       Vector.new2
+                                          (Return.NonTail (reify (k, ty)), r))})})
           | Case {cases, default, test, ty} =>
                let
                   val k = Cont.goto (reify (k, ty))
@@ -410,7 +419,7 @@ fun linearize' (e: t, h: Handler.t, k: Cont.t): Label.t * Block.t list =
                                                  newLabel0 (e, h, k)),
                            cases =
                            let
-                              fun doit v = 
+                              fun doit v =
                                  Vector.map (v, fn (c, e) =>
                                              (c, newLabel0 (e, h, k)))
                            in
@@ -435,13 +444,13 @@ fun linearize' (e: t, h: Handler.t, k: Cont.t): Label.t * Block.t list =
                       let
                          fun doit (tuple: Var.t): Res.t =
                             let
-                               val (ss, xs) = 
+                               val (ss, xs) =
                                   case length of
                                      0 => ([], Vector.new0 ())
                                    | 1 => ([], Vector.new1 tuple)
                                    | _ =>
                                         let
-                                           val xs = 
+                                           val xs =
                                               Vector.tabulate
                                               (length, fn _ => Var.newNoname ())
                                         in (selects (tuple, ty, xs), xs)
@@ -455,7 +464,7 @@ fun linearize' (e: t, h: Handler.t, k: Cont.t): Label.t * Block.t list =
                          case e of
                             Exp.Tuple xs => loop (body xs, h, k)
                           | Exp.Var x => doit x
-                          | _ => 
+                          | _ =>
                                let
                                   val tuple = Var.newNoname ()
                                in
@@ -484,6 +493,7 @@ fun linearize' (e: t, h: Handler.t, k: Cont.t): Label.t * Block.t list =
                let
                   val k = Cont.goto (reify (k, ty))
                   val hl = Label.newNoname ()
+
                   val {statements, transfer} = loop (handler, h, k)
                   val _ =
                      List.push (blocks,
@@ -492,7 +502,7 @@ fun linearize' (e: t, h: Handler.t, k: Cont.t): Label.t * Block.t list =
                                          statements = Vector.fromList statements,
                                          transfer = transfer})
                in
-                  loop (try, Handler.Handle hl, k)
+                  loop (try, SOME (Return.NonTail hl), k)
                end
           | Let {decs, body} =>
                let
@@ -517,11 +527,16 @@ fun linearize' (e: t, h: Handler.t, k: Cont.t): Label.t * Block.t list =
                       {statements = [],
                        transfer =
                        (case h of
-                           Handler.Caller => Transfer.Raise (Vector.new1 x)
-                         | Handler.Dead => Error.bug "DirectExp.linearize'.loop: Raise:to dead handler"
-                         | Handler.Handle l =>
-                              Transfer.Goto {args = Vector.new1 x,
-                                             dst = l})})
+                           NONE =>
+                              Error.bug
+                              "DirectExp.linearize'.loop: Raise:no handler"
+                        |  SOME r =>
+                              (case r of
+                                 Return.NonTail l =>
+                                    Transfer.Goto { args = Vector.new1 x,
+                                                    dst = l }
+                               | Return.Tail i =>
+                                    Transfer.Return (i, Vector.new1 x)))})
           | Runtime {args, prim, ty} =>
                loops
                (args, h, fn xs =>
@@ -563,7 +578,7 @@ fun linearize' (e: t, h: Handler.t, k: Cont.t): Label.t * Block.t list =
           | Tuple {exps, ty} =>
                loops (exps, h, fn xs => Cont.sendExp (k, ty, Exp.Tuple xs))
           | Var (x, ty) => Cont.sendVar (k, ty, x)) arg
-      and loops (es: t vector, h: Handler.t, k: Var.t vector -> Res.t): Res.t =
+      and loops (es: t vector, h: Return.t option, k: Var.t vector -> Res.t): Res.t =
          let
             val n = Vector.length es
             fun each (i, ac) =
@@ -582,7 +597,7 @@ fun linearize' (e: t, h: Handler.t, k: Cont.t): Label.t * Block.t list =
 fun linearize (e: t, h) = linearize' (e, h, Cont.return)
 
 val linearize =
-   Trace.trace2 ("DirectExp.linearize", layout, Handler.layout,
+   Trace.trace2 ("DirectExp.linearize", layout, Option.layout Return.layout,
                 Layout.tuple2 (Label.layout,
                                List.layout (Label.layout o Block.label)))
    linearize
