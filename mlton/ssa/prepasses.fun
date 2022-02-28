@@ -65,7 +65,7 @@ fun breakFunction (f, {codeMotion: bool}) =
       val outDeg' = LabelInfo.outDeg' o labelInfo
 
       val {args, blocks, mayInline,
-           name, raises, returns, start} = Function.dest f
+           name, returns, start} = Function.dest f
 
       val _ = 
          Vector.foreach
@@ -75,7 +75,6 @@ fun breakFunction (f, {codeMotion: bool}) =
                 case transfer of
                    Bug => false (* no successors *)
                  | Goto _ => false
-                 | Raise _ => false (* no successors *)
                  | Return _ => false (* no successors *)
                  | _ => true
           in
@@ -137,7 +136,6 @@ fun breakFunction (f, {codeMotion: bool}) =
                     blocks = Vector.concat [blocks, Vector.fromList (!newBlocks)],
                     mayInline = mayInline,
                     name = name,
-                    raises = raises,
                     returns = returns,
                     start = start}
    end
@@ -165,7 +163,7 @@ struct
 
 fun eliminateFunction f =
    let
-      val {args, blocks, mayInline, name, raises, returns, start} =
+      val {args, blocks, mayInline, name, returns, start} =
          Function.dest f
       val {get = isLive, set = setLive, rem} =
          Property.getSetOnce (Label.plist, Property.initConst false)
@@ -185,7 +183,6 @@ fun eliminateFunction f =
                              blocks = blocks,
                              mayInline = mayInline,
                              name = name,
-                             raises = raises,
                              returns = returns,
                              start = start}
             end
@@ -215,7 +212,7 @@ fun orderFunctions (p as Program.T {globals, datatypes, main, ...}) =
          Program.dfs
          (p, fn f =>
           let
-             val {args, mayInline, name, raises, returns, start, ...} =
+             val {args, mayInline, name, returns, start, ...} =
                 Function.dest f
              val blocks = ref []
              val () =
@@ -227,7 +224,6 @@ fun orderFunctions (p as Program.T {globals, datatypes, main, ...}) =
                                    blocks = Vector.fromListRev (!blocks),
                                    mayInline = mayInline,
                                    name = name,
-                                   raises = raises,
                                    returns = returns,
                                    start = start}
           in
