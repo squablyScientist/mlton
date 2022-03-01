@@ -557,7 +557,8 @@ structure Transfer =
                   default: Label.t option} (* Must be nullary. *)
        | Goto of {dst: Label.t,
                   args: Var.t vector}
-       | Return of int * Var.t vector
+       | Return of {retpt : int,
+                    xs : Var.t vector}
        | Runtime of {prim: Type.t Prim.t,
                      args: Var.t vector,
                      return: Label.t}
@@ -568,7 +569,7 @@ structure Transfer =
           | Call {args, ...} => 1 + Vector.length args
           | Case {cases, ...} => 1 + Cases.length cases
           | Goto {args, ...} => 1 + Vector.length args
-          | Return (_, xs) => 1 + Vector.length xs
+          | Return {xs, ...} => 1 + Vector.length xs
           | Runtime {args, ...} => 1 + Vector.length args
 
       fun foreachFuncLabelVar (t, func: Func.t -> unit, label: Label.t -> unit, var) =
@@ -586,7 +587,7 @@ structure Transfer =
                    ; Cases.foreach (cases, label)
                    ; Option.app (default, label))
              | Goto {dst, args, ...} => (vars args; label dst)
-             | Return (_, xs) => vars xs
+             | Return {xs, ...} => vars xs
              | Runtime {args, return, ...} =>
                   (vars args
                    ; label return)
@@ -618,7 +619,9 @@ structure Transfer =
              | Goto {dst, args} => 
                   Goto {dst = fl dst, 
                         args = fxs args}
-             | Return (i, xs) => Return (i, (fxs xs))
+             | Return {retpt, xs} => 
+                  Return {retpt = retpt, 
+                          xs = (fxs xs)}
              | Runtime {prim, args, return} =>
                   Runtime {prim = prim,
                            args = fxs args,
@@ -668,7 +671,7 @@ structure Transfer =
              | Case arg => layoutCase arg
              | Goto {dst, args} =>
                   seq [str "goto ", Label.layout dst, str " ", layoutArgs args]
-             | Return (_, xs) => seq [str "return ", layoutArgs xs]
+             | Return {xs, ...} => seq [str "return ", layoutArgs xs]
              | Runtime {prim, args, return} =>
                   seq [str "runtime ", Label.layout return, str " ",
                        paren (layoutPrim {prim = prim, args = args})]
@@ -753,7 +756,7 @@ structure Transfer =
           | (Goto {dst, args}, Goto {dst = dst', args = args'}) =>
                Label.equals (dst, dst') andalso
                varsEquals (args, args')
-          | (Return (i, xs), Return (i', xs')) => i = i' andalso varsEquals (xs, xs')
+          | (Return {retpt = i, xs}, Return {retpt = i', xs = xs'}) => i = i' andalso varsEquals (xs, xs')
           | (Runtime {prim, args, return},
              Runtime {prim = prim', args = args', return = return'}) =>
                Prim.equals (prim, prim') andalso
@@ -788,7 +791,7 @@ structure Transfer =
                           hash2 (Label.hash l, w)))
              | Goto {dst, args} =>
                   hashVars (args, Label.hash dst)
-             | Return (i, xs) => hash2 ((Word.fromInt i), hashVars (xs, return))
+             | Return {retpt = i, xs} => hash2 ((Word.fromInt i), hashVars (xs, return))
              | Runtime {args, return, ...} => hashVars (args, Label.hash return)
       end
 

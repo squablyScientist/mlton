@@ -295,7 +295,8 @@ structure Cont:
           | ReceiveVar f => f (x, ty)
           | Prefix (k, s) => Res.prefix (sendVar (k, ty, x), s)
           | Return => {statements = [],
-                       transfer = Transfer.Return (0, Vector.new1 x)}
+                       transfer = Transfer.Return {retpt = 0, 
+                                                   xs = Vector.new1 x}}
       and sendBindExp ({arg, statements, transfer}, ty, e: Exp.t) =
          {statements = Statement.T {var = SOME arg,
                                     ty = ty,
@@ -536,7 +537,8 @@ fun linearize' (e: t, h: Return.t option, k: Cont.t): Label.t * Block.t list =
                                     Transfer.Goto { args = Vector.new1 x,
                                                     dst = l }
                                | Return.Tail i =>
-                                    Transfer.Return (i, Vector.new1 x)))})
+                                    Transfer.Return {retpt = i, 
+                                                     xs = Vector.new1 x}))})
           | Runtime {args, prim, ty} =>
                loops
                (args, h, fn xs =>

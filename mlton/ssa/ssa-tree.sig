@@ -119,7 +119,8 @@ signature SSA_TREE =
                         test: Var.t}
              | Goto of {args: Var.t vector,
                         dst: Label.t}
-             | Return of int * Var.t vector
+             | Return of {retpt : int,
+                          xs : Var.t vector}
              | Runtime of {args: Var.t vector,
                            prim: Type.t Prim.t,
                            return: Label.t}
