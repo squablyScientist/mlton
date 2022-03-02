@@ -154,8 +154,7 @@ fun checkScopes (program as
                   ()
                end
           | Goto {args, ...} => getVars args
-          | Raise xs => getVars xs
-          | Return xs => getVars xs
+          | Return {xs, ...} => getVars xs
           | Runtime {args, ...} => getVars args
       val loopTransfer =
          fn t =>
@@ -163,7 +162,7 @@ fun checkScopes (program as
          handle exn => Error.reraiseSuffix (exn, concat [" in ", Layout.toString (Transfer.layout t)])
       fun loopFunc (f: Function.t) =
          let
-            val {args, blocks, raises, returns, start, ...} = Function.dest f
+            val {args, blocks, returns, start, ...} = Function.dest f
             (* Descend the dominator tree, verifying that variable definitions
              * dominate variable uses.
              *)
@@ -196,8 +195,7 @@ fun checkScopes (program as
             val _ = loop (Function.dominatorTree f)
             val _ = Vector.foreach (blocks, unbindLabel o Block.label)
             val _ = Vector.foreach (args, unbindVar o #1)
-            val _ = Option.app (returns, loopTypes)
-            val _ = Option.app (raises, loopTypes)
+            val _ = Vector.foreach (returns, loopTypes)
             val _ = Function.clear f
          in
              ()
@@ -318,16 +316,16 @@ structure Function =
                               end
                            val _ = 
                               if (case transfer of
-                                     Call {return, ...} =>
+                                     Call {returns, ...} =>
                                         let
                                            datatype z = datatype Return.t
+                                           fun doesLeave r =
+                                             case r of
+                                                NonTail _ => false
+                                              | Tail _ => true
                                         in
-                                           case return of
-                                              Dead => false
-                                            | NonTail _ => false
-                                            | Tail => true
+                                          Vector.exists (returns, doesLeave)
                                         end
-                                   | Raise _ => true
                                    | Return _ => true
                                    | _ => false)
                                  then (case sources of
