@@ -102,7 +102,7 @@ structure Accum =
                                              (globals, fn {var, ty, ...} =>
                                               Dexp.var (var, ty))),
                                      ty = Type.tuple tys}},
-                 Ssa.Handler.Caller)
+                 SOME (Return.Tail 1))
              val {blocks, ...} =
                 Function.dest
                 (Ssa.shrinkFunction
@@ -111,8 +111,7 @@ structure Accum =
                                 blocks = Vector.fromList blocks,
                                 mayInline = false, (* doesn't matter *)
                                 name = Func.newNoname (),
-                                raises = NONE,
-                                returns = SOME (Vector.new1 (Type.tuple tys)),
+                                returns = Vector.new1 (Vector.new1 (Type.tuple tys)),
                                 start = start}))
           in
              if 1 <> Vector.length blocks
@@ -756,18 +755,24 @@ fun closureConvert
       fun addFunc (ac, {args, body, isMain, mayInline, name, returns}) =
          let
             val (start, blocks) =
-               Dexp.linearize (body, Ssa.Handler.Caller)
+               Dexp.linearize (body, SOME (Return.Tail 1))
             val f =
-               shrinkFunction
-               (Function.new {args = args,
-                              blocks = Vector.fromList blocks,
-                              mayInline = mayInline,
-                              name = name,
-                              raises = if isMain
-                                          then NONE
-                                          else raises,
-                              returns = SOME returns,
-                              start = start})
+               let
+                 val rrs = 
+                    if isMain
+                       then (case raises of 
+                          NONE => Vector.new1 returns
+                        | SOME raises => Vector.new2 (returns, raises))
+                       else Vector.new1 returns
+               in
+                 shrinkFunction
+                 (Function.new {args = args,
+                                blocks = Vector.fromList blocks,
+                                mayInline = mayInline,
+                                name = name,
+                                returns = rrs,
+                                start = start})
+               end
             val f =
                if isMain
                   then Function.profile (f, SourceInfo.main)
