@@ -321,17 +321,17 @@ fun shrinkFunction {globals: Statement.t vector} =
                   Vector.toListMap
                   (statements, fn Statement.T {exp, ty, ...} =>
                    Statement.T {exp = exp, ty = ty, var = NONE})
-               fun rr ({retpt : int, xs: Var.t vector}, make) =
+               fun rr ({retpt : int, args: Var.t vector}, make) =
                   let
-                     val _ = incVars xs
+                     val _ = incVars args
 (*
                      val n = Vector.length statements
                      fun loop (i, ac) =
                         if i = n
                            then
-                              if 0 = Vector.length xs
+                              if 0 = Vector.length args
                                  orelse 0 < Vector.length args
-                                 then doit (make {args = extract xs,
+                                 then doit (make {args = extract args,
                                                   canMove = rev ac})
                               else normal ()
                         else
@@ -352,9 +352,9 @@ fun shrinkFunction {globals: Statement.t vector} =
 *)
                   in
                      if Vector.forall (statements, Statement.isProfile)
-                        andalso (0 = Vector.length xs
+                        andalso (0 = Vector.length args
                                  orelse 0 < Vector.length args)
-                        then doit (make {args = extract xs,
+                        then doit (make {args = extract args,
                                          retpt = retpt,
                                          canMove = canMove ()})
                      else normal ()
@@ -733,7 +733,7 @@ fun shrinkFunction {globals: Statement.t vector} =
                          fun rr ({args, retpt, canMove}, make) =
                             (canMove,
                              make {retpt = retpt,
-                                   xs = Vector.map (args, use o extract)})
+                                   args = Vector.map (args, use o extract)})
                          datatype z = datatype LabelMeaning.aux
                       in
                          case aux of
@@ -861,8 +861,8 @@ fun shrinkFunction {globals: Statement.t vector} =
                        test = test}
                    end
               | Goto {dst, args} => goto (dst, varInfos args)
-              | Return {retpt, xs} => ([], Return {retpt = retpt,
-                                                   xs = (simplifyVars xs)})
+              | Return {retpt, args} => ([], Return {retpt = retpt,
+                                                     args = (simplifyVars args)})
               | Runtime {prim, args, return} =>
                    ([], Runtime {prim = prim, 
                                  args = simplifyVars args, 
@@ -996,7 +996,7 @@ fun shrinkFunction {globals: Statement.t vector} =
                 fun rr ({args, retpt, canMove}, make) =
                    (canMoveIn @ canMove, 
                     make {retpt = retpt,
-                          xs = Vector.map (args, use o extract)})
+                          args = Vector.map (args, use o extract)})
                 datatype z = datatype LabelMeaning.aux
              in
                 case aux of

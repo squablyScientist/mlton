@@ -121,7 +121,7 @@ signature SSA_TREE =
              | Goto of {args: Var.t vector,
                         dst: Label.t}
              | Return of {retpt : int,
-                          xs : Var.t vector}
+                          args : Var.t vector}
              | Runtime of {args: Var.t vector,
                            prim: Type.t Prim.t,
                            return: Label.t}

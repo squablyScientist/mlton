@@ -117,12 +117,12 @@ fun 'a analyze
                in ()
                end
           | Goto {dst, args} => coerces ("goto", values args, labelValues dst)
-          | Return {retpt, xs} =>
+          | Return {retpt, args} =>
                if retpt >= Vector.size shouldReturns
                   then Error.bug "Analyze.loopTransfer (out of bounds at Return)"
                else  
                   coerces ("return", 
-                           values xs, 
+                           values args, 
                            (Vector.sub (shouldReturns, retpt)))
           | Runtime {prim, args, return} =>
                let

@@ -154,7 +154,7 @@ fun checkScopes (program as
                   ()
                end
           | Goto {args, ...} => getVars args
-          | Return {xs, ...} => getVars xs
+          | Return {args, ...} => getVars args
           | Runtime {args, ...} => getVars args
       val loopTransfer =
          fn t =>
