@@ -105,6 +105,7 @@ signature SSA_TREE =
             val layout: t -> Layout.t
             val profile: ProfileExp.t -> t
             val var: t -> Var.t option
+            val equals: (t * t) -> bool
          end
 
       structure Transfer:

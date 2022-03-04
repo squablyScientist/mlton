@@ -543,6 +543,14 @@ structure Statement =
          in
             global
          end
+
+      fun equals (T {exp = exp1, ty = ty1, var = var1} : t,
+                  T {exp = exp2, ty = ty2, var = var2} : t): bool =
+         Exp.equals (exp1, exp2)
+         andalso
+         Type.equals (ty1, ty2)
+         andalso
+         Option.equals (var1, var2, Var.equals)
    end
 
 structure Transfer =

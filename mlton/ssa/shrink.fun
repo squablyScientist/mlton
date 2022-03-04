@@ -131,6 +131,7 @@ structure LabelMeaning =
                   dst: t,
                   args: Positions.t}
        | Return of {args: Positions.t,
+                    retpt : int,
                     canMove: Statement.t list}
 
       local
@@ -245,7 +246,6 @@ fun shrinkFunction {globals: Statement.t vector} =
          val inDegree = Array.array (numBlocks, 0)
          fun addLabelIndex i = Array.inc (inDegree, i)
          val isHeader = Array.array (numBlocks, false)
-         val numHandlerUses = Array.array (numBlocks, 0)
          fun layoutLabel (l: Label.t): Layout.t =
             let
                val i = labelIndex l
@@ -321,7 +321,7 @@ fun shrinkFunction {globals: Statement.t vector} =
                   Vector.toListMap
                   (statements, fn Statement.T {exp, ty, ...} =>
                    Statement.T {exp = exp, ty = ty, var = NONE})
-               fun rr (xs: Var.t vector, make) =
+               fun rr ({retpt : int, xs: Var.t vector}, make) =
                   let
                      val _ = incVars xs
 (*
@@ -355,6 +355,7 @@ fun shrinkFunction {globals: Statement.t vector} =
                         andalso (0 = Vector.length xs
                                  orelse 0 < Vector.length args)
                         then doit (make {args = extract xs,
+                                         retpt = retpt,
                                          canMove = canMove ()})
                      else normal ()
                   end
@@ -373,12 +374,6 @@ fun shrinkFunction {globals: Statement.t vector} =
                 | Call {args, returns, ...} =>
                      let
                         val _ = incVars args
-                        fun incHandleUses l =
-                           Array.inc (numHandlerUses, labelIndex l)
-                        val _ =
-                           Vector.foreach
-                           (returns, fn r =>
-                                Return.foreachLabel (r, incHandleUses))
                         val _ = Vector.foreach 
                                 (returns,
                                  fn r => Return.foreachLabel (r, incLabel))
@@ -475,15 +470,16 @@ fun shrinkFunction {globals: Statement.t vector} =
                                              Goto {canMove = canMove' @ canMove,
                                                    dst = dst,
                                                    args = extract args}
-                                        | Return {args, canMove} =>
+                                        | Return {args, retpt, canMove} =>
                                              Return {args = extract args,
+                                                     retpt = retpt,
                                                      canMove = canMove' @ canMove}
                                  in
                                     doit a
                                  end
                            end
                      end
-                | Return {xs, ...} => rr (xs, LabelMeaning.Return)
+                | Return z => rr (z, LabelMeaning.Return)
                 | Runtime {args, return, ...} =>
                      (incVars args
                       ; incLabel return
@@ -625,18 +621,6 @@ fun shrinkFunction {globals: Statement.t vector} =
                               let
                                  val t = Block.transfer (Vector.sub (blocks, i))
                                  val _ = Transfer.foreachLabel (t, deleteLabel)
-                                 fun decHandleUses l =
-                                    Array.dec (numHandlerUses,
-                                               LabelMeaning.blockIndex
-                                               (labelMeaning l))
-                                 val _ =
-                                    case t of
-                                       Transfer.Call {returns, ...} =>
-                                          Vector.foreach 
-                                          (returns, fn r => 
-                                             Return.foreachLabel 
-                                             (r, decHandleUses))
-                                     | _ => ()
                               in
                                  ()
                               end
@@ -746,9 +730,10 @@ fun shrinkFunction {globals: Statement.t vector} =
                                 | Position.Free x => x)
                    val (statements, transfer) =
                       let
-                         fun rr ({args, canMove}, make) =
+                         fun rr ({args, retpt, canMove}, make) =
                             (canMove,
-                             make (Vector.map (args, use o extract)))
+                             make {retpt = retpt,
+                                   xs = Vector.map (args, use o extract)})
                          datatype z = datatype LabelMeaning.aux
                       in
                          case aux of
@@ -760,7 +745,6 @@ fun shrinkFunction {globals: Statement.t vector} =
                                (canMove,
                                 dst,
                                 Vector.map (args, extract))
-                          (* TODO : ctod: ask fluet about this *)
                           | Return z => rr (z, Transfer.Return)
                       end
                    val _ =
@@ -796,7 +780,7 @@ fun shrinkFunction {globals: Statement.t vector} =
                Bug => ([], Bug)
              | Call {func, args, returns} =>
                   let
-                     fun simplifyRet (r : Return.t) : 
+                     fun simplifyRet (r : Return.t) = 
                         case r of
                            Return.NonTail retLabel =>
                            let
@@ -811,87 +795,52 @@ fun shrinkFunction {globals: Statement.t vector} =
 
                               val retMeaning = labelMeaning retLabel
 
-                              (* TODO : ctod: delete this comment V *)
-                              (* Forces the label to have a meaning, but leaves
-                              * the nontail call unchanged *)
-                              val nonTail =
-                                 let
-                                    val _ = forceMeaningBlock retMeaning
-                                 in
-                                    ([], Return.NonTail (meaningLabel retMeaning))
-                                 end
-
-                               (* TODO : ctod: figure out what idx to convert
-                               * this to (currently 0 to appease compilation) *)
-                               (* TODO : ctod: delete this comment V *)
-                               (* We can convert this nontail -> tail *)
-                               fun tail (statements : Statement.t list) =
+                               fun tail {retpt : int, statements : Statement.t list} =
                                   (deleteLabelMeaning retMeaning
-                                   ; (statements, Return.Tail 0))
-
-                               (* TODO : ctod: figure out what should be here
-                                               instead *)
-                               fun cont (handler, handlerEta) =
-                                  case LabelMeaning.aux retMeaning of
-                                     LabelMeaning.Bug => nonTail
-                                     (* TODO : ctod: delete this 
-                                        (case handlerEta of
-                                            NONE => nonTail handler
-                                          | SOME canMove => tail canMove)
-                                     *)
-                                   | LabelMeaning.Return {args, canMove} =>
-                                        if isEta (retMeaning, args)
-                                           then tail canMove
-                                        else nonTail
-                                   | _ => nonTail
+                                   ; (statements, Return.Tail retpt))
                             in
-                              (* TODO : ctod: what should `handler` be here? *)
-                              cont (handler, NONE)
+                              case LabelMeaning.aux retMeaning of
+                                 LabelMeaning.Return {args, retpt, canMove} =>
+                                    if isEta (retMeaning, args)
+                                       then tail {retpt = retpt, 
+                                                  statements = canMove}
+                                    else ([], Return.NonTail retLabel)
+                               | _ => ([], Return.NonTail retLabel)
+                                    
                             end
 
-                         (* TODO : ctod: I think that we can't simplify a tail
-                         * call any further, but confirm this w/ fluet *)
-                         | _ => r
+                         | _ => ([], r)
 
-                    (* TODO : ctod: delete this
-                     val (statements, return) =
-                        case return of
-                           Return.NonTail {cont, handler} =>
-                              let
-                                ... (* moved up in file *)
-                              in
-                                 case handler of
-                                    Handler.Caller => cont (handler, NONE)
-                                  | Handler.Dead => cont (handler, NONE)
-                                  | Handler.Handle l =>
-                                       let
-                                          val m = labelMeaning l
-                                       in
-                                          case LabelMeaning.aux m of
-                                             LabelMeaning.Bug => cont (handler, NONE)
-                                           | LabelMeaning.Raise {args, canMove} =>
-                                                if isEta (m, args)
-                                                   then cont (if List.isEmpty canMove
-                                                                 then Handler.Caller
-                                                                 else handler,
-                                                              SOME canMove)
-                                                else nonTail handler
-                                           | _ => nonTail handler
-                                       end
-                              end
-                         | _ => ([], return)
-                       *)
+                     val (statements : Statement.t list vector, 
+                          simpReturns : Return.t vector) =
+                        Vector.unzip (Vector.map (returns, simplifyRet))
 
-                     (* TODO : ctod: ask how the moved statements should be
-                     * represented; aren't they on a retpt basis? *)
-                     val (simpStatements, simpReturns) =
-                        Vector.unzip (Vector.map (simplifyRet, returns))
+
+                     val (statements : Statement.t list, 
+                          returns : Return.t vector) = 
+                        let 
+                           val firstStatements = Vector.first statements
+                        in
+                          if Vector.forall 
+                             (statements, 
+                              fn ss => List.equals 
+                                       (firstStatements, 
+                                        ss,
+                                        Statement.equals))
+                             then (firstStatements, simpReturns)
+                          else ([], returns)
+                        end
+                          
+                      (* Simplify all of the labels on the returns *)
+                      val returns = 
+                        Vector.map (returns, fn r => Return.mapLabel (r, simplifyLabel))
+
 
                   in 
-                     (simpStatements,
+                     (statements,
                       Call {func = func,
                             args = simplifyVars args,
-                            returns = simpReturns})
+                            returns = returns})
                   end
               | Case {test, cases, default} =>
                    let
@@ -912,8 +861,8 @@ fun shrinkFunction {globals: Statement.t vector} =
                        test = test}
                    end
               | Goto {dst, args} => goto (dst, varInfos args)
-              (* TODO : ctod: make sure this is right *)
-              | Return {xs, ...} => ([], Return (simplifyVars xs))
+              | Return {retpt, xs} => ([], Return {retpt = retpt,
+                                                   xs = (simplifyVars xs)})
               | Runtime {prim, args, return} =>
                    ([], Runtime {prim = prim, 
                                  args = simplifyVars args, 
@@ -1044,9 +993,10 @@ fun shrinkFunction {globals: Statement.t vector} =
                    case p of
                       Position.Formal n => Vector.sub (args, n)
                     | Position.Free x => varInfo x
-                fun rr ({args, canMove}, make) =
+                fun rr ({args, retpt, canMove}, make) =
                    (canMoveIn @ canMove, 
-                    make (Vector.map (args, use o extract)))
+                    make {retpt = retpt,
+                          xs = Vector.map (args, use o extract)})
                 datatype z = datatype LabelMeaning.aux
              in
                 case aux of
@@ -1076,7 +1026,6 @@ fun shrinkFunction {globals: Statement.t vector} =
                                          dst, 
                                          Vector.map (args, extract))
                          end
-                 (* TODO : ctod: ask fluet about this *)
                  | Return z => rr (z, Transfer.Return)
              end) arg
          and evalStatement arg : Statement.t list -> Statement.t list =
