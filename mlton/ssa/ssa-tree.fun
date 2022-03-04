@@ -1346,13 +1346,12 @@ structure Function =
             Func.parse >>= (fn name =>
             parseFormals >>= (fn args =>
             sym ":" *>
-            cbrack (ffield ("returns", option (vector Type.parse)) >>= (fn returns =>
-                    nfield ("raises", option (vector Type.parse)) >>= (fn raises =>
-                    pure (returns, raises)))) >>= (fn (returns, raises) =>
+            cbrack (ffield ("returns", vector (vector Type.parse)) >>= (fn returns =>
+                    pure returns)) >>= (fn returns =>
             sym "=" *>
             Label.parse >>= (fn start =>
             paren (pure ()) *>
-            pure (Option.isNone noInline, name, args, returns, raises, start))))))
+            pure (Option.isNone noInline, name, args, returns, start))))))
          end
 
       fun layout' (f: t, layoutVar) =
