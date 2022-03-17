@@ -63,6 +63,8 @@ fun 'a analyze
                let
                   val {args = formals, returns = calleeReturns} = funcInfo func
                   val _ = coerces ("call args/formals", values args, formals)
+                  val numRetsPassed = Vector.size returns
+                  val numCalleeRets = Vector.size calleeReturns
                   datatype z = datatype Return.t
                   fun analyzeRet (retpt : z, calleeRet : 'a vector) =
                      case retpt of
@@ -80,7 +82,14 @@ fun 'a analyze
                                     labelValues l)
 
                in
-                 Vector.foreach2 (returns, calleeReturns, analyzeRet)
+                 if numRetsPassed = numCalleeRets
+                    then Vector.foreach2 (returns, calleeReturns, analyzeRet)
+                 else
+                    Error.bug (concat ["Analyze.loopTransfer (caller passed ",
+                                       Int.toString numRetsPassed,
+                                       " return points into callee with ",
+                                       Int.toString numCalleeRets,
+                                       " return type vectors)"])
                end
 
           | Case {test, cases, default, ...} =>

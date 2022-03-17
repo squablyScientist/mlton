@@ -760,10 +760,10 @@ fun closureConvert
                let
                  val rrs = 
                     if isMain
-                       then (case raises of 
-                          NONE => Vector.new1 returns
-                        | SOME raises => Vector.new2 (returns, raises))
-                       else Vector.new1 returns
+                       then Vector.new1 returns
+                    else (case raises of 
+                       NONE => Vector.new1 returns
+                     | SOME raises => Vector.new2 (returns, raises))
                in
                  shrinkFunction
                  (Function.new {args = args,
