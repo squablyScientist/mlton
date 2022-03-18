@@ -673,7 +673,7 @@ structure Transfer =
                   let
                      val call = seq [Func.layout func, str " ", layoutArgs args]
                   in
-                     seq [call, Vector.layout Return.layout returns]
+                     seq [str "call ", call, Vector.layout Return.layout returns]
                   end
 
              | Case arg => layoutCase arg
