@@ -49,8 +49,7 @@ signature ANALYZE2 =
                    value: 'a} -> unit,
           useFromTypeOnBinds: bool}
          -> {func: Func.t -> {args: 'a vector,
-                              raises: 'a vector option,
-                              returns: 'a vector option},
+                              returns: 'a vector vector},
              label: Label.t -> 'a vector,
              value: Var.t -> 'a}
    end

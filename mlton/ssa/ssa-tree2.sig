@@ -126,6 +126,7 @@ signature SSA_TREE2 =
             val layout: t -> Layout.t
             val profile: ProfileExp.t -> t
             val replaceUses: t * (Var.t -> Var.t) -> t
+            val equals: t * t -> bool
          end
 
       structure Transfer:
@@ -134,7 +135,7 @@ signature SSA_TREE2 =
                Bug  (* MLton thought control couldn't reach here. *)
              | Call of {args: Var.t vector,
                         func: Func.t,
-                        return: Return.t}
+                        returns: Return.t vector}
              | Case of {cases: (Con.t, Label.t) Cases.t,
                         default: Label.t option, (* Must be nullary. *)
                         test: Var.t}
@@ -143,8 +144,8 @@ signature SSA_TREE2 =
              (* Raise implicitly raises to the caller.  
               * I.E. the local handler stack must be empty.
               *)
-             | Raise of Var.t vector
-             | Return of Var.t vector
+             | Return of {retpt : int,
+                          args : Var.t vector}
              | Runtime of {args: Var.t vector,
                            prim: Type.t Prim.t,
                            return: Label.t}
@@ -204,8 +205,7 @@ signature SSA_TREE2 =
                             blocks: Block.t vector,
                             mayInline: bool,
                             name: Func.t,
-                            raises: Type.t vector option,
-                            returns: Type.t vector option,
+                            returns: Type.t vector vector,
                             start: Label.t}
             (* dfs (f, v) visits the blocks in depth-first order, applying v b
              * for block b to yield v', then visiting b's descendents,
@@ -225,8 +225,7 @@ signature SSA_TREE2 =
                       blocks: Block.t vector,
                       mayInline: bool,
                       name: Func.t,
-                      raises: Type.t vector option,
-                      returns: Type.t vector option,
+                      returns: Type.t vector vector,
                       start: Label.t} -> t
             val profile: t * SourceInfo.t -> t
          end

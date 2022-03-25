@@ -15,7 +15,7 @@ struct
 
 fun eliminateFunction f =
    let
-      val {args, blocks, mayInline, name, raises, returns, start} =
+      val {args, blocks, mayInline, name, returns, start} =
          Function.dest f
       val {get = isLive, set = setLive, rem} =
          Property.getSetOnce (Label.plist, Property.initConst false)
@@ -35,7 +35,6 @@ fun eliminateFunction f =
                              blocks = blocks,
                              mayInline = mayInline,
                              name = name,
-                             raises = raises,
                              returns = returns,
                              start = start}
             end
@@ -67,7 +66,7 @@ fun orderFunctions (p as Program.T {globals, datatypes, main, ...}) =
          Program.dfs
          (p, fn f =>
           let
-             val {args, mayInline, name, raises, returns, start, ...} =
+             val {args, mayInline, name, returns, start, ...} =
                 Function.dest f
              val blocks = ref []
              val () =
@@ -79,7 +78,6 @@ fun orderFunctions (p as Program.T {globals, datatypes, main, ...}) =
                                    blocks = Vector.fromListRev (!blocks),
                                    mayInline = mayInline,
                                    name = name,
-                                   raises = raises,
                                    returns = returns,
                                    start = start}
           in

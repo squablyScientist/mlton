@@ -15,27 +15,27 @@ local
    equatable.sig
    equatable.sml
    ssa-tree.sig
-   (* ssa-tree2.sig *)
+   ssa-tree2.sig 
    ssa-tree.fun
-   (* ssa-tree2.fun *)
+   ssa-tree2.fun
    direct-exp.sig
    direct-exp.fun
    analyze.sig
-   (* analyze2.sig *)
+   analyze2.sig
    analyze.fun
-   (* analyze2.fun *)
+   analyze2.fun
    type-check.sig
-   (* type-check2.sig *)
+   type-check2.sig
    type-check.fun
-   (* type-check2.fun *)
+   type-check2.fun
    prepasses.sig
-   (* prepasses2.sig *)
+   prepasses2.sig
    prepasses.fun
-   (* prepasses2.fun *)
+   prepasses2.fun
    shrink.sig
-   (* shrink2.sig *)
+   shrink2.sig
    shrink.fun
-   (* shrink2.fun *)
+   shrink2.fun
    restore.sig
    restore.fun
 

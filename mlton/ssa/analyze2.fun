@@ -49,71 +49,47 @@ fun 'a analyze
          List.foreach
          (functions, fn f =>
           let
-             val {args, name, raises, returns, ...} = Function.dest f
+             val {args, name, returns, ...} = Function.dest f
           in
              setFuncInfo (name, {args = loopArgs args,
-                                 raises = Option.map (raises, fn ts =>
-                                                      Vector.map (ts, fromType)),
-                                 returns = Option.map (returns, fn ts =>
+                                 returns = Vector.map (returns, fn ts =>
                                                        Vector.map (ts, fromType))})
           end)
       fun loopTransfer (t: Transfer.t,
-                        shouldReturns: 'a vector option,
-                        shouldRaises: 'a vector option): unit =
+                        shouldReturns: 'a vector vector): unit =
         (case t of
             Bug => ()
-          | Call {func, args, return, ...} =>
+          | Call {func, args, returns, ...} =>
                let
-                  val {args = formals, raises, returns} = funcInfo func
+                  val {args = formals, returns = calleeReturns} = funcInfo func
                   val _ = coerces ("call args/formals", values args, formals)
-                  fun noHandler () =
-                     case (raises, shouldRaises) of
-                        (NONE, NONE) => ()
-                      | (NONE, SOME _) => ()
-                      | (SOME _, NONE) => 
-                           Error.bug "Analyze2.loopTransfer (raise mismatch)"
-                      | (SOME vs, SOME vs') => coerces ("call caller/raises", vs, vs')
+                  val numRetsPassed = Vector.size returns
+                  val numCalleeRets = Vector.size calleeReturns
                   datatype z = datatype Return.t
-               in
-                  case return of
-                     Dead =>
-                        if isSome returns orelse isSome raises
-                           then Error.bug "Analyze2.loopTransfer (return mismatch at Dead)"
-                        else ()
-                   | NonTail {cont, handler} => 
-                        (Option.app (returns, fn vs =>
-                                     coerces ("call non-tail/returns", vs, labelValues cont))
-                         ; (case handler of
-                               Handler.Caller => noHandler ()
-                             | Handler.Dead =>
-                                  if isSome raises
-                                     then Error.bug "Analyze2.loopTransfer (raise mismatch at NonTail/Dead)"
-                                  else ()
-                             | Handler.Handle h =>
-                                  let
-                                     val _ =
-                                        case raises of
-                                           NONE => ()
-                                         | SOME vs =>
-                                              coerces ("call handle/raises", vs, labelValues h)
-                                  in
-                                     ()
-                                  end))
-                   | Tail =>
-                        let
-                           val _ = noHandler ()
-                           val _ =
-                              case (returns, shouldReturns) of
-                                 (NONE, NONE) => ()
-                               | (NONE, SOME _) => ()
-                               | (SOME _, NONE) =>
-                                    Error.bug "Analyze2.loopTransfer (return mismatch at Tail)"
-                               | (SOME vs, SOME vs') =>
-                                    coerces ("call tail/return", vs, vs')
-                        in
-                           ()
-                        end
+                  fun analyzeRet (retpt : z, calleeRet : 'a vector) =
+                     case retpt of
+                        Tail i =>
+                           if i >=  Vector.size shouldReturns
+                              then Error.bug 
+                                   "Analyze.loopTransfer (tail call return out of bounds for caller)"
+                           else 
+                              coerces ("call tail/returns", 
+                                       calleeRet, 
+                                       (Vector.sub (shouldReturns, i)))
+                      | NonTail l => 
+                           coerces ("call non-tail/returns", 
+                                    calleeRet,
+                                    labelValues l)
 
+               in
+                 if numRetsPassed = numCalleeRets
+                    then Vector.foreach2 (returns, calleeReturns, analyzeRet)
+                 else
+                    Error.bug (concat ["Analyze.loopTransfer (caller passed ",
+                                       Int.toString numRetsPassed,
+                                       " return points into callee with ",
+                                       Int.toString numCalleeRets,
+                                       " return type vectors)"])
                end
           | Case {test, cases, default, ...} =>
                let
@@ -161,14 +137,13 @@ fun 'a analyze
                in ()
                end
           | Goto {dst, args} => coerces ("goto", values args, labelValues dst)
-          | Raise xs =>
-               (case shouldRaises of
-                   NONE => Error.bug "Analyze2.loopTransfer (raise mismatch at Raise)"
-                 | SOME vs => coerces ("raise", values xs, vs))
-          | Return xs =>
-               (case shouldReturns of
-                   NONE => Error.bug "Analyze2.loopTransfer (return mismatch at Return)"
-                 | SOME vs => coerces ("return", values xs, vs))
+          | Return {retpt, args} =>
+               if retpt >= Vector.size shouldReturns
+                  then Error.bug "Analyze.loopTransfer (out of bounds at Return)"
+               else  
+                  coerces ("return", 
+                           values args, 
+                           (Vector.sub (shouldReturns, retpt)))
           | Runtime {prim, args, return} =>
                let
                   val xts = labelArgs return
@@ -191,11 +166,10 @@ fun 'a analyze
                end)
         handle exn => Error.reraiseSuffix (exn, concat [" in ", Layout.toString (Transfer.layout t)])
       val loopTransfer =
-         Trace.trace3
+         Trace.trace2
          ("Analyze2.loopTransfer",
           Transfer.layout, 
-          Option.layout (Vector.layout layout),
-          Option.layout (Vector.layout layout),
+          Vector.layout (Vector.layout layout),
           Layout.ignore)
          loopTransfer
       fun baseValue b = base (Base.map (b, value))
@@ -294,7 +268,7 @@ fun 'a analyze
                                        block = b,
                                        values = loopArgs args,
                                        visited = ref false}))
-             val {returns, raises, ...} = funcInfo name
+             val {returns, ...} = funcInfo name
              fun visit (l: Label.t) =
                 let
                    val {block, visited, ...} = labelInfo l
@@ -306,7 +280,7 @@ fun 'a analyze
                          val _ = visited := true
                          val Block.T {statements, transfer, ...} = block
                          val _ = (Vector.foreach (statements, loopStatement)
-                                  ; loopTransfer (transfer, returns, raises))
+                                  ; loopTransfer (transfer, returns))
                                  handle exn => Error.reraiseSuffix (exn, concat [" in ", Label.toString l])
                       in
                          Transfer.foreachLabel (transfer, visit)
