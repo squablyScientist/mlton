@@ -12,10 +12,11 @@ struct
 
 open S
 
+(* TODO : ctod:  uncomment `Profile2` & `RemoveUnused2` *)
 structure DeepFlatten = DeepFlatten (S)
-structure Profile2 = Profile2 (S)
+(* structure Profile2 = Profile2 (S) *)
 structure RefFlatten = RefFlatten (S)
-structure RemoveUnused2 = RemoveUnused2 (S)
+(* structure RemoveUnused2 = RemoveUnused2 (S) *)
 structure Zone = Zone (S)
 
 type pass = {name: string,
@@ -25,7 +26,7 @@ type pass = {name: string,
 val ssa2PassesDefault = 
    {name = "deepFlatten", doit = DeepFlatten.transform2, execute = true} ::
    {name = "refFlatten", doit = RefFlatten.transform2, execute = true} ::
-   {name = "removeUnused5", doit = RemoveUnused2.transform2, execute = true} ::
+   (*{name = "removeUnused5", doit = RemoveUnused2.transform2, execute = true} ::*)
    {name = "zone", doit = Zone.transform2, execute = false} ::
    nil
 
@@ -48,13 +49,14 @@ local
       end
 
 
+   (* TODO : ctod:  uncomment `Profile2` & `RemoveUnused2` *)
    val passGens = 
       List.map([("deepFlatten", DeepFlatten.transform2),
                 ("refFlatten", RefFlatten.transform2),
-                ("removeUnused", RemoveUnused2.transform2),
+                (* ("removeUnused", RemoveUnused2.transform2), *)
                 ("zone", Zone.transform2),
-                ("ssa2AddProfile", Profile2.addProfile),
-                ("ssa2DropProfile", Profile2.dropProfile),
+                (* ("ssa2AddProfile", Profile2.addProfile), *)
+                (* ("ssa2DropProfile", Profile2.dropProfile), *)
                 ("ssa2EliminateDeadBlocks", S.eliminateDeadBlocks),
                 ("ssa2OrderFunctions", S.orderFunctions),
                 ("ssa2ReverseFunctions", S.reverseFunctions),
@@ -90,10 +92,10 @@ fun simplify p =
       val ssa2Passes =
          if !Control.profile <> Control.ProfileNone
             andalso !Control.profileIL = Control.ProfileSSA2
-            then AppendList.snoc (ssa2Passes,
+            then ssa2Passes (*AppendList.snoc (ssa2Passes, TODO : ctod delete
                                   {name = "ssa2AddProfile",
                                    doit = Profile2.addProfile,
-                                   execute = true})
+                                   execute = true})*)
             else ssa2Passes
       val ssa2Passes =
          AppendList.snoc (ssa2Passes, {name = "ssa2OrderFunctions",

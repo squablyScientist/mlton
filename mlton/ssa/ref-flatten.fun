@@ -1144,15 +1144,13 @@ fun transform2 (program as Program.T {datatypes, functions, globals, main}) =
       fun transformFunction (f: Function.t): Function.t =
           let
              val {args, blocks, mayInline, name, start, ...} = Function.dest f
-             val {raises, returns, ...} = func name
-             val raises = Option.map (raises, valuesTypes)
-             val returns = Option.map (returns, valuesTypes)
+             val {returns, ...} = func name
+             val returns = Vector.map (returns, valuesTypes)
           in
              Function.new {args = transformFormals args,
                            blocks = Vector.map (blocks, transformBlock),
                            mayInline = mayInline,
                            name = name,
-                           raises = raises,
                            returns = returns,
                            start = start}
           end

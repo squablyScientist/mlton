@@ -1120,10 +1120,9 @@ fun transform2 (program as Program.T {datatypes, functions, globals, main}) =
       fun transformFunction (f: Function.t): Function.t =
           let
              val {args, mayInline, name, start, ...} = Function.dest f
-             val {raises, returns, ...} = func name
+             val {returns, ...} = func name
              val args = transformFormals args
-             val raises = Option.map (raises, valuesTypes)
-             val returns = Option.map (returns, valuesTypes)
+             val returns = Vector.map (returns, valuesTypes)
              val blocks = ref []
              val () =
                 Function.dfs (f, fn b =>
@@ -1134,7 +1133,6 @@ fun transform2 (program as Program.T {datatypes, functions, globals, main}) =
                            blocks = Vector.fromList (!blocks),
                            mayInline = mayInline,
                            name = name,
-                           raises = raises,
                            returns = returns,
                            start = start}
           end

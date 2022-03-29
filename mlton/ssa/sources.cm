@@ -10,10 +10,10 @@
 Library
 
 signature SSA
-(* signature SSA2 *)
+signature SSA2
 
 functor Ssa
-(* functor Ssa2 *)
+functor Ssa2
 (* functor SsaToSsa2 *)
 
 is
@@ -50,7 +50,7 @@ restore.sig
 restore.fun
 
 ssa-transform.sig
-(* ssa2-transform.sig *)
+ssa2-transform.sig
 (* common-arg.fun *)
 (* common-block.fun *)
 (* common-subexp.fun *)
@@ -61,7 +61,7 @@ ssa-transform.sig
 (* combine-conversions.fun *)
 (* constant-propagation.fun *)
 (* contify.fun *)
-(* deep-flatten.fun *)
+deep-flatten.fun
 (* duplicate-globals.fun *)
 (* flatten.fun *)
 (* inline.sig *)
@@ -81,21 +81,21 @@ ssa-transform.sig
 (* profile2.fun *)
 (* redundant-tests.fun *)
 (* redundant.fun *)
-(* ref-flatten.fun *)
+ref-flatten.fun
 (* remove-unused.fun *)
 (* remove-unused2.fun *)
 (* share-zero-vec.fun *)
 (* simplify-types.fun *)
 (* split-types.fun *)
 (* useless.fun *)
-(* zone.fun *)
+zone.fun
 simplify.sig
-(* simplify2.sig *)
+simplify2.sig
 simplify.fun
-(* simplify2.fun *)
+simplify2.fun
 ssa.sig
-(* ssa2.sig *)
+ssa2.sig
 ssa.fun
-(* ssa2.fun *)
-(* ssa-to-ssa2.sig *)
-(* ssa-to-ssa2.fun *)
+ssa2.fun
+ssa-to-ssa2.sig
+ssa-to-ssa2.fun

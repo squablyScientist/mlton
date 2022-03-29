@@ -45,7 +45,7 @@ structure CoreML = CoreML (open Atoms
 structure Xml = Xml (open Atoms)
 structure Sxml = Sxml (open Xml)
 structure Ssa = Ssa (open Atoms)
-(* structure Ssa2 = Ssa2 (open Atoms) *)
+structure Ssa2 = Ssa2 (open Atoms)
 (* structure BackendAtoms = BackendAtoms (open Atoms) *)
 (* structure Rssa = Rssa (open BackendAtoms) *)
 (* structure Machine = Machine (open BackendAtoms) *)
@@ -72,8 +72,8 @@ structure Monomorphise = Monomorphise (structure Xml = Xml
                                        structure Sxml = Sxml)
 structure ClosureConvert = ClosureConvert (structure Ssa = Ssa
                                            structure Sxml = Sxml)
-(* structure SsaToSsa2 = SsaToSsa2 (structure Ssa = Ssa *)
-(*                                  structure Ssa2 = Ssa2) *)
+structure SsaToSsa2 = SsaToSsa2 (structure Ssa = Ssa
+                                 structure Ssa2 = Ssa2)
 (* structure Ssa2ToRssa = Ssa2ToRssa (structure Rssa = Rssa *)
 (*                                    structure Ssa2 = Ssa2) *)
 (* structure Backend = Backend (structure Machine = Machine *)
@@ -436,12 +436,12 @@ fun mkCompile {outputC, outputLL, outputS} =
           stats = Ssa.Program.layoutStats,
           toFile = Ssa.Program.toFile,
           typeCheck = Ssa.typeCheck}
-      (* val ssa2Frontend = *)
-      (*    mkFrontend *)
-      (*    {parse = Ssa2.Program.parse, *)
-      (*     stats = Ssa2.Program.layoutStats, *)
-      (*     toFile = Ssa2.Program.toFile, *)
-      (*     typeCheck = Ssa2.typeCheck} *)
+      val ssa2Frontend =
+         mkFrontend
+         {parse = Ssa2.Program.parse,
+          stats = Ssa2.Program.layoutStats,
+          toFile = Ssa2.Program.toFile,
+          typeCheck = Ssa2.typeCheck}
       val ssa2Frontend = fn _ =>
          Error.bug "Compile.ssa2Frontend: unimplemented"
 
@@ -513,16 +513,16 @@ fun mkCompile {outputC, outputLL, outputS} =
          in
             ssa
          end
-      (* fun toSsa2 ssa = *)
-      (*    Control.translatePass *)
-      (*    {arg = ssa, *)
-      (*     doit = SsaToSsa2.convert, *)
-      (*     keepIL = false, *)
-      (*     name = "toSsa2", *)
-      (*     srcToFile = SOME Ssa.Program.toFile, *)
-      (*     tgtStats = SOME Ssa2.Program.layoutStats, *)
-      (*     tgtToFile = SOME Ssa2.Program.toFile, *)
-      (*     tgtTypeCheck = SOME (Ssa2.typeCheck, SOME true)} *)
+      fun toSsa2 ssa =
+         Control.translatePass
+         {arg = ssa,
+          doit = SsaToSsa2.convert,
+          keepIL = false,
+          name = "toSsa2",
+          srcToFile = SOME Ssa.Program.toFile,
+          tgtStats = SOME Ssa2.Program.layoutStats,
+          tgtToFile = SOME Ssa2.Program.toFile,
+          tgtTypeCheck = SOME (Ssa2.typeCheck, SOME true)}
       (* fun ssa2Simplify ssa2 = *)
       (*    let *)
       (*       val ssa2 = *)

@@ -166,18 +166,11 @@ fun convert (S.Program.T {datatypes, functions, globals, main}) =
                       S.Statement.layout,
                       Vector.layout S2.Statement.layout)
             convertStatement
-      fun convertHandler (h: S.Handler.t): S2.Handler.t =
-         case h of
-            S.Handler.Caller => S2.Handler.Caller
-          | S.Handler.Dead => S2.Handler.Dead
-          | S.Handler.Handle l => S2.Handler.Handle l
+
       fun convertReturn (r: S.Return.t): S2.Return.t =
          case r of
-            S.Return.Dead => S2.Return.Dead
-          | S.Return.NonTail {cont, handler} =>
-               S2.Return.NonTail {cont = cont,
-                                  handler = convertHandler handler}
-          | S.Return.Tail => S2.Return.Tail
+            S.Return.Tail i => S2.Return.Tail i
+          | S.Return.NonTail l => S2.Return.NonTail l
       val extraBlocks: S2.Block.t list ref = ref []
       fun convertCases (cs: (Con.t, Label.t) S.Cases.t): (Con.t, Label.t) S2.Cases.t =
          case cs of
@@ -231,16 +224,15 @@ fun convert (S.Program.T {datatypes, functions, globals, main}) =
       fun convertTransfer (t: S.Transfer.t): S2.Transfer.t =
          case t of
             S.Transfer.Bug => S2.Transfer.Bug
-          | S.Transfer.Call {args, func, return} =>
+          | S.Transfer.Call {args, func, returns} =>
                S2.Transfer.Call {args = args,
                                  func = func,
-                                 return = convertReturn return}
+                                 returns = Vector.map (returns, convertReturn)}
           | S.Transfer.Case {cases, default, test} =>
                S2.Transfer.Case {cases = convertCases cases,
                                  default = default,
                                  test = test}
           | S.Transfer.Goto r => S2.Transfer.Goto r
-          | S.Transfer.Raise v => S2.Transfer.Raise v
           | S.Transfer.Return v => S2.Transfer.Return v
           | S.Transfer.Runtime {args, prim, return} =>
                S2.Transfer.Runtime {args = args,
@@ -258,9 +250,9 @@ fun convert (S.Program.T {datatypes, functions, globals, main}) =
          List.map
          (functions, fn f =>
           let
-             val {args, blocks, mayInline, name, raises, returns, start} =
+             val {args, blocks, mayInline, name, returns, start} =
                 S.Function.dest f
-             fun rr tvo = Option.map (tvo, convertTypes)
+             fun rr tvo = Vector.map (tvo, convertTypes)
              val blocks = Vector.map (blocks, convertBlock)
              val blocks = Vector.concat [blocks, Vector.fromList (!extraBlocks)]
              val () = extraBlocks := []
@@ -269,7 +261,6 @@ fun convert (S.Program.T {datatypes, functions, globals, main}) =
                               blocks = blocks,
                               mayInline = mayInline,
                               name = name,
-                              raises = rr raises,
                               returns = rr returns,
                               start = start}
           end)
