@@ -40,273 +40,6 @@ in
       end
 end
 
-structure ExnStack =
-   struct
-      local
-      structure ZPoint =
-         struct
-            datatype t = Caller | Me
-
-            val equals: t * t -> bool = op =
-
-            val toString =
-               fn Caller => "Caller"
-                | Me => "Me"
-
-            val layout = Layout.str o toString
-         end
-      structure L = FlatLatticeMono (structure Point = ZPoint
-                                     val bottom = "Bottom"
-                                     val top = "Top")
-      open L
-      in
-      structure Point = ZPoint
-      type t = t
-      val layout = layout
-
-      val newBottom = newBottom
-
-      val op <= = fn args => wrapOper (op <=) args
-      val lowerBoundPoint = fn args => wrapOper lowerBoundPoint args
-
-      val forcePoint = fn (e, p) =>
-         forcePoint (addHandler', Value.isTop, lowerBoundPoint) (e, p)
-
-      val newPoint = fn p =>
-         let
-            val e = newBottom ()
-            val _ = forcePoint (e, p)
-         in
-            e
-         end
-      val me = newPoint Point.Me
-      end
-   end
-
-structure HandlerLat =
-   struct
-      local
-      structure L = FlatLatticeMono (structure Point = Label
-                                     val bottom = "Bottom"
-                                     val top = "Top")
-      open L
-      in
-      type t = t
-      val layout = layout
-
-      val newBottom = newBottom
-
-      val op <= = fn args => wrapOper (op <=) args
-
-      val forcePoint = fn (e, p) =>
-         forcePoint (addHandler', Value.isTop, wrapOper lowerBoundPoint) (e, p)
-
-      val newPoint = fn p =>
-         let
-            val e = newBottom ()
-            val _ = forcePoint (e, p)
-         in
-            e
-         end
-      end
-   end
-
-structure HandlerInfo =
-   struct
-      datatype t = T of {block: Block.t,
-                         global: ExnStack.t,
-                         handler: HandlerLat.t,
-                         slot: ExnStack.t,
-                         visited: bool ref}
-
-      fun new (b: Block.t): t =
-         T {block = b,
-            global = ExnStack.newBottom (),
-            handler = HandlerLat.newBottom (),
-            slot = ExnStack.newBottom (),
-            visited = ref false}
-
-      fun layout (T {global, handler, slot, ...}) =
-         Layout.record [("global", ExnStack.layout global),
-                        ("slot", ExnStack.layout slot),
-                        ("handler", HandlerLat.layout handler)]
-   end
-
-val traceGoto =
-   Trace.trace ("Rssa.checkHandlers.goto", Label.layout, Unit.layout)
-
-fun checkHandlers (Program.T {functions, ...}) =
-   let
-      val debug = false
-      fun checkFunction (f: Function.t): unit =
-         let
-            val {name, start, blocks, ...} = Function.dest f
-            val {get = labelInfo: Label.t -> HandlerInfo.t,
-                 rem = remLabelInfo,
-                 set = setLabelInfo} =
-               Property.getSetOnce
-               (Label.plist, Property.initRaise ("info", Label.layout))
-            val _ =
-               Vector.foreach
-               (blocks, fn b =>
-                setLabelInfo (Block.label b, HandlerInfo.new b))
-            (* Do a DFS of the control-flow graph. *)
-            fun visitLabel l = visitInfo (labelInfo l)
-            and visitInfo
-               (hi as HandlerInfo.T {block, global, handler, slot,
-                                     visited, ...}): unit =
-               if !visited
-                  then ()
-               else
-                  let
-                     val _ = visited := true
-                     val Block.T {label, statements, transfer, ...} = block
-                     val _ =
-                        if debug
-                           then
-                              let
-                                 open Layout
-                              in
-                                 outputl
-                                 (seq [str "visiting ",
-                                       Label.layout label],
-                                  Out.error)
-                              end
-                        else ()
-                     datatype z = datatype Statement.t
-                     val {global, handler, slot} =
-                        Vector.fold
-                        (statements,
-                         {global = global, handler = handler, slot = slot},
-                         fn (s, {global, handler, slot}) =>
-                         case s of
-                            SetExnStackLocal => {global = ExnStack.me,
-                                                 handler = handler,
-                                                 slot = slot}
-                          | SetExnStackSlot => {global = slot,
-                                                handler = handler,
-                                                slot = slot}
-                          | SetSlotExnStack => {global = global,
-                                                handler = handler,
-                                                slot = global}
-                          | SetHandler l => {global = global,
-                                             handler = HandlerLat.newPoint l,
-                                             slot = slot}
-                          | _ => {global = global,
-                                  handler = handler,
-                                  slot = slot})
-                     fun fail msg =
-                        (Control.message
-                         (Control.Silent, fn () =>
-                          let open Layout
-                          in align
-                             [str "before: ", HandlerInfo.layout hi,
-                              str "block: ", Block.layout block,
-                              seq [str "after: ",
-                                   Layout.record
-                                   [("global", ExnStack.layout global),
-                                    ("slot", ExnStack.layout slot),
-                                    ("handler",
-                                     HandlerLat.layout handler)]],
-                              Vector.layout
-                              (fn Block.T {label, ...} =>
-                               seq [Label.layout label,
-                                    str " ",
-                                    HandlerInfo.layout (labelInfo label)])
-                              blocks]
-                          end)
-                         ; Error.bug (concat ["Rssa.checkHandlers: handler mismatch at ", msg]))
-                     fun assert (msg, f) =
-                        if f
-                           then ()
-                        else fail msg
-                     fun goto (l: Label.t): unit =
-                        let
-                           val HandlerInfo.T {global = g, handler = h,
-                                              slot = s, ...} =
-                              labelInfo l
-                           val _ =
-                              assert ("goto",
-                                      ExnStack.<= (global, g)
-                                      andalso ExnStack.<= (slot, s)
-                                      andalso HandlerLat.<= (handler, h))
-                        in
-                           visitLabel l
-                        end
-                     val goto = traceGoto goto
-                     fun tail name =
-                        assert (name,
-                                ExnStack.forcePoint
-                                (global, ExnStack.Point.Caller))
-                     datatype z = datatype Transfer.t
-                  in
-                     case transfer of
-                        CCall {return, ...} => Option.app (return, goto)
-                      | Call {return, ...} =>
-                           assert
-                           ("return",
-                            let
-                               datatype z = datatype Return.t
-                            in
-                               case return of
-                                  Dead => true
-                                | NonTail {handler = h, ...} =>
-                                     (case h of
-                                         Handler.Caller =>
-                                            ExnStack.forcePoint
-                                            (global, ExnStack.Point.Caller)
-                                       | Handler.Dead => true
-                                       | Handler.Handle l =>
-                                            let
-                                               val res =
-                                                  ExnStack.forcePoint
-                                                  (global,
-                                                   ExnStack.Point.Me)
-                                                  andalso
-                                                  HandlerLat.forcePoint
-                                                  (handler, l)
-                                               val _ = goto l
-                                            in
-                                               res
-                                            end)
-                                | Tail => true
-                            end)
-                      | Goto {dst, ...} => goto dst
-                      | Raise _ => tail "raise"
-                      | Return _ => tail "return"
-                      | Switch s => Switch.foreachLabel (s, goto)
-                  end
-            val info as HandlerInfo.T {global, ...} = labelInfo start
-            val _ = ExnStack.lowerBoundPoint (global, ExnStack.Point.Caller)
-            val _ = visitInfo info
-            val _ =
-               Control.diagnostics
-               (fn display =>
-                let
-                   open Layout
-                   val _ =
-                      display (seq [str "checkHandlers ",
-                                    Func.layout name])
-                   val _ =
-                      Vector.foreach
-                      (blocks, fn Block.T {label, ...} =>
-                       display (seq
-                                [Label.layout label,
-                                 str " ",
-                                 HandlerInfo.layout (labelInfo label)]))
-                in
-                   ()
-                end)
-            val _ = Vector.foreach (blocks, fn b =>
-                                    remLabelInfo (Block.label b))
-         in
-            ()
-         end
-      val _ = List.foreach (functions, checkFunction)
-   in
-      ()
-   end
-
 fun checkScopes (program as Program.T {functions, main, statics, ...}): unit =
    let
       datatype status =
@@ -446,9 +179,8 @@ fun typeCheck (p as Program.T {functions, main, objectTypes, profileInfo, static
                                    fn () => Label.layout l)
                             in
                                case k of
-                                  Kind.Cont _ => chk true
+                                  Kind.Cont => chk true
                                 | Kind.CReturn _ => chk true
-                                | Kind.Handler => chk true
                                 | Kind.Jump => chk false
                             end
             end
@@ -538,11 +270,7 @@ fun typeCheck (p as Program.T {functions, main, objectTypes, profileInfo, static
              | Profile _ => true
              | SetExnStackLocal => (handlersImplemented := true; true)
              | SetExnStackSlot => (handlersImplemented := true; true)
-             | SetHandler l =>
-                  (handlersImplemented := true;
-                   case labelKind l of
-                      Kind.Handler => true
-                    | _ => false)
+             | SetHandler l => (handlersImplemented := true; false)
              | SetSlotExnStack => (handlersImplemented := true; true)
          end
       val statementOk =
@@ -562,72 +290,80 @@ fun typeCheck (p as Program.T {functions, main, objectTypes, profileInfo, static
                       | _ => false)
          end
       fun labelIsNullaryJump l = gotoOk {dst = l, args = Vector.new0 ()}
-      fun tailIsOk (caller: Type.t vector option,
-                    callee: Type.t vector option): bool =
-         case (caller, callee) of
-            (_, NONE) => true
-          | (SOME caller, SOME callee) =>
-               Vector.equals (callee, caller, Type.isSubtype)
-          | _ => false
+
+      (* Makes sure a tail call lines up type wise *)
+      fun tailIsOk (idx: int, 
+                    calleeRetsTys: Type.t vector vector,
+                    callerRetsTys: Type.t vector vector): bool =
+         (Vector.size callerRetsTys) < idx
+         andalso
+         let 
+            val callerRetTys = Vector.sub (callerRetsTys, idx)
+         in
+            Vector.forall (calleeRetsTys,
+                           fn calleeRetTys =>
+                              Vector.equals 
+                              (calleeRetTys, callerRetTys, Type.isSubtype))
+         end
+
       fun nonTailIsOk (formals: (Var.t * Type.t) vector,
-                       returns: Type.t vector option): bool =
-         case returns of
-            NONE => true
-          | SOME ts =>
-               Vector.equals (formals, ts, fn ((_, t), t') =>
-                              Type.isSubtype (t', t))
-      fun callIsOk {args, func, raises, return, returns} =
+                       returnsTys: Type.t vector vector): bool =
+          Vector.forall 
+          (returnsTys,
+           fn ts => 
+              Vector.equals (formals, ts, fn ((_, t), t') =>
+                                             Type.isSubtype (t', t)))
+
+      (* Dispatches to either `nonTailIsOk` or `tailIsOk` *)
+      (* `r`:           The return datatype that describes either which of the
+       *                caller's return points to use, or what label to jump to 
+       *                upon continuation.
+       * calleeRetsTys: The types that are to be returned to each of the return
+       *                points of the callee 
+       * callerRetsTys: The types returned to each of the return points of the
+       *                function making this call.
+       *)
+      fun retIsOk (r : Return.t, 
+                   calleeRetsTys: Type.t vector vector,
+                   callerRetsTys: Type.t vector vector): bool =
+         case r of
+            Return.Tail i => tailIsOk (i, calleeRetsTys, callerRetsTys)
+          | Return.NonTail l => 
+               let 
+                  (* cArgs: formals expected by `l` *)
+                  (* cKind: the `Kind` of block that `l` is *)
+                  val Block.T {args = cArgs, kind = cKind, ...} = labelBlock l
+               in
+                  (* Do the types coming out of the callee match the argument
+                   * types of the continuation retpt? *)
+                  nonTailIsOk (cArgs, calleeRetsTys)
+                  andalso
+                  (* Is the block at `l` a `Cont` `Kind`? *)
+                  (case cKind of
+                     Kind.Cont => true
+                   | _ => false)
+               end
+      fun callIsOk {args, func, 
+                    returnPts: Return.t vector, 
+                    returnsTys: Type.t vector vector} =
          let
             val {args = formals,
-                 raises = raises',
-                 returns = returns', ...} =
+                 returns = calleeRetsTys, ...} =
                Function.dest (funcInfo func)
-
          in
+            (* Make sure the passed in args are the correct types *)
             Vector.equals (args, formals, fn (z, (_, t)) =>
                            Type.isSubtype (Operand.ty z, t))
             andalso
-            (case return of
-                Return.Dead =>
-                   Option.isNone raises'
-                   andalso Option.isNone returns'
-              | Return.NonTail {cont, handler} =>
-                   let
-                      val Block.T {args = cArgs, kind = cKind, ...} =
-                         labelBlock cont
-                   in
-                      nonTailIsOk (cArgs, returns')
-                      andalso
-                      (case cKind of
-                          Kind.Cont {handler = h} =>
-                             Handler.equals (handler, h)
-                             andalso
-                             (case h of
-                                 Handler.Caller =>
-                                    tailIsOk (raises, raises')
-                               | Handler.Dead => true
-                               | Handler.Handle l =>
-                                    let
-                                       val Block.T {args = hArgs,
-                                                    kind = hKind, ...} =
-                                          labelBlock l
-                                    in
-                                       nonTailIsOk (hArgs, raises')
-                                       andalso
-                                       (case hKind of
-                                           Kind.Handler => true
-                                         | _ => false)
-                                    end)
-                        | _ => false)
-                   end
-              | Return.Tail =>
-                   tailIsOk (raises, raises')
-                   andalso tailIsOk (returns, returns'))
+            
+            (* Make sure the return points have the correct types *)
+            Vector.forall (returnPts, 
+                           fn r => retIsOk (r, returnsTys, calleeRetsTys))
          end
 
       fun checkFunction f =
          let
-            val {args, blocks, raises, returns, start, ...} = Function.dest f
+            val {args, blocks, returns = returnsTys, start, ...} = Function.dest f
             val _ = Vector.foreach (args, setVarType)
             val _ =
                Vector.foreach
@@ -663,36 +399,35 @@ fun typeCheck (p as Program.T {functions, main, objectTypes, profileInfo, static
                                        CFunction.equals (func, f)
                                   | _ => false
                         end
-                   | Call {args, func, return} =>
+                   | Call {args, func, returns} =>
                         let
                            val _ = checkOperands args
                         in
                            callIsOk {args = args,
                                      func = func,
-                                     raises = raises,
-                                     return = return,
-                                     returns = returns}
+                                     returnPts = returns,
+                                     returnsTys = returnsTys}
                         end
                    | Goto {args, dst} =>
                         (checkOperands args
                          ; gotoOk {args = Vector.map (args, Operand.ty),
                                    dst = dst})
-                   | Raise zs =>
-                        (checkOperands zs
-                         ; (case raises of
-                               NONE => false
-                             | SOME ts =>
-                                  Vector.equals
-                                  (zs, ts, fn (z, t) =>
-                                   Type.isSubtype (Operand.ty z, t))))
-                   | Return zs =>
-                        (checkOperands zs
-                         ; (case returns of
-                               NONE => false
-                             | SOME ts =>
-                                  Vector.equals
-                                  (zs, ts, fn (z, t) =>
-                                   Type.isSubtype (Operand.ty z, t))))
+                   | Return {retpt, args} =>
+                        (checkOperands args; 
+                         (Vector.size returnsTys) < retpt
+                         andalso
+                         let
+                            (* The types to be returned out of the `retpt`th
+                             * return point
+                             *)
+                            val ts = Vector.sub (returnsTys, retpt)
+                         in
+                            Vector.equals 
+                            (args, ts, 
+                             fn (arg, t) =>
+                                 Type.isSubtype (Operand.ty arg, t))
+                         end)
+
                    | Switch s =>
                         Switch.isOk (s, {checkUse = checkOperand,
                                          labelIsOk = labelIsNullaryJump})
@@ -710,7 +445,7 @@ fun typeCheck (p as Program.T {functions, main, objectTypes, profileInfo, static
                         datatype z = datatype Kind.t
                      in
                         case k of
-                           Cont _ => true
+                           Cont => true
                          | CReturn {func} =>
                               let
                                  val return = CFunction.return func
@@ -729,7 +464,6 @@ fun typeCheck (p as Program.T {functions, main, objectTypes, profileInfo, static
                                                    Type.toCType expects)
                                   end)
                               end
-                         | Handler => true
                          | Jump => true
                      end
                   val _ = check' (kind, "kind", kindOk, Kind.layout)
@@ -777,9 +511,6 @@ fun typeCheck (p as Program.T {functions, main, objectTypes, profileInfo, static
           end,
           Function.layout)
       val _ = Program.clear p
-      val _ = if !handlersImplemented
-                 then checkHandlers p
-                 else ()
    in
       ()
    end handle Err.E e => (Layout.outputl (Err.layout e, Out.error)
