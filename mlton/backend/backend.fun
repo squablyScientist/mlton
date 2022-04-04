@@ -792,6 +792,15 @@ fun toMachine (rssa: Rssa.Program.t) =
          paramOffsets (xs, ty, fn {offset, ty} =>
                        StackOffset.T {offset = Bytes.+ (offset, shift),
                                       ty = ty})
+      (* Version of `paramStackOffsets` that doesn't construct a `StackOffset`
+       * out of the result. Used to be able to access the `offset` for further
+       * stack offset calculations (Notably multireturns being put onto the
+       * stack)
+       *)
+      fun paramByteOffsets (xs: 'a vector, ty: 'a -> Type.t,
+                             shift: Bytes.t) =
+         paramOffsets (xs, ty, fn b => b)
+
       val operandLive: M.Operand.t -> M.Live.t =
          valOf o M.Live.fromOperand
       val operandsLive: M.Operand.t vector -> M.Live.t vector =
@@ -815,24 +824,33 @@ fun toMachine (rssa: Rssa.Program.t) =
       fun genFunc (f: Function.t, isMain: bool): unit =
          let
             val f = eliminateDeadCode f
-            val {args, blocks, name, raises, returns, start, ...} =
+            val {args, blocks, name, returns, start, ...} =
                Function.dest f
-            val {raisesTo, returnsTo} = rflow name
-            val (returnLives, returnOperands) =
-               case returns of
-                  NONE => (NONE, NONE)
-                | SOME returns =>
-                     let
-                        val returnStackOffsets =
-                           paramStackOffsets (returns, fn t => t, Bytes.zero)
-                     in
-                        (SOME (Vector.map (returnStackOffsets, M.Live.StackOffset)),
-                         SOME (Vector.map (returnStackOffsets, M.Operand.StackOffset)))
-                     end
-            val raiseLives =
-               case raises of
-                  NONE => NONE
-                | SOME _ => SOME (Vector.new0 ())
+            val returnsTo = rflow name
+            val returnsLivesAndOperands =
+               #1 (* Disregard the fold result *)
+               (Vector.mapAndFold 
+                (returns, Bytes.zero,
+                 fn (rs, a) =>
+                    let 
+                      val returnByteOffsets =
+                         paramByteOffsets (rs, fn t => t, a)
+
+                      (* Grab the last offset so that the next return point can
+                       * start there
+                       *)
+                      val lastOffset = #offset (Vector.last returnByteOffsets)
+
+                      val returnStackOffsets = 
+                         Vector.map (returnByteOffsets, StackOffset.T)
+                    in
+                      ((Vector.map (returnStackOffsets, M.Live.StackOffset),
+                       Vector.map (returnStackOffsets, M.Operand.StackOffset)),
+                       Bytes.+ (a, lastOffset))
+                    end))
+
+            val (returnsLives, returnsOperands) = 
+               Vector.unzip returnsLivesAndOperands
             fun newVarInfo (x, ty: Type.t) =
                let
                   val operand =
