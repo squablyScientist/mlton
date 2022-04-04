@@ -105,14 +105,14 @@ signature RSSA_TREE =
                          return: Label.t option}
              | Call of {args: Operand.t vector,
                         func: Func.t,
-                        return: Return.t}
+                        returns: Return.t vector}
              | Goto of {args: Operand.t vector,
                         dst: Label.t}
              (* Raise implicitly raises to the caller.  
               * I.E. the local handler stack must be empty.
               *)
-             | Raise of Operand.t vector
-             | Return of Operand.t vector
+             | Return of {retpt: int,
+                          args: Operand.t vector}
              | Switch of Switch.t
 
             val bug: unit -> t
@@ -135,13 +135,10 @@ signature RSSA_TREE =
       structure Kind:
          sig
             datatype t =
-               Cont of {handler: Handler.t}
+               Cont
              | CReturn of {func: Type.t CFunction.t}
-             | Handler
              | Jump
 
-            datatype frameStyle = None | OffsetsAndSize | SizeOnly
-            val frameStyle: t -> frameStyle
             val isJump: t -> bool
             val layout: t -> Layout.t
          end
@@ -172,8 +169,7 @@ signature RSSA_TREE =
             val dest: t -> {args: (Var.t * Type.t) vector,
                             blocks: Block.t vector,
                             name: Func.t,
-                            raises: Type.t vector option,
-                            returns: Type.t vector option,
+                            returns: Type.t vector vector,
                             start: Label.t}
             (* dfs (f, v) visits the blocks in depth-first order, applying v b
              * for block b to yield v', then visiting b's descendents,
@@ -193,8 +189,7 @@ signature RSSA_TREE =
             val new: {args: (Var.t * Type.t) vector,
                       blocks: Block.t vector,
                       name: Func.t,
-                      raises: Type.t vector option,
-                      returns: Type.t vector option,
+                      returns: Type.t vector vector,
                       start: Label.t} -> t
          end
 
@@ -219,8 +214,7 @@ signature RSSA_TREE =
             val layouts: t * (Layout.t -> unit) -> unit
             val layoutStats: t -> Layout.t
             val orderFunctions: t -> t
-            val rflow: t -> (Func.t -> {raisesTo: Label.t list,
-                                        returnsTo: Label.t list})
+            val rflow: t -> (Func.t -> Label.t list vector)
             val shuffle: t -> t
             val toFile: {display: t Control.display, style: Control.style, suffix: string}
          end

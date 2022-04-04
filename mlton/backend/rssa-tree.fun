@@ -346,11 +346,11 @@ structure Transfer =
                    return: Label.t option}
        | Call of {args: Operand.t vector,
                   func: Func.t,
-                  return: Return.t}
+                  returns: Return.t vector}
        | Goto of {args: Operand.t vector,
                   dst: Label.t}
-       | Raise of Operand.t vector
-       | Return of Operand.t vector
+       | Return of {retpt : int,
+                    args : Operand.t vector}
        | Switch of Switch.t
 
       fun layout t =
@@ -363,15 +363,16 @@ structure Transfer =
                        record [("args", Vector.layout Operand.layout args),
                                ("func", CFunction.layout (func, Type.layout)),
                                ("return", Option.layout Label.layout return)]]
-             | Call {args, func, return} =>
+             | Call {args, func, returns} =>
                   seq [Func.layout func, str " ",
                        Vector.layout Operand.layout args,
-                       str " ", Return.layout return]
+                       str " ", 
+                       Vector.layout Return.layout returns]
              | Goto {dst, args} =>
                   seq [Label.layout dst, str " ",
                        Vector.layout Operand.layout args]
-             | Raise xs => seq [str "raise ", Vector.layout Operand.layout xs]
-             | Return xs => seq [str "return ", Vector.layout Operand.layout xs]
+             | Return {retpt, args} => seq [str "return ", 
+                                            Vector.layout Operand.layout args]
              | Switch s => Switch.layout s
          end
 
@@ -401,11 +402,13 @@ structure Transfer =
                                case return of
                                   NONE => a
                                 | SOME l => label (l, a))
-             | Call {args, return, ...} =>
-                  useOperands (args, Return.foldLabel (return, a, label))
+             | Call {args, returns, ...} =>
+                  useOperands (args, 
+                               Vector.fold
+                               (returns, a,
+                                fn (r, a) => Return.foldLabel (r, a, label)))
              | Goto {args, dst, ...} => label (dst, useOperands (args, a))
-             | Raise zs => useOperands (zs, a)
-             | Return zs => useOperands (zs, a)
+             | Return {args, ...} => useOperands (args, a)
              | Switch s => Switch.foldLabelUse (s, a, {label = label,
                                                        use = useOperand})
          end
@@ -472,15 +475,16 @@ structure Transfer =
                   CCall {args = opers args,
                          func = func,
                          return = Option.map (return, label)}
-             | Call {args, func, return} =>
+             | Call {args, func, returns} =>
                   Call {args = opers args,
                         func = func,
-                        return = Return.map (return, label)}
+                        returns = Vector.map 
+                                  (returns, fn r => Return.mapLabel (r, label))}
              | Goto {args, dst} =>
                   Goto {args = opers args,
                         dst = label dst}
-             | Raise zs => Raise (opers zs)
-             | Return zs => Return (opers zs)
+             | Return {retpt, args} => Return {retpt = retpt,
+                                               args = opers args}
              | Switch s => Switch (Switch.replace' (s, fs))
          end
       fun replaceLabels (s, label) =
@@ -492,9 +496,8 @@ structure Transfer =
 structure Kind =
    struct
       datatype t =
-         Cont of {handler: Handler.t}
+         Cont
        | CReturn of {func: Type.t CFunction.t}
-       | Handler
        | Jump
 
       fun isJump k =
@@ -507,28 +510,12 @@ structure Kind =
             open Layout
          in
             case k of
-               Cont {handler} =>
-                  seq [str "Cont ",
-                       record [("handler", Handler.layout handler)]]
+               Cont => str "Cont"
              | CReturn {func} =>
                   seq [str "CReturn ",
                        record [("func", CFunction.layout (func, Type.layout))]]
-             | Handler => str "Handler"
              | Jump => str "Jump"
          end
-
-      datatype frameStyle = None | OffsetsAndSize | SizeOnly
-      fun frameStyle (k: t): frameStyle =
-         case k of
-            Cont _ => OffsetsAndSize
-          | CReturn {func, ...} =>
-               if CFunction.mayGC func
-                  then OffsetsAndSize
-               else if !Control.profile = Control.ProfileNone
-                       then None
-                    else SizeOnly
-          | Handler => SizeOnly
-          | Jump => None
    end
 
 local
@@ -596,8 +583,7 @@ structure Function =
       datatype t = T of {args: (Var.t * Type.t) vector,
                          blocks: Block.t vector,
                          name: Func.t,
-                         raises: Type.t vector option,
-                         returns: Type.t vector option,
+                         returns: Type.t vector vector,
                          start: Label.t}
 
       local
@@ -615,7 +601,7 @@ structure Function =
           ; Vector.foreach (args, Var.clear o #1)
           ; Vector.foreach (blocks, Block.clear))
 
-      fun layoutHeader (T {args, name, raises, returns, start, ...}): Layout.t =
+      fun layoutHeader (T {args, name, returns, start, ...}): Layout.t =
          let
             open Layout
          in
@@ -623,11 +609,8 @@ structure Function =
                  str " ", layoutFormals args,
                  if !Control.showTypes
                     then seq [str ": ",
-                              record [("raises",
-                                       Option.layout
-                                       (Vector.layout Type.layout) raises),
-                                      ("returns",
-                                       Option.layout
+                              record [("returns",
+                                       Vector.layout
                                        (Vector.layout Type.layout) returns)]]
                  else empty,
                  str " = ", Label.layout start, str " ()"]
@@ -745,7 +728,7 @@ structure Function =
 
       fun dropProfile (f: t): t =
          let
-            val {args, blocks, name, raises, returns, start} = dest f
+            val {args, blocks, name, returns, start} = dest f
             val blocks =
                Vector.map
                (blocks, fn Block.T {args, kind, label, statements, transfer} =>
@@ -761,21 +744,19 @@ structure Function =
             new {args = args,
                  blocks = blocks,
                  name = name,
-                 raises = raises,
                  returns = returns,
                  start = start}
          end
 
       fun shuffle (f: t): t =
          let
-            val {args, blocks, name, raises, returns, start} = dest f
+            val {args, blocks, name, returns, start} = dest f
             val blocks = Array.fromVector blocks
             val () = Array.shuffle blocks
          in
             new {args = args,
                  blocks = Array.toVector blocks,
                  name = name,
-                 raises = raises,
                  returns = returns,
                  start = start}
          end
@@ -899,12 +880,27 @@ structure Program =
          let
             val functions = main :: functions
             val table = HashTable.new {equals = Func.equals, hash = Func.hash}
-            fun get f =
-               HashTable.lookupOrInsert (table, f, fn () =>
-                                         {raisesTo = Labels.empty (),
-                                          returnsTo = Labels.empty ()})
-            val raisesTo = #raisesTo o get
-            val returnsTo = #returnsTo o get
+
+            (* initialize return sets *)
+            val _ =
+               List.map
+               (functions, fn f =>
+                let
+                   val {name, returns, ...} = Function.dest f
+                 in
+                   HashTable.lookupOrInsert
+                   (table, name, fn () =>
+                    Vector.map (returns, fn _ => Labels.empty ()))
+                 end)
+
+            (* get all of the return label sets *)
+            fun get_all f =
+               valOf (HashTable.peek (table, f))
+
+            (* get one of the return label sets *)
+            fun get_one (f, i) =
+                Vector.sub (get_all f, i)
+
             val empty = Labels.empty ()
             val _ =
                List.foreach
@@ -915,32 +911,20 @@ structure Program =
                    Vector.foreach
                    (blocks, fn Block.T {transfer, ...} =>
                     case transfer of
-                       Transfer.Call {func, return, ...} =>
+                       Transfer.Call {func, returns, ...} =>
                           let
-                             val (returns, raises) =
+                             fun flowRet return =
                                 case return of
-                                   Return.Dead => (empty, empty)
-                                 | Return.NonTail {cont, handler, ...} =>
-                                      (Labels.singleton cont,
-                                       case handler of
-                                          Handler.Caller => raisesTo name
-                                        | Handler.Dead => empty
-                                        | Handler.Handle hand => Labels.singleton hand)
-                                 | Return.Tail => (returnsTo name, raisesTo name)
+                                   Return.Tail i => get_one (name, i)
+                                 | Return.NonTail l => Labels.singleton l
+                             val rets = Vector.map (returns, flowRet)
                           in
-                             Labels.<= (returns, returnsTo func)
-                             ; Labels.<= (raises, raisesTo func)
+                             Vector.foreach2 (rets, get_all func, Labels.<=)
                           end
                      | _ => ())
                 end)
          in
-            fn f =>
-            let
-               val {raisesTo, returnsTo} = get f
-            in
-               {raisesTo = Labels.getElements raisesTo,
-                returnsTo = Labels.getElements returnsTo}
-            end
+            fn f => Vector.map (get_all f, Labels.getElements)
          end
 
       fun orderFunctions (p as T {handlesSignals, objectTypes, profileInfo, statics, ...}) =
@@ -950,7 +934,7 @@ structure Program =
                dfs
                (p, fn f =>
                 let
-                   val {args, name, raises, returns, start, ...} =
+                   val {args, name, returns, start, ...} =
                       Function.dest f
                    val blocks = ref []
                    val () =
@@ -961,7 +945,6 @@ structure Program =
                    val f = Function.new {args = args,
                                          blocks = Vector.fromListRev (!blocks),
                                          name = name,
-                                         raises = raises,
                                          returns = returns,
                                          start = start}
                 in
