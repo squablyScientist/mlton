@@ -739,8 +739,7 @@ fun convert (program as S.Program.T {functions, globals, main, ...},
          end
       val {get = labelInfo: (Label.t ->
                              {args: (Var.t * S.Type.t) vector,
-                              cont: (Handler.t * Label.t) list ref,
-                              handler: Label.t option ref}),
+                              cont: Label.t list ref}),
            set = setLabelInfo, ...} =
          Property.getSetOnce (Label.plist,
                               Property.initRaise ("label info", Label.layout))
@@ -815,38 +814,18 @@ fun convert (program as S.Program.T {functions, globals, main, ...},
          in
             l'
          end
-      fun labelHandler (l: Label.t): Label.t =
-         let
-            val {handler, ...} = labelInfo l
-         in
-            case !handler of
-               NONE =>
-                  let
-                     val l' = eta (l, Kind.Handler)
-                     val _ = handler := SOME l'
-                  in
-                     l'
-                  end
-             | SOME l => l
-         end
-      fun labelCont (l: Label.t, h: Handler.t): Label.t =
+      fun labelCont (l: Label.t): Label.t =
          let
             val {cont, ...} = labelInfo l
-            datatype z = datatype Handler.t
-         in
-            case List.peek (!cont, fn (h', _) => Handler.equals (h, h')) of
-               SOME (_, l) => l
-             | NONE =>
-                  let
-                     val l' = eta (l, Kind.Cont {handler = h})
-                     val _ = List.push (cont, (h, l'))
-                  in
-                     l'
-                  end
-         end
+            val l' = eta (l, Kind.Cont)
+            val _ = List.push (cont, l')
+          in
+            l'
+          end
+
       val labelCont =
-         Trace.trace2 ("SsaToRssa.labelCont",
-                       Label.layout, Handler.layout, Label.layout)
+         Trace.trace ("SsaToRssa.labelCont",
+                      Label.layout, Label.layout)
          labelCont
       fun vos (xs: Var.t vector) =
          Vector.keepAllMap (xs, fn x =>
@@ -871,39 +850,28 @@ fun convert (program as S.Program.T {functions, globals, main, ...},
                    case toRtype t of
                       NONE => Type.unit
                     | SOME t => t)
+      fun translateReturn (r: S.Return.t): Return.t =
+         case r of
+            S.Return.Tail i => Return.Tail i
+          | S.Return.NonTail l => Return.NonTail (labelCont l)
+
       fun translateTransfer (t: S.Transfer.t): (Statement.t list *
                                                 Transfer.t) =
          case t of
             S.Transfer.Bug => ([], Transfer.bug ())
-          | S.Transfer.Call {func, args, return} =>
+          | S.Transfer.Call {func, args, returns} =>
                let
-                  datatype z = datatype S.Return.t
-                  val return =
-                     case return of
-                        Dead => Return.Dead
-                      | NonTail {cont, handler} =>
-                           let
-                              datatype z = datatype S.Handler.t
-                              val handler =
-                                 case handler of
-                                    Caller => Handler.Caller
-                                  | Dead => Handler.Dead
-                                  | Handle l => Handler.Handle (labelHandler l)
-                           in
-                              Return.NonTail {cont = labelCont (cont, handler),
-                                              handler = handler}
-                           end
-                      | Tail => Return.Tail
+                 val returns' = Vector.map (returns, translateReturn)
                in
                   ([], Transfer.Call {func = func,
                                       args = vos args,
-                                      return = return})
+                                      returns = returns'})
                end
           | S.Transfer.Case r => translateCase r
           | S.Transfer.Goto {dst, args} =>
                ([], Transfer.Goto {dst = dst, args = vos args})
-          | S.Transfer.Raise xs => ([], Transfer.Raise (vos xs))
-          | S.Transfer.Return xs => ([], Transfer.Return (vos xs))
+          | S.Transfer.Return {retpt, args} => 
+               ([], Transfer.Return {retpt = retpt, args = (vos args)})
           | S.Transfer.Runtime {args, prim, return} =>
                (case prim of
                    Prim.Thread_copyCurrent =>
@@ -1637,25 +1605,23 @@ fun convert (program as S.Program.T {functions, globals, main, ...},
          let
             val _ =
                S.Function.foreachVar (f, fn (x, t) => setVarInfo (x, {ty = t}))
-            val {args, blocks, name, raises, returns, start, ...} =
+            val {args, blocks, name, returns, start, ...} =
                S.Function.dest f
             val _ =
                Vector.foreach
                (blocks, fn S.Block.T {label, args, ...} =>
                 setLabelInfo (label, {args = args,
-                                      cont = ref [],
-                                      handler = ref NONE}))
+                                      cont = ref []}))
             val blocks = Vector.map (blocks, translateBlock)
             val blocks = Vector.concat [Vector.fromList (!extraBlocks), blocks]
             val _ = extraBlocks := []
-            fun transTypes (ts : S.Type.t vector option)
-               : Type.t vector option =
-               Option.map (ts, fn ts => Vector.keepAllMap (ts, toRtype))
+            fun transTypes (ts : S.Type.t vector vector)
+               : Type.t vector vector =
+               Vector.map (ts, fn ts => Vector.keepAllMap (ts, toRtype))
          in
             Function.new {args = translateFormals args,
                           blocks = blocks,
                           name = name,
-                          raises = transTypes raises,
                           returns = transTypes returns,
                           start = start}
          end
@@ -1676,11 +1642,10 @@ fun convert (program as S.Program.T {functions, globals, main, ...},
                            transfer = (S.Transfer.Call
                                        {args = Vector.new0 (),
                                         func = main,
-                                        return = S.Return.Tail})})),
+                                        returns = Vector.new1 (S.Return.Tail 0)})})),
                mayInline = false, (* doesn't matter *)
                name = Func.newString "initGlobals",
-               raises = NONE,
-               returns = NONE,
+               returns = Vector.new0 (),
                start = start},
               S.SourceInfo.main))
          end

@@ -165,14 +165,6 @@ fun live (function, {shouldConsider: Var.t -> bool}) =
             val {argInfo, bodyInfo = b, ...} = labelInfo label
             val _ = Vector.foreach (args, fn (x, _) => setDefined (x, argInfo))
             fun goto l = LiveInfo.addEdge (b, #argInfo (labelInfo l))
-            (* Make sure that a cont's live vars includes variables live in its
-             * handler.
-             *)
-            val _ =
-               case kind of
-                  Kind.Cont {handler, ...} =>
-                     Handler.foreachLabel (handler, goto)
-                | _ => ()
             fun define (x: Var.t): unit = setDefined (x, b)
             fun use (x: Var.t): unit =
                if shouldConsider x
@@ -205,15 +197,7 @@ fun live (function, {shouldConsider: Var.t -> bool}) =
                 in
                    ()
                 end)
-            fun label l =
-               let
-                  val {block = Block.T {kind, ...}, ...} = labelInfo l
-               in
-                  case kind of
-                     Kind.Handler =>
-                        List.push (handlerCodeDefUses, Use (l, b))
-                   | _ => goto l
-               end
+            fun label l = goto l
             val _ =
                Transfer.foreachLabelUse (transfer, {label = label,
                                                     use = use})

@@ -347,16 +347,7 @@ fun allocate {function = f: Rssa.Function.t,
           fn R.Block.T {args, kind, label, ...} =>
           let
              val {beginNoFormals, ...} = labelLive label
-             val _ =
-                case Kind.frameStyle kind of
-                   Kind.None => ()
-                 | Kind.OffsetsAndSize =>
-                      Vector.foreach (beginNoFormals, forceStack)
-                 | Kind.SizeOnly => ()
-             val _ =
-                case kind of
-                   Kind.Handler => List.push (handlersArgs, args)
-                 | _ => ()
+             val _ = Vector.foreach (beginNoFormals, forceStack)
           in
              ()
           end)
@@ -538,18 +529,11 @@ fun allocate {function = f: Rssa.Function.t,
                              else stackInit)
              val a = Allocation.new (stackInit, temporariesInit)
              val size =
-                case kind of
-                   Kind.Handler =>
-                      (case handlersInfo of
-                          NONE => Error.bug "AllocateVariables.allocate: Handler with no handler offset"
-                        | SOME {handlerOffset, ...} =>
-                             Bytes.+ (handlerOffset, Runtime.labelSize ()))
-                 | _ =>
-                      Bytes.align
-                      (Bytes.+ (Allocation.stackSize a, Runtime.labelSize ()),
-                       {alignment = (case !Control.align of
-                                        Control.Align4 => Bytes.inWord32
-                                      | Control.Align8 => Bytes.inWord64)})
+                Bytes.align
+                (Bytes.+ (Allocation.stackSize a, Runtime.labelSize ()),
+                 {alignment = (case !Control.align of
+                                  Control.Align4 => Bytes.inWord32
+                                | Control.Align8 => Bytes.inWord64)})
              val _ =
                 if Bytes.isAligned (size, {alignment = (case !Control.align of
                                                            Control.Align4 => Bytes.inWord32
