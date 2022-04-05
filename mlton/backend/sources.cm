@@ -56,10 +56,10 @@ rssa-restore.sig
 rssa-restore.fun
 
 rssa-transform.sig
-bounce-vars.fun
+(* bounce-vars.fun *)
 collect-statics.fun
-implement-handlers.fun
-implement-profiling.fun
+(* implement-handlers.fun *)
+(* implement-profiling.fun *)
 insert-checks.fun
 rssa-simplify.sig
 rssa-simplify.fun
