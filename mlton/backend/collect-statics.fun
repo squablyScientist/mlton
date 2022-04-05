@@ -35,13 +35,12 @@ structure Function =
       open Function
       fun replace (f, {const: Const.t -> Operand.t}) =
          let
-            val {args, blocks, name, raises, returns, start} = Function.dest f
+            val {args, blocks, name, returns, start} = Function.dest f
          in
             Function.new {args = args,
                           blocks = Vector.map (blocks, fn b =>
                                                Block.replace (b, {const = const})),
                           name = name,
-                          raises = raises,
                           returns = returns,
                           start = start}
          end
@@ -233,7 +232,7 @@ structure Globals =
 
             val main =
                let
-                  val {args, name, raises, returns, start, ...} = Function.dest main
+                  val {args, name, returns, start, ...} = Function.dest main
                   val blocks = ref []
                   val () =
                      Function.dfs
@@ -255,7 +254,6 @@ structure Globals =
                   Function.new {args = args,
                                 blocks = Vector.fromList (!blocks),
                                 name = name,
-                                raises = raises,
                                 returns = returns,
                                 start = start}
                end

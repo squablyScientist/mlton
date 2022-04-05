@@ -62,7 +62,7 @@ fun shrinkFunction {main: Function.t, statics: {dst: Var.t * Type.t, obj: Object
 
       fun shrink (f: Function.t, clear): Function.t =
          let
-            val {args, blocks, name, raises, returns, start} = Function.dest f
+            val {args, blocks, name, returns, start} = Function.dest f
 
             val () =
                Vector.foreach
@@ -265,7 +265,6 @@ fun shrinkFunction {main: Function.t, statics: {dst: Var.t * Type.t, obj: Object
             val f = Function.new {args = args,
                                   blocks = blocks,
                                   name = name,
-                                  raises = raises,
                                   returns = returns,
                                   start = start}
             val _ = if clear then Function.clear f else ()

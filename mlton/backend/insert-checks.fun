@@ -180,7 +180,7 @@ fun insertFunction (f: Function.t,
                     ensureFree: Label.t -> Bytes.t,
                     needsSignalCheck: Label.t -> bool) =
    let
-      val {args, blocks, name, raises, returns, start} = Function.dest f
+      val {args, blocks, name, returns, start} = Function.dest f
       val newBlocks = ref []
       fun newBlock b = List.push (newBlocks, b)
       local
@@ -544,7 +544,6 @@ fun insertFunction (f: Function.t,
          Function.new {args = args,
                        blocks = Vector.fromList (!newBlocks),
                        name = name,
-                       raises = raises,
                        returns = returns,
                        start = start}
       val _ = Function.clear f
@@ -579,7 +578,7 @@ val traceMaxPath = Trace.trace ("LimitCheck.maxPath", Int.layout, Bytes.layout)
 
 fun isolateBigTransfers (f: Function.t): Function.t =
    let
-      val {args, blocks, name, raises, returns, start} = Function.dest f
+      val {args, blocks, name, returns, start} = Function.dest f
       val newBlocks = ref []
       fun newBlock b = List.push (newBlocks, b)
       val () =
@@ -608,7 +607,6 @@ fun isolateBigTransfers (f: Function.t): Function.t =
       Function.new {args = args,
                     blocks = blocks,
                     name = name,
-                    raises = raises,
                     returns = returns,
                     start = start}
    end
@@ -658,11 +656,10 @@ fun limitCheckCoalesce (f: Function.t, tyconTy) =
              val isBigAlloc = BytesAllocated.isBig (Transfer.bytesAllocated transfer)
              val b =
                 case kind of
-                   Cont _ => true
+                   Cont => true
                  | CReturn {func, ...} =>
                       CFunction.mayGC func
                       andalso not (Option.isSome (CFunction.ensuresBytesFree func))
-                 | Handler => true
                  | Jump =>
                       (case transfer of
                           Transfer.CCall {args, func, ...} =>
