@@ -9,10 +9,10 @@ struct
 
 open S
 
-structure BounceVars = BounceVars (S)
+(* structure BounceVars = BounceVars (S) *)
 structure CollectStatics = CollectStatics (S)
-structure ImplementHandlers = ImplementHandlers (S)
-structure ImplementProfiling = ImplementProfiling (S)
+(* structure ImplementHandlers = ImplementHandlers (S) *)
+(* structure ImplementProfiling = ImplementProfiling (S) *)
 structure InsertChecks = InsertChecks (S)
 
 val rssaPasses =
@@ -29,10 +29,10 @@ val rssaPasses =
    {name = "insertChecks", doit = InsertChecks.transform, execute = true} ::
    {name = "rssaShrink2", doit = S.shrink, execute = true} ::
    (* must be before implementHandlers *)
-   {name = "bounceVars", doit = BounceVars.transform, execute = true} ::
-   {name = "implementHandlers", doit = ImplementHandlers.transform, execute = true} ::
+   (* {name = "bounceVars", doit = BounceVars.transform, execute = true} :: *)
+   (* {name = "implementHandlers", doit = ImplementHandlers.transform, execute = true} :: *)
    {name = "rssaShrink3", doit = S.shrink, execute = true} ::
-   {name = "implementProfiling", doit = ImplementProfiling.transform, execute = true} ::
+   (* {name = "implementProfiling", doit = ImplementProfiling.transform, execute = true} :: *)
    {name = "rssaOrderFunctions", doit = Program.orderFunctions, execute = true} ::
    {name = "rssaShuffle", doit = Program.shuffle, execute = false} ::
    nil
