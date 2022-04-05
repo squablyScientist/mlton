@@ -46,8 +46,8 @@ structure Xml = Xml (open Atoms)
 structure Sxml = Sxml (open Xml)
 structure Ssa = Ssa (open Atoms)
 structure Ssa2 = Ssa2 (open Atoms)
-(* structure BackendAtoms = BackendAtoms (open Atoms) *)
-(* structure Rssa = Rssa (open BackendAtoms) *)
+structure BackendAtoms = BackendAtoms (open Atoms)
+structure Rssa = Rssa (open BackendAtoms)
 (* structure Machine = Machine (open BackendAtoms) *)
 
 (*---------------------------------------------------*)
@@ -74,8 +74,8 @@ structure ClosureConvert = ClosureConvert (structure Ssa = Ssa
                                            structure Sxml = Sxml)
 structure SsaToSsa2 = SsaToSsa2 (structure Ssa = Ssa
                                  structure Ssa2 = Ssa2)
-(* structure Ssa2ToRssa = Ssa2ToRssa (structure Rssa = Rssa *)
-(*                                    structure Ssa2 = Ssa2) *)
+structure Ssa2ToRssa = Ssa2ToRssa (structure Rssa = Rssa
+                                   structure Ssa2 = Ssa2)
 (* structure Backend = Backend (structure Machine = Machine *)
 (*                              structure Rssa = Rssa *)
 (*                              fun funcToLabel f = f) *)
@@ -644,8 +644,8 @@ fun mkCompile {outputC, outputLL, outputS} =
       (* val goToRssa = goRssaSimplify o toRssa *)
       (* val goSsa2Simplify = goToRssa o ssa2Simplify *)
       val goSsa2Simplify = fn _ => Error.bug "Compile.goSsa2Simplify: unimplemented"
-      (* val goToSsa2 = goSsa2Simplify o toSsa2 *)
-      (* val goSsaSimplify = goToSsa2 o ssaSimplify *)
+      val goToSsa2 = goSsa2Simplify o toSsa2
+      val goSsaSimplify = goToSsa2 o ssaSimplify
       val goSsaSimplify = ignore o ssaSimplify o (fn p => (List.push (Control.stopPasses, Regexp.compileDFA (#1 (valOf (Regexp.fromString "ssaSimplify")))) ; p))
       val goToSsa = goSsaSimplify o toSsa
       val goSxmlSimplify = goToSsa o sxmlSimplify
