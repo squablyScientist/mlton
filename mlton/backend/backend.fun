@@ -108,7 +108,7 @@ val traceGenBlock =
 
 fun eliminateDeadCode (f: R.Function.t): R.Function.t =
    let
-      val {args, blocks, name, returns, raises, start} = R.Function.dest f
+      val {args, blocks, name, returns, start} = R.Function.dest f
       val {get, rem, set, ...} =
          Property.getSetOnce (Label.plist, Property.initConst false)
       val get = Trace.trace ("Backend.labelIsReachable",
@@ -131,7 +131,6 @@ fun eliminateDeadCode (f: R.Function.t): R.Function.t =
                       blocks = blocks,
                       name = name,
                       returns = returns,
-                      raises = raises,
                       start = start}
    end
 
@@ -141,7 +140,7 @@ fun toMachine (rssa: Rssa.Program.t) =
       (* tyconTy *)
       fun tyconTy tycon =
          Vector.sub (objectTypes, ObjptrTycon.index tycon)
-      (* returnsTo and raisesTo info *)
+      (* returnsTo info *)
       val rflow = R.Program.rflow rssa
       (* Chunk info *)
       val {get = labelChunk, set = setLabelChunk, ...} =
@@ -974,10 +973,9 @@ fun toMachine (rssa: Rssa.Program.t) =
                                []
                          val (entry, kind) =
                             case kind of
-                               R.Kind.Cont _=> (true, M.FrameInfo.Kind.ML_FRAME)
+                               R.Kind.Cont => (true, M.FrameInfo.Kind.ML_FRAME)
                              | R.Kind.CReturn {func} => (CFunction.maySwitchThreadsTo func,
                                                          M.FrameInfo.Kind.C_FRAME)
-                             | R.Kind.Handler => (true, M.FrameInfo.Kind.ML_FRAME)
                              | R.Kind.Jump => (false, M.FrameInfo.Kind.ML_FRAME)
                          val frameInfo =
                             getFrameInfo {entry = entry,
@@ -989,10 +987,7 @@ fun toMachine (rssa: Rssa.Program.t) =
                          setFrameInfo (label, SOME frameInfo)
                       end
                 in
-                   case R.Kind.frameStyle kind of
-                      R.Kind.None => ()
-                    | R.Kind.OffsetsAndSize => doit true
-                    | R.Kind.SizeOnly => doit false
+                   doit true
                 end)
             (* ------------------------------------------------- *)
             (*                    genTransfer                    *)
@@ -1022,6 +1017,7 @@ fun toMachine (rssa: Rssa.Program.t) =
                                     func = func,
                                     return = return})
                         end
+                   (* TODO : ctod: fix the `Call` case in `genTransfer` *)
                    | R.Transfer.Call {func, args, return} =>
                         let
                            datatype z = datatype R.Return.t
@@ -1076,6 +1072,8 @@ fun toMachine (rssa: Rssa.Program.t) =
                            (parallelMove {dsts = dsts', srcs = srcs'},
                             M.Transfer.Goto dst)
                         end
+                   (* TODO : ctod: delete the `Raise` case in `genTransfer` *)
+                   (*
                    | R.Transfer.Raise srcs =>
                         let
                            val handlerStackTop =
@@ -1101,10 +1099,12 @@ fun toMachine (rssa: Rssa.Program.t) =
                                                    srcs = translateOperands srcs}],
                                     M.Transfer.Raise {raisesTo = raisesTo})
                         end
-                   | R.Transfer.Return xs =>
-                        (parallelMove {dsts = valOf returnOperands,
-                                       srcs = translateOperands xs},
-                         M.Transfer.Return {returnsTo = returnsTo})
+                    *)
+                   (* TODO : ctod: do we need a bounds check here? probably*)
+                   | R.Transfer.Return {retpt, args} =>
+                       (parallelMove {dsts = (Vector.sub (returnsOperands, retpt)),
+                                      srcs = translateOperands args},
+                        M.Transfer.Return {returnsTo = Vector.sub (returnsTo, retpt)})
                    | R.Transfer.Switch switch =>
                         let
                            val R.Switch.T {cases, default, expect, size, test} =
@@ -1159,7 +1159,7 @@ fun toMachine (rssa: Rssa.Program.t) =
                      end
                   val (kind, live, pre) =
                      case kind of
-                        R.Kind.Cont _ => doContHandler M.Kind.Cont
+                        R.Kind.Cont => doContHandler M.Kind.Cont
                       | R.Kind.CReturn {func, ...} =>
                            let
                               val dst =
@@ -1176,7 +1176,6 @@ fun toMachine (rssa: Rssa.Program.t) =
                                liveNoFormals,
                                Vector.new0 ())
                            end
-                      | R.Kind.Handler => doContHandler M.Kind.Handler
                       | R.Kind.Jump => (M.Kind.Jump, live, Vector.new0 ())
                   val statements =
                      Vector.concat [pre, statements, preTransfer]
@@ -1185,8 +1184,7 @@ fun toMachine (rssa: Rssa.Program.t) =
                                   {kind = kind,
                                    label = label,
                                    live = operandsLive live,
-                                   raises = raiseLives,
-                                   returns = returnLives,
+                                   returns = returnsLives,
                                    statements = statements,
                                    transfer = transfer})
                end
@@ -1214,8 +1212,7 @@ fun toMachine (rssa: Rssa.Program.t) =
                    {label = funcToLabel name,
                     kind = M.Kind.Func {frameInfo = frameInfo},
                     live = operandsLive srcs,
-                    raises = raiseLives,
-                    returns = returnLives,
+                    returns = returnsLives,
                     statements = statements,
                     transfer = M.Transfer.Goto start})
                end
