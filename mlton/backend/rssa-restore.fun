@@ -201,7 +201,7 @@ fun restoreFunction {main: Function.t, statics: {dst: Var.t * Type.t, obj: Objec
       val restore =
       fn (f: Function.t) =>
       let
-        val {args, blocks, name, returns, raises, start} = Function.dest f
+        val {args, blocks, name, returns, start} = Function.dest f
         (* check for violations *)
         val violations = ref []
         fun addDef (x, ty)
@@ -564,11 +564,6 @@ fun restoreFunction {main: Function.t, statics: {dst: Var.t * Type.t, obj: Objec
                                 val args' = Vector.map
                                   (Vector.concat [args, phiArgs],
                                    fn (x, ty) => Operand.Var {ty=ty, var=x})
-                                val kind =
-                                  case kind of
-                                       Kind.Cont {handler} =>
-                                          Kind.Cont {handler=Handler.map (handler, route false)}
-                                     | _ => kind
                                 val block = Block.T
                                             {label = label,
                                              args = args,
@@ -608,26 +603,26 @@ fun restoreFunction {main: Function.t, statics: {dst: Var.t * Type.t, obj: Objec
                         else st
                   end)
             end
+        (* TODO : ctod: check if this `rewriteTransfer` is correct *)
         fun rewriteTransfer (t: Transfer.t) =
            let
               val t =
                  case t of
-                   Call {args, func,
-                        return=Return.NonTail
-                        {cont, handler=Handler.Handle h}} =>
+                   Call {args, func, returns} =>
                      let
-                       val args =
+                       val returns' =
+                          Vector.map
+                          (returns, fn ret =>
+                           Return.mapLabel (ret, route true))
+                       val args' =
                           Vector.map
                           (args, fn arg =>
                            Operand.replace (arg, {const = Operand.Const,
                                                   var = rewriteVar o #var}))
-                       val h' = route false h
-                       val cont = route true cont
                      in
-                       Call {args=args,
+                       Call {args=args',
                              func=func,
-                             return=Return.NonTail
-                              {cont=cont, handler=Handler.Handle h'}}
+                             returns=returns'}
                      end
                  | _ => Transfer.replace (t, {const = Operand.Const,
                                               label = route false,
@@ -650,7 +645,7 @@ fun restoreFunction {main: Function.t, statics: {dst: Var.t * Type.t, obj: Objec
               val transfer = rewriteTransfer transfer
               val kind =
                  case kind of
-                      Kind.Cont {handler=Handler.Handle _} => Kind.Jump
+                      Kind.Cont => Kind.Jump
                     | _ => kind
               val kind = if Vector.isEmpty phiArgs then kind else Kind.Jump
               val block = Block.T {label = label,
@@ -686,7 +681,6 @@ fun restoreFunction {main: Function.t, statics: {dst: Var.t * Type.t, obj: Objec
               Function.new {args = args,
                             blocks = Vector.fromList (!blocks),
                             name = name,
-                            raises = raises,
                             returns = returns,
                             start = entry}
             end
