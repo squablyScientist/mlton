@@ -602,11 +602,9 @@ structure Transfer =
                             size: Bytes.t option} option}
        | Call of {label: Label.t,
                   live: Live.t vector,
-                  return: {return: Label.t,
-                           handler: Label.t option,
-                           size: Bytes.t} option}
+                  returns: Return.t vector,
+                  size: Bytes.t}
        | Goto of Label.t
-       | Raise of {raisesTo: Label.t list}
        | Return of {returnsTo: Label.t list}
        | Switch of Switch.t
 
@@ -625,21 +623,13 @@ structure Transfer =
                           record [("return", Label.layout return),
                                   ("size", Option.layout Bytes.layout size)])
                          return)]]
-             | Call {label, live, return} => 
+             | Call {label, live, returns, size} => 
                   seq [str "Call ", 
                        record [("label", Label.layout label),
                                ("live", Vector.layout Live.layout live),
-                               ("return", Option.layout 
-                                (fn {return, handler, size} =>
-                                 record [("return", Label.layout return),
-                                         ("handler",
-                                          Option.layout Label.layout handler),
-                                         ("size", Bytes.layout size)])
-                                return)]]
+                               ("returns", Vector.layout Return.layout returns),
+                               ("size", Bytes.layout size)]]
              | Goto l => seq [str "Goto ", Label.layout l]
-             | Raise {raisesTo} =>
-                  seq [str "Raise ",
-                       record [("raisesTo", List.layout Label.layout raisesTo)]]
              | Return {returnsTo} =>
                   seq [str "Return ",
                        record [("returnsTo", List.layout Label.layout returnsTo)]]
@@ -819,8 +809,7 @@ structure Block =
       datatype t = T of {kind: Kind.t,
                          label: Label.t,
                          live: Live.t vector,
-                         raises: Live.t vector option,
-                         returns: Live.t vector option,
+                         returns: Live.t vector vector,
                          statements: Statement.t vector,
                          transfer: Transfer.t}
 
@@ -833,7 +822,7 @@ structure Block =
          val label = make #label
       end
 
-      fun layoutHeader (T {kind, label, live, raises, returns, ...}) =
+      fun layoutHeader (T {kind, label, live, returns, ...}) =
          let
             open Layout
          in
@@ -841,11 +830,8 @@ structure Block =
                  str ": ",
                  record [("kind", Kind.layout kind),
                          ("live", Vector.layout Live.layout live),
-                         ("raises",
-                          Option.layout (Vector.layout Live.layout)
-                          raises),
                          ("returns",
-                          Option.layout (Vector.layout Live.layout)
+                          Vector.layout (Vector.layout Live.layout)
                           returns)]]
          end
 
@@ -1437,31 +1423,20 @@ structure Program =
                (live, fn z => Vector.exists (live', fn z' =>
                                              Live.equals (z, z')))
             fun goto (Block.T {live,
-                               raises = raises',
                                returns = returns', ...},
-                      raises: Live.t vector option,
-                      returns: Live.t vector option,
+                      returns: Live.t vector vector,
                       alloc: Alloc.t): bool =
                liveIsOk (live, alloc)
                andalso
-               (case (raises, raises') of
-                   (_, NONE) => true
-                 | (SOME gs, SOME gs') =>
-                      Vector.equals (gs', gs, Live.isSubtype)
-                 | _ => false)
-               andalso
-               (case (returns, returns') of
-                   (_, NONE) => true
-                 | (SOME os, SOME os') =>
-                      Vector.equals (os', os, Live.isSubtype)
-                 | _ => false)
+               Vector.equals
+               (returns, returns',
+                fn (r, r') => Vector.equals (r', r, Live.isSubtype))
             val goto =
                Trace.trace
                ("Machine.Program.typeCheck.goto",
-                fn (b, raises, returns, a) =>
+                fn (b, returns, a) =>
                 Layout.tuple [Block.layoutHeader b,
-                              Option.layout (Vector.layout Live.layout) raises,
-                              Option.layout (Vector.layout Live.layout) returns,
+                              Vector.layout (Vector.layout Live.layout) returns,
                               Alloc.layout a],
                 Bool.layout)
                goto
@@ -1492,50 +1467,26 @@ structure Program =
             fun callIsOk {alloc: Alloc.t,
                           dst: Label.t,
                           live: Live.t vector,
-                          raises: Live.t vector option,
-                          return,
-                          returns: Live.t vector option} =
+                          returnPts: Return.t vector,
+                          size: Bytes.t,
+                          returns: Live.t vector vector} =
                let
-                  val {raises, returns, size} =
-                     case return of
-                        NONE =>
-                           {raises = raises,
-                            returns = returns,
-                            size = Bytes.zero}
-                      | SOME {handler, return, size} =>
-                           let
-                              val (contLive, returns) =
-                                 Err.check'
-                                 ("cont",
-                                  fn () => checkCont (return, size, alloc),
-                                  fn () => Label.layout return)
-                              fun checkHandler () =
-                                 case handler of
-                                    NONE => SOME raises
-                                  | SOME h =>
-                                       let
-                                          val Block.T {kind, live = handlerLive, ...} =
-                                             labelBlock h
-                                       in
-                                          if liveSubset (handlerLive, contLive)
-                                             then
-                                                (case kind of
-                                                    Kind.Handler {frameInfo, ...} =>
-                                                       if Bytes.< (FrameInfo.size frameInfo, size)
-                                                          then SOME (SOME (Vector.new0 ()))
-                                                          else NONE
-                                                    | _ => NONE)
-                                             else NONE
-                                       end
-                              val raises =
-                                 Err.check'
-                                 ("handler", checkHandler,
-                                  fn () => Option.layout Label.layout handler)
-                           in
-                              {raises = raises,
-                               returns = returns,
-                               size = size}
-                           end
+                  val numCallerReturns = Vector.size returns
+                  fun processRetpt r =
+                     case r of
+                        Return.Tail i => Vector.sub (returns, i)
+                      | Return.NonTail l =>
+                         let
+                            val (contLive, returns) =
+                              Err.check'
+                              ("cont",
+                               fn () => checkCont (l, size, alloc),
+                               fn () => Label.layout l)
+                         in
+                            valOf returns
+                         end
+
+                  val returns = Vector.map (returnPts, processRetpt)
                   val b = labelBlock dst
                   val alloc =
                      Alloc.T
@@ -1551,12 +1502,11 @@ structure Program =
                                      ty = ty})) :: ac
                         | _ => ac))
                in
-                  goto (b, raises, returns, alloc)
+                  goto (b, returns, alloc)
                end
             fun transferOk
                (t: Transfer.t,
-                raises: Live.t vector option,
-                returns: Live.t vector option,
+                returns: Live.t vector vector,
                 alloc: Alloc.t): bool =
                let
                   fun jump (l: Label.t) =
@@ -1566,7 +1516,7 @@ structure Program =
                         (case kind of
                             Kind.Jump => true
                           | _ => false)
-                        andalso goto (b, raises, returns, alloc)
+                        andalso goto (b, returns, alloc)
                      end
                   datatype z = datatype Transfer.t
                in
@@ -1599,24 +1549,23 @@ structure Program =
                                      | _ => false
                                  end
                         end
-                   | Call {label, live, return} =>
+                   | Call {label, live, returns = returnPts, size} =>
                         liveIsOk (live, alloc)
                         andalso
                         callIsOk {alloc = alloc,
                                   dst = label,
                                   live = live,
-                                  raises = raises,
-                                  return = return,
+                                  returnPts = returnPts,
+                                  size = size,
                                   returns = returns}
                    | Goto l => jump l
-                   | Raise _ =>
-                        (case raises of
-                            NONE => false
-                          | SOME live => liveIsOk (live, alloc))
+                   (* TODO : ctod: verify `Return` case is correct *)
                    | Return _ =>
-                        (case returns of
-                            NONE => false
-                          | SOME live => liveIsOk (live, alloc))
+                        if (Vector.isEmpty returns)
+                           then false
+                        else 
+                           Vector.forall 
+                           (returns, fn l => liveIsOk (l, alloc))
                    | Switch s =>
                         Switch.isOk
                         (s, {checkUse = fn z => checkOperand (z, alloc),
@@ -1625,14 +1574,13 @@ structure Program =
             val transferOk =
                Trace.trace
                ("Machine.Program.typeCheck.transferOk",
-                fn (t, raises, returns, a) =>
+                fn (t, returns, a) =>
                 Layout.tuple [Transfer.layout t,
-                              Option.layout (Vector.layout Live.layout) raises,
-                              Option.layout (Vector.layout Live.layout) returns,
+                              Vector.layout (Vector.layout Live.layout) returns,
                               Alloc.layout a],
                 Bool.layout)
                transferOk
-            fun blockOk (Block.T {kind, live, raises, returns, statements,
+            fun blockOk (Block.T {kind, live, returns, statements,
                                   transfer, ...}): bool =
                let
                   val live = Vector.toList live
@@ -1668,7 +1616,7 @@ structure Program =
                   val _ =
                      Err.check
                      ("transfer",
-                      fn () => transferOk (transfer, raises, returns, alloc),
+                      fn () => transferOk (transfer, returns, alloc),
                       fn () => Transfer.layout transfer)
                in
                   true

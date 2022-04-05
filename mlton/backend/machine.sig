@@ -178,11 +178,9 @@ signature MACHINE =
                                   size: Bytes.t option} option}
              | Call of {label: Label.t, (* must be kind Func *)
                         live: Live.t vector,
-                        return: {return: Label.t (* must be kind Cont *),
-                                 handler: Label.t option (* must be kind Handler*),
-                                 size: Bytes.t} option}
+                        returns: Return.t vector,
+                        size: Bytes.t}
              | Goto of Label.t (* must be kind Jump *)
-             | Raise of {raisesTo: Label.t list}
              | Return of {returnsTo: Label.t list}
              | Switch of Switch.t
 
@@ -255,8 +253,7 @@ signature MACHINE =
                      label: Label.t,
                      (* Live temporaries and stack offsets at start of block. *)
                      live: Live.t vector,
-                     raises: Live.t vector option,
-                     returns: Live.t vector option,
+                     returns: Live.t vector vector,
                      statements: Statement.t vector,
                      transfer: Transfer.t}
 
