@@ -181,7 +181,8 @@ signature MACHINE =
                         returns: Return.t vector,
                         size: Bytes.t}
              | Goto of Label.t (* must be kind Jump *)
-             | Return of {returnsTo: Label.t list}
+             | Return of {retpt: int,
+                          returnsTo: Label.t list}
              | Switch of Switch.t
 
             val foldOperands: t * 'a * (Operand.t * 'a -> 'a) -> 'a

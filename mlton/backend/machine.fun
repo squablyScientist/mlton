@@ -605,7 +605,8 @@ structure Transfer =
                   returns: Return.t vector,
                   size: Bytes.t}
        | Goto of Label.t
-       | Return of {returnsTo: Label.t list}
+       | Return of {retpt: int,
+                    returnsTo: Label.t list}
        | Switch of Switch.t
 
       fun layout t =
@@ -630,7 +631,7 @@ structure Transfer =
                                ("returns", Vector.layout Return.layout returns),
                                ("size", Bytes.layout size)]]
              | Goto l => seq [str "Goto ", Label.layout l]
-             | Return {returnsTo} =>
+             | Return {retpt, returnsTo} =>
                   seq [str "Return ",
                        record [("returnsTo", List.layout Label.layout returnsTo)]]
              | Switch s => Switch.layout s
