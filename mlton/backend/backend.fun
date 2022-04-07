@@ -827,6 +827,8 @@ fun toMachine (rssa: Rssa.Program.t) =
                Function.dest f
             val returnsTo = rflow name
             val returnsLivesAndOperands =
+               (* TODO : ctod: find out the max amount of room that any of the
+                * returns and put that on top of the stack instead. *)
                #1 (* Disregard the fold result *)
                (Vector.mapAndFold 
                 (returns, Bytes.zero,
@@ -1018,7 +1020,7 @@ fun toMachine (rssa: Rssa.Program.t) =
                                     return = return})
                         end
                    (* TODO : ctod: fix the `Call` case in `genTransfer` *)
-                   | R.Transfer.Call {func, args, return} =>
+                   | R.Transfer.Call {func, args, returns} =>
                         let
                            datatype z = datatype R.Return.t
                            val (contLive, frameSize, return) =
@@ -1049,6 +1051,23 @@ fun toMachine (rssa: Rssa.Program.t) =
                               parallelMove
                               {dsts = Vector.map (dsts, M.Operand.StackOffset),
                                srcs = translateOperands args}
+
+                           (* TODO : ctod:
+                            * Figure out what the largest number of returns/args
+                            * in any of the return points and make sure that the
+                            * space between the args/results and the return
+                            * points (offsets and addresses) 
+                            *)
+                           val maxArgRes = ()
+
+                           (* TODO : ctod:
+                            * Install the frame and ic offsets on the stack from
+                            * the `returns`. Make sure this is taking into
+                            * accound the max amount of returns on the callee as
+                            * well in addition to all of the args that we just
+                            * set up; there must be room for all *)
+                           val setypRetPts = ()
+
                            val live =
                               Vector.concat [operandsLive contLive,
                                              Vector.map (dsts, Live.StackOffset)]
@@ -1072,39 +1091,18 @@ fun toMachine (rssa: Rssa.Program.t) =
                            (parallelMove {dsts = dsts', srcs = srcs'},
                             M.Transfer.Goto dst)
                         end
-                   (* TODO : ctod: delete the `Raise` case in `genTransfer` *)
-                   (*
-                   | R.Transfer.Raise srcs =>
-                        let
-                           val handlerStackTop =
-                              M.Operand.Temporary
-                              (Temporary.new (Type.cpointer (), NONE))
-                           val dsts =
-                              paramOffsets
-                              (srcs, R.Operand.ty, fn {offset, ty} =>
-                               M.Operand.Offset {base = handlerStackTop,
-                                                 offset = offset,
-                                                 ty = ty,
-                                                 volatile = false})
-                        in
-                           if Vector.isEmpty srcs
-                              then (Vector.new0 (), M.Transfer.Raise {raisesTo = raisesTo})
-                              else (Vector.concat
-                                    [Vector.new1
-                                     (M.Statement.PrimApp
-                                      {args = Vector.new2 (stackBottomOp, exnStackOp),
-                                       dst = SOME handlerStackTop,
-                                       prim = Prim.CPointer_add}),
-                                     parallelMove {dsts = dsts,
-                                                   srcs = translateOperands srcs}],
-                                    M.Transfer.Raise {raisesTo = raisesTo})
-                        end
-                    *)
                    (* TODO : ctod: do we need a bounds check here? probably*)
                    | R.Transfer.Return {retpt, args} =>
-                       (parallelMove {dsts = (Vector.sub (returnsOperands, retpt)),
-                                      srcs = translateOperands args},
-                        M.Transfer.Return {returnsTo = Vector.sub (returnsTo, retpt)})
+                       let
+                          val setupResults = 
+                             parallelMove {dsts = (Vector.sub (returnsOperands, retpt)),
+                                           srcs = translateOperands args}
+                          val transfer = 
+                             M.Transfer.Return {retpt = retpt,
+                                                returnsTo = Vector.sub (returnsTo, retpt)}
+                       in
+                          (setupResults, transfer)
+                       end
                    | R.Transfer.Switch switch =>
                         let
                            val R.Switch.T {cases, default, expect, size, test} =
