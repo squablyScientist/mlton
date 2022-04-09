@@ -95,15 +95,16 @@ fun coalesce (program as Program.T {functions, main, ...}, limit) =
           in
              ()
           end)
-      val rflow = Program.rflow program
-      val returnsTo = #returnsTo o rflow
+      val returnsTo = Program.rflow program
       (* Add edges, and then coalesce the graph. *)
       val _ =
          List.foreach
          (functions, fn f =>
           let
              val {name, blocks, ...} = Function.dest f
-             val returnsTo = List.revMap (returnsTo name, labelClass)
+             val returnsTo = Vector.map
+                             (returnsTo name, 
+                              fn rt => List.revMap (rt, labelClass))
              val _ =
                 Vector.foreach
                 (blocks, fn Block.T {label, transfer, ...} =>
@@ -115,9 +116,12 @@ fun coalesce (program as Program.T {functions, main, ...}, limit) =
                        let
                           val from = labelClass label
                        in
-                          List.foreach
-                          (returnsTo, fn c =>
-                           Graph.addEdge (graph, from, c))
+                          Vector.foreach
+                          (returnsTo,
+                           fn rt => 
+                              List.foreach 
+                              (rt, fn c =>
+                                   Graph.addEdge (graph, from, c)))
                        end
                   | _ => ())
           in
@@ -285,9 +289,7 @@ fun simple (program as Program.T {functions, main, ...},
                | _ => ())
           end)
       (* Compute rflow. *)
-      val rflow = Program.rflow program
-      val returnsTo = #returnsTo o rflow
-      val raisesTo = #raisesTo o rflow
+      val returnsTo = Program.rflow program
       (* Place src and dst blocks of SCC calls/raises/returns in same chunks. *)
       val _ =
          List.foreach
@@ -303,16 +305,24 @@ fun simple (program as Program.T {functions, main, ...},
              (funcs, fn f =>
               let
                  val {name, blocks, ...} = Function.dest (funcFunction f)
-                 fun mkRTo rTo = List.revKeepAllMap (rTo name, fn l =>
-                                                     if labelInSCC l
-                                                        then SOME (labelClass l)
-                                                        else NONE)
+                 fun mkRTo rTo = 
+                   Vector.map
+                   (rTo name,
+                    fn rt => List.revKeepAllMap 
+                       (rt, fn l =>
+                          if labelInSCC l
+                          then SOME (labelClass l)
+                          else NONE))
+
                  val returnsTo = mkRTo returnsTo
-                 val raisesTo = mkRTo raisesTo
                  fun eqRTo (l, rTo) =
                     if sccR
                        then let val lc = labelClass l
-                            in List.foreach (rTo, fn rlc => Class.== (lc, rlc))
+                            in 
+                              Vector.foreach
+                              (rTo, fn rt =>
+                                     List.foreach 
+                                     (rt, fn rlc => Class.== (lc, rlc)))
                             end
                        else ()
               in
@@ -323,7 +333,6 @@ fun simple (program as Program.T {functions, main, ...},
                         if sccC andalso funcInSCC func
                            then Class.== (labelClass label, funcClass func)
                            else ()
-                   | Raise _ => eqRTo (label, raisesTo)
                    | Return _ => eqRTo (label, returnsTo)
                    | _ => ())
               end)
@@ -360,23 +369,29 @@ fun simple (program as Program.T {functions, main, ...},
                                                  else ())
                                    else NONE
                              end
+
+                    val oneClasses = 
+                       Vector.map (returnsTo name, oneClass)
+
                     fun doSingC () =
                        Option.app
                        (oneClass (!callSites), fn f => f funcClass)
                     val () = if singC then doSingC () else ()
                     fun doSingR () =
-                       Option.app
-                       (oneClass (returnsTo name @ raisesTo name), fn f =>
-                        Vector.foreach
-                        (blocks, fn Block.T {label, transfer, ...} =>
-                         let
-                            val f = fn () => f (labelClass label)
-                         in
-                            case transfer of
-                               Raise _ => f ()
-                             | Return _ => f()
-                             | _ => ()
-                         end))
+                       Vector.foreach
+                       (oneClasses,
+                        fn rTo => 
+                           Option.app 
+                           (rTo, fn f =>
+                           Vector.foreach
+                           (blocks, fn Block.T {label, transfer, ...} =>
+                             let
+                                val f = fn () => f (labelClass label)
+                             in
+                                case transfer of
+                                 Return _ => f ()
+                               | _ => ()
+                             end)))
                     val () = if singR then doSingR () else ()
                  in
                     ()
